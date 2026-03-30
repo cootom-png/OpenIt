@@ -1,16 +1,36 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Upload, RotateCcw, Maximize2, Move, FileBox, Clock, Layers, Info } from "lucide-react";
+import {
+  Upload,
+  RotateCcw,
+  Maximize2,
+  Move,
+  FileBox,
+  Clock,
+  Layers,
+  Info,
+  FileType,
+  MousePointer,
+} from "lucide-react";
 import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
+import DxfViewerComponent from "@/components/DxfViewerComponent";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
+type ViewerMode = "3d" | "2d" | null;
+
+const SUPPORTED_3D = ["stp", "step", "stl"];
+const SUPPORTED_2D = ["dxf"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D];
+const ACCEPT_STRING = ALL_SUPPORTED.map((e) => `.${e}`).join(",");
 
 export default function Home() {
   const [meshData, setMeshData] = useState<ParsedMeshData | null>(null);
+  const [dxfFileUrl, setDxfFileUrl] = useState<string | null>(null);
+  const [viewerMode, setViewerMode] = useState<ViewerMode>(null);
   const [status, setStatus] = useState<FileStatus>("idle");
   const [fileName, setFileName] = useState<string>("");
   const [fileSize, setFileSize] = useState<number>(0);
@@ -23,34 +43,60 @@ export default function Home() {
 
   const handleFile = useCallback(async (file: File) => {
     const ext = getFileExtension(file.name);
-    if (!["stp", "step", "stl"].includes(ext)) {
+
+    if (!ALL_SUPPORTED.includes(ext)) {
       setStatus("error");
-      setErrorMsg(`不支持的文件格式: .${ext}，请上传 .stp、.step 或 .stl 文件`);
+      setErrorMsg(
+        `不支持的文件格式: .${ext}，请上传 ${ALL_SUPPORTED.map((e) => `.${e}`).join("、")} 文件`
+      );
       return;
     }
 
     setFileName(file.name);
     setFileSize(file.size);
-    setStatus("parsing");
     setErrorMsg("");
     setMeshData(null);
+    setDxfFileUrl(null);
 
-    try {
-      const { data, parseTime: pt } = await parseFile(file);
-      setMeshData(data);
-      setParseTime(pt);
-      setMeshCount(data.meshes.length);
+    if (SUPPORTED_2D.includes(ext)) {
+      // DXF file - use DxfViewer
+      setViewerMode("2d");
+      setStatus("parsing");
 
-      let totalVerts = 0;
-      data.meshes.forEach((m) => {
-        totalVerts += m.attributes.position.array.length / 3;
-      });
-      setVertexCount(totalVerts);
+      try {
+        // Create a blob URL for the DXF file
+        const blobUrl = URL.createObjectURL(file);
+        setDxfFileUrl(blobUrl);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载 DXF 文件时发生错误");
+      }
+    } else {
+      // 3D file - use ThreeViewer
+      setViewerMode("3d");
+      setStatus("parsing");
 
-      setStatus("ready");
-    } catch (err: any) {
-      setStatus("error");
-      setErrorMsg(err.message || "解析文件时发生错误");
+      try {
+        const { data, parseTime: pt } = await parseFile(file);
+        setMeshData(data);
+        setParseTime(pt);
+        setMeshCount(data.meshes.length);
+
+        let totalVerts = 0;
+        data.meshes.forEach((m) => {
+          totalVerts += m.attributes.position.array.length / 3;
+        });
+        setVertexCount(totalVerts);
+
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "解析文件时发生错误");
+      }
     }
   }, []);
 
@@ -87,6 +133,9 @@ export default function Home() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const fileExt = useMemo(() => getFileExtension(fileName), [fileName]);
+  const is2DFile = useMemo(() => SUPPORTED_2D.includes(fileExt), [fileExt]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -97,25 +146,35 @@ export default function Home() {
               <FileBox className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">CORITON 康瑞通</h1>
-              <p className="text-xs text-muted-foreground -mt-0.5">3D 文件预览测试</p>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">
+                CORITON 康瑞通
+              </h1>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                3D / CAD 文件预览测试
+              </p>
             </div>
           </div>
-          <Badge variant="secondary" className="text-xs">
-            支持 STP / STEP / STL
-          </Badge>
+          <div className="flex gap-1.5">
+            <Badge variant="secondary" className="text-xs">
+              3D: STP / STEP / STL
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              CAD: DXF
+            </Badge>
+          </div>
         </div>
       </header>
 
       <main className="container py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-          {/* Left: 3D Viewer */}
+          {/* Left: Viewer Area */}
           <div className="space-y-4">
-            {/* Upload Area / Viewer */}
             <Card className="overflow-hidden">
               <div
                 className={`relative ${
-                  status === "ready" ? "h-[calc(100vh-220px)] min-h-[500px]" : ""
+                  status === "ready"
+                    ? "h-[calc(100vh-220px)] min-h-[500px]"
+                    : ""
                 }`}
               >
                 {status === "idle" || status === "error" ? (
@@ -134,7 +193,7 @@ export default function Home() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".stp,.step,.stl"
+                      accept={ACCEPT_STRING}
                       className="hidden"
                       onChange={handleInputChange}
                     />
@@ -142,15 +201,26 @@ export default function Home() {
                       <Upload className="w-10 h-10 text-primary" />
                     </div>
                     <h3 className="text-xl font-semibold text-foreground mb-2">
-                      上传 3D 文件
+                      上传 3D / CAD 文件
                     </h3>
                     <p className="text-muted-foreground text-center max-w-md mb-4">
-                      将 STP、STEP 或 STL 文件拖拽到此处，或点击选择文件
+                      将文件拖拽到此处，或点击选择文件
                     </p>
-                    <div className="flex gap-2">
-                      <Badge variant="outline">.STP</Badge>
-                      <Badge variant="outline">.STEP</Badge>
-                      <Badge variant="outline">.STL</Badge>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <div className="flex gap-1.5 items-center">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          3D:
+                        </span>
+                        <Badge variant="outline">.STP</Badge>
+                        <Badge variant="outline">.STEP</Badge>
+                        <Badge variant="outline">.STL</Badge>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          CAD:
+                        </span>
+                        <Badge variant="outline">.DXF</Badge>
+                      </div>
                     </div>
                     {status === "error" && (
                       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-lg text-sm max-w-md text-center">
@@ -158,7 +228,7 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                ) : status === "parsing" ? (
+                ) : status === "parsing" && viewerMode !== "2d" ? (
                   <div
                     className="flex flex-col items-center justify-center bg-muted/30"
                     style={{ minHeight: "500px" }}
@@ -167,7 +237,7 @@ export default function Home() {
                       <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
                     </div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">
-                      正在解析 3D 文件...
+                      正在解析文件...
                     </h3>
                     <p className="text-muted-foreground text-sm">
                       {fileName} ({formatFileSize(fileSize)})
@@ -176,6 +246,8 @@ export default function Home() {
                       首次加载 STEP 文件需要初始化 WASM 引擎，可能需要几秒钟
                     </p>
                   </div>
+                ) : viewerMode === "2d" ? (
+                  <DxfViewerComponent fileUrl={dxfFileUrl} />
                 ) : (
                   <ThreeViewer meshData={meshData} />
                 )}
@@ -185,18 +257,33 @@ export default function Home() {
             {/* Controls hint */}
             {status === "ready" && (
               <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  左键拖拽旋转
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  滚轮缩放
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Move className="w-3.5 h-3.5" />
-                  右键拖拽平移
-                </span>
+                {viewerMode === "3d" ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      左键拖拽旋转
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      滚轮缩放
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Move className="w-3.5 h-3.5" />
+                      右键拖拽平移
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <MousePointer className="w-3.5 h-3.5" />
+                      左键拖拽平移
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      滚轮缩放
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -213,36 +300,61 @@ export default function Home() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {status === "ready" ? (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">文件名</span>
-                        <span className="font-medium truncate ml-2 max-w-[180px]" title={fileName}>
-                          {fileName}
-                        </span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">文件大小</span>
-                        <span className="font-medium">{formatFileSize(fileSize)}</span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">格式</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {getFileExtension(fileName).toUpperCase()}
-                        </Badge>
-                      </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">文件名</span>
+                      <span
+                        className="font-medium truncate ml-2 max-w-[180px]"
+                        title={fileName}
+                      >
+                        {fileName}
+                      </span>
                     </div>
-                  </>
+                    <Separator />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">文件大小</span>
+                      <span className="font-medium">
+                        {formatFileSize(fileSize)}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">格式</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {fileExt.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">类型</span>
+                      <Badge
+                        variant={is2DFile ? "outline" : "secondary"}
+                        className="text-xs"
+                      >
+                        {is2DFile ? (
+                          <span className="flex items-center gap-1">
+                            <FileType className="w-3 h-3" />
+                            2D CAD 图纸
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <Layers className="w-3 h-3" />
+                            3D 模型
+                          </span>
+                        )}
+                      </Badge>
+                    </div>
+                  </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">请先上传 3D 文件</p>
+                  <p className="text-sm text-muted-foreground">
+                    请先上传 3D 或 CAD 文件
+                  </p>
                 )}
               </CardContent>
             </Card>
 
-            {/* Model Stats */}
-            {status === "ready" && (
+            {/* Model Stats (3D only) */}
+            {status === "ready" && viewerMode === "3d" && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -258,7 +370,9 @@ export default function Home() {
                   <Separator />
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">顶点数</span>
-                    <span className="font-medium">{vertexCount.toLocaleString()}</span>
+                    <span className="font-medium">
+                      {vertexCount.toLocaleString()}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-sm">
@@ -266,7 +380,32 @@ export default function Home() {
                       <Clock className="w-3 h-3" />
                       解析耗时
                     </span>
-                    <span className="font-medium">{(parseTime / 1000).toFixed(2)}s</span>
+                    <span className="font-medium">
+                      {(parseTime / 1000).toFixed(2)}s
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* DXF Info (2D only) */}
+            {status === "ready" && viewerMode === "2d" && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <FileType className="w-4 h-4" />
+                    图纸信息
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">渲染引擎</span>
+                    <span className="font-medium">DXF Viewer (WebGL)</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">视图类型</span>
+                    <span className="font-medium">2D 正交投影</span>
                   </div>
                 </CardContent>
               </Card>
@@ -289,11 +428,18 @@ export default function Home() {
               <CardContent className="pt-4">
                 <h4 className="text-sm font-medium mb-2">操作提示</h4>
                 <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li>• 支持 STP/STEP 和 STL 格式的 3D 文件</li>
-                  <li>• STEP 文件会在浏览器中实时解析（使用 WASM）</li>
-                  <li>• 鼠标左键拖拽旋转模型</li>
-                  <li>• 鼠标滚轮缩放模型</li>
-                  <li>• 鼠标右键拖拽平移视角</li>
+                  <li>
+                    <span className="font-medium text-foreground">3D 文件</span>
+                    ：支持 STP/STEP 和 STL 格式
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">CAD 图纸</span>
+                    ：支持 DXF 格式
+                  </li>
+                  <li>• STEP 文件使用 WASM 引擎在浏览器端解析</li>
+                  <li>• DXF 文件使用 WebGL 引擎直接渲染 2D 图纸</li>
+                  <li>• 3D 模型：左键旋转 / 滚轮缩放 / 右键平移</li>
+                  <li>• 2D 图纸：左键平移 / 滚轮缩放</li>
                   <li>• 大文件解析可能需要较长时间</li>
                 </ul>
               </CardContent>
