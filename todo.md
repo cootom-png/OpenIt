@@ -20,3 +20,4 @@
 - [x] 隐藏cad-simple-viewer自带UI控件(关闭按钮、命令栏、下拉按钮)
 - [x] 更新右侧面板渲染引擎信息为CAD Viewer (WebGL)
 - [x] BUG修复：STP文件上传时报"falling back to ArrayBuffer instantiation"错误
+- [x] 将常用CAD字体预集成到CDN，避免每次打开DWG文件都从外网下载字体

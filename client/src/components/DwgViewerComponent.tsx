@@ -74,7 +74,7 @@ export default function DwgViewerComponent({
             AcApDocManager.createInstance({
               container: containerRef.current!,
               autoResize: true,
-              baseUrl: "https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/",
+              baseUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
             });
             initRef.current = true;
           } catch (e: any) {
@@ -88,7 +88,7 @@ export default function DwgViewerComponent({
 
         if (cancelled) return;
 
-        setProgress("正在解析 DWG 文件（首次加载需下载字体）...");
+        setProgress("正在解析 DWG 文件...");
 
         const options = {
           minimumChunkSize: 1000,
