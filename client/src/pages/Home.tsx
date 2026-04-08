@@ -40,7 +40,7 @@ import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
-import html2canvas from "html2canvas";
+import { captureViewerThumbnail } from "@/lib/captureThumb";
 
 /**
  * Load a remote file from S3 URL into the viewer.
@@ -330,36 +330,19 @@ export default function Home() {
       setPendingThumbFileId(null);
       (async () => {
         try {
-          // Wait for rendering to fully complete
-          await new Promise(r => setTimeout(r, 1500));
+          // Wait for rendering to fully complete (WebGL needs time)
+          await new Promise(r => setTimeout(r, 2000));
           const container = viewerContainerRef.current;
           if (!container) return;
-          const canvas = await html2canvas(container, {
-            useCORS: true,
-            allowTaint: true,
-            scale: 0.5,
-            width: container.offsetWidth,
-            height: container.offsetHeight,
-            logging: false,
-            backgroundColor: "#ffffff",
-          });
-          const thumbCanvas = document.createElement("canvas");
-          const maxW = 300;
-          const ratio = canvas.height / canvas.width;
-          thumbCanvas.width = maxW;
-          thumbCanvas.height = Math.round(maxW * ratio);
-          const tctx = thumbCanvas.getContext("2d");
-          if (tctx) {
-            tctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-            const thumbDataUrl = thumbCanvas.toDataURL("image/png");
-            const thumbBase64 = thumbDataUrl.split(",")[1];
-            if (thumbBase64) {
-              await uploadThumbnailMut.mutateAsync({
-                fileId,
-                thumbnailBase64: thumbBase64,
-              });
-              toast.success("缩略图已生成");
-            }
+          const thumbBase64 = await captureViewerThumbnail(container);
+          if (thumbBase64) {
+            await uploadThumbnailMut.mutateAsync({
+              fileId,
+              thumbnailBase64: thumbBase64,
+            });
+            toast.success("缩略图已生成");
+          } else {
+            toast.error("缩略图截取失败，请重试");
           }
         } catch (err) {
           console.warn("Auto thumbnail generation failed:", err);
@@ -1450,34 +1433,14 @@ export default function Home() {
                       try {
                         const container = viewerContainerRef.current;
                         if (container) {
-                          // Wait for rendering to complete
-                          await new Promise(r => setTimeout(r, 1000));
-                          const canvas = await html2canvas(container, {
-                            useCORS: true,
-                            allowTaint: true,
-                            scale: 0.5,
-                            width: container.offsetWidth,
-                            height: container.offsetHeight,
-                            logging: false,
-                            backgroundColor: "#ffffff",
-                          });
-                          // Resize to max 300px wide thumbnail
-                          const thumbCanvas = document.createElement("canvas");
-                          const maxW = 300;
-                          const ratio = canvas.height / canvas.width;
-                          thumbCanvas.width = maxW;
-                          thumbCanvas.height = Math.round(maxW * ratio);
-                          const tctx = thumbCanvas.getContext("2d");
-                          if (tctx) {
-                            tctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-                            const thumbDataUrl = thumbCanvas.toDataURL("image/png");
-                            const thumbBase64 = thumbDataUrl.split(",")[1];
-                            if (thumbBase64) {
-                              await uploadThumbnailMut.mutateAsync({
-                                fileId: result.file.id,
-                                thumbnailBase64: thumbBase64,
-                              });
-                            }
+                          // Wait for WebGL rendering to complete
+                          await new Promise(r => setTimeout(r, 2000));
+                          const thumbBase64 = await captureViewerThumbnail(container);
+                          if (thumbBase64) {
+                            await uploadThumbnailMut.mutateAsync({
+                              fileId: result.file.id,
+                              thumbnailBase64: thumbBase64,
+                            });
                           }
                         }
                       } catch (thumbErr) {

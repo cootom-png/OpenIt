@@ -85,3 +85,5 @@
 - [x] BUG修复：个人中心文件卡片不显示缩略图（历史文件无缩略图数据）
 - [x] 优化：图片类文件直接用S3原图URL作为缩略图，无需html2canvas截取
 - [x] 功能：个人中心卡片增加“生成缩略图”按钮，点击后跳转预览并自动截取缩略图
+- [x] BUG修复：DWG/STP等WebGL渲染文件缩略图无法生成（改用canvas.toDataURL直接截取）
+- [x] 改用 canvas.toDataURL 直接从 WebGL canvas 获取截图替代 html2canvas（Three.js设置preserveDrawingBuffer+智能选择最大canvas）
