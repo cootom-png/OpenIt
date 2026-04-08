@@ -13,23 +13,25 @@ import {
   Layers,
   Info,
   FileType,
-  MousePointer,
 } from "lucide-react";
 import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
 import DxfViewerComponent from "@/components/DxfViewerComponent";
+import DwgViewerComponent from "@/components/DwgViewerComponent";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl"];
-const SUPPORTED_2D = ["dxf"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D];
+const SUPPORTED_2D_DXF = ["dxf"];
+const SUPPORTED_2D_DWG = ["dwg"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG];
 const ACCEPT_STRING = ALL_SUPPORTED.map((e) => `.${e}`).join(",");
 
 export default function Home() {
   const [meshData, setMeshData] = useState<ParsedMeshData | null>(null);
   const [dxfFileUrl, setDxfFileUrl] = useState<string | null>(null);
+  const [dwgFileBuffer, setDwgFileBuffer] = useState<ArrayBuffer | null>(null);
   const [viewerMode, setViewerMode] = useState<ViewerMode>(null);
   const [status, setStatus] = useState<FileStatus>("idle");
   const [fileName, setFileName] = useState<string>("");
@@ -38,6 +40,7 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [meshCount, setMeshCount] = useState<number>(0);
   const [vertexCount, setVertexCount] = useState<number>(0);
+  const [dwgInfo, setDwgInfo] = useState<{ entityCount: number; layerCount: number } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,14 +60,31 @@ export default function Home() {
     setErrorMsg("");
     setMeshData(null);
     setDxfFileUrl(null);
+    setDwgFileBuffer(null);
+    setDwgInfo(null);
 
-    if (SUPPORTED_2D.includes(ext)) {
-      // DXF file - use DxfViewer
-      setViewerMode("2d");
+    if (SUPPORTED_2D_DWG.includes(ext)) {
+      // DWG file - use DwgViewer (libredwg-web WASM → SVG)
+      setViewerMode("2d-dwg");
       setStatus("parsing");
 
       try {
-        // Create a blob URL for the DXF file
+        const buffer = await file.arrayBuffer();
+        setDwgFileBuffer(buffer);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载 DWG 文件时发生错误");
+      }
+    } else if (SUPPORTED_2D_DXF.includes(ext)) {
+      // DXF file - use DxfViewer
+      setViewerMode("2d-dxf");
+      setStatus("parsing");
+
+      try {
         const blobUrl = URL.createObjectURL(file);
         setDxfFileUrl(blobUrl);
         setParseTime(0);
@@ -134,7 +154,10 @@ export default function Home() {
   };
 
   const fileExt = useMemo(() => getFileExtension(fileName), [fileName]);
-  const is2DFile = useMemo(() => SUPPORTED_2D.includes(fileExt), [fileExt]);
+  const is2DFile = useMemo(
+    () => SUPPORTED_2D_DXF.includes(fileExt) || SUPPORTED_2D_DWG.includes(fileExt),
+    [fileExt]
+  );
 
   // Reset file input value so the same file can be re-selected
   const triggerFileInput = useCallback(() => {
@@ -143,6 +166,13 @@ export default function Home() {
       fileInputRef.current.click();
     }
   }, []);
+
+  const handleDwgParsed = useCallback(
+    (info: { entityCount: number; layerCount: number }) => {
+      setDwgInfo(info);
+    },
+    []
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -176,7 +206,7 @@ export default function Home() {
               3D: STP / STEP / STL
             </Badge>
             <Badge variant="outline" className="text-xs">
-              CAD: DXF
+              CAD: DXF / DWG
             </Badge>
           </div>
         </div>
@@ -230,6 +260,7 @@ export default function Home() {
                           CAD:
                         </span>
                         <Badge variant="outline">.DXF</Badge>
+                        <Badge variant="outline">.DWG</Badge>
                       </div>
                     </div>
                     {status === "error" && (
@@ -238,7 +269,7 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                ) : status === "parsing" && viewerMode !== "2d" ? (
+                ) : status === "parsing" && viewerMode === "3d" ? (
                   <div
                     className="flex flex-col items-center justify-center bg-muted/30"
                     style={{ minHeight: "500px" }}
@@ -256,7 +287,13 @@ export default function Home() {
                       首次加载 STEP 文件需要初始化 WASM 引擎，可能需要几秒钟
                     </p>
                   </div>
-                ) : viewerMode === "2d" ? (
+                ) : viewerMode === "2d-dwg" ? (
+                  <DwgViewerComponent
+                    fileBuffer={dwgFileBuffer}
+                    fileName={fileName}
+                    onParsed={handleDwgParsed}
+                  />
+                ) : viewerMode === "2d-dxf" ? (
                   <DxfViewerComponent fileUrl={dxfFileUrl} />
                 ) : (
                   <ThreeViewer meshData={meshData} />
@@ -285,7 +322,7 @@ export default function Home() {
                 ) : (
                   <>
                     <span className="flex items-center gap-1.5">
-                      <MousePointer className="w-3.5 h-3.5" />
+                      <Move className="w-3.5 h-3.5" />
                       左键拖拽平移
                     </span>
                     <span className="flex items-center gap-1.5">
@@ -398,8 +435,8 @@ export default function Home() {
               </Card>
             )}
 
-            {/* DXF Info (2D only) */}
-            {status === "ready" && viewerMode === "2d" && (
+            {/* DXF Info (2D DXF only) */}
+            {status === "ready" && viewerMode === "2d-dxf" && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -417,6 +454,45 @@ export default function Home() {
                     <span className="text-muted-foreground">视图类型</span>
                     <span className="font-medium">2D 正交投影</span>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* DWG Info (2D DWG only) */}
+            {status === "ready" && viewerMode === "2d-dwg" && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <FileType className="w-4 h-4" />
+                    图纸信息
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">渲染引擎</span>
+                    <span className="font-medium">LibreDWG (WASM → SVG)</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">视图类型</span>
+                    <span className="font-medium">2D 矢量图</span>
+                  </div>
+                  {dwgInfo && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">实体数量</span>
+                        <span className="font-medium">
+                          {dwgInfo.entityCount.toLocaleString()}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">图层数量</span>
+                        <span className="font-medium">{dwgInfo.layerCount}</span>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -444,10 +520,11 @@ export default function Home() {
                   </li>
                   <li>
                     <span className="font-medium text-foreground">CAD 图纸</span>
-                    ：支持 DXF 格式
+                    ：支持 DXF 和 DWG 格式
                   </li>
                   <li>• STEP 文件使用 WASM 引擎在浏览器端解析</li>
                   <li>• DXF 文件使用 WebGL 引擎直接渲染 2D 图纸</li>
+                  <li>• DWG 文件使用 LibreDWG WASM 引擎解析并转为 SVG 预览</li>
                   <li>• 3D 模型：左键旋转 / 滚轮缩放 / 右键平移</li>
                   <li>• 2D 图纸：左键平移 / 滚轮缩放</li>
                   <li>• 大文件解析可能需要较长时间</li>
