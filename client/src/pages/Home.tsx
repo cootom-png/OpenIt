@@ -330,8 +330,8 @@ export default function Home() {
       setPendingThumbFileId(null);
       (async () => {
         try {
-          // Wait for rendering to fully complete (WebGL needs time)
-          await new Promise(r => setTimeout(r, 2000));
+          // Wait for rendering to fully complete (DWG CAD viewer needs extra time)
+          await new Promise(r => setTimeout(r, 3500));
           const container = viewerContainerRef.current;
           if (!container) return;
           const thumbBase64 = await captureViewerThumbnail(container);
@@ -1433,8 +1433,8 @@ export default function Home() {
                       try {
                         const container = viewerContainerRef.current;
                         if (container) {
-                          // Wait for WebGL rendering to complete
-                          await new Promise(r => setTimeout(r, 2000));
+                          // Wait for WebGL rendering to complete (DWG needs extra time)
+                          await new Promise(r => setTimeout(r, 3500));
                           const thumbBase64 = await captureViewerThumbnail(container);
                           if (thumbBase64) {
                             await uploadThumbnailMut.mutateAsync({
