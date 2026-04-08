@@ -470,12 +470,12 @@ export default function Home() {
                 <CardContent className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">渲染引擎</span>
-                    <span className="font-medium">LibreDWG (WASM → SVG)</span>
+                    <span className="font-medium">CAD Viewer (WebGL)</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">视图类型</span>
-                    <span className="font-medium">2D 矢量图</span>
+                    <span className="font-medium">2D WebGL 渲染</span>
                   </div>
                   {dwgInfo && (
                     <>
@@ -524,7 +524,7 @@ export default function Home() {
                   </li>
                   <li>• STEP 文件使用 WASM 引擎在浏览器端解析</li>
                   <li>• DXF 文件使用 WebGL 引擎直接渲染 2D 图纸</li>
-                  <li>• DWG 文件使用 LibreDWG WASM 引擎解析并转为 SVG 预览</li>
+                  <li>• DWG 文件使用 CAD Viewer WebGL 引擎直接渲染</li>
                   <li>• 3D 模型：左键旋转 / 滚轮缩放 / 右键平移</li>
                   <li>• 2D 图纸：左键平移 / 滚轮缩放</li>
                   <li>• 大文件解析可能需要较长时间</li>

@@ -16,3 +16,6 @@
 - [x] BUG修复：DWG文件打开时报"falling back to ArrayBuffer instantiation"错误
 - [x] BUG修复：DWG文件预览时图像显示非常小，大片空白区域
 - [x] BUG修复：DWG文件预览显示为一片黑色，SVG viewBox宽高比极端不均衡(34483×300)
+- [x] 改用cad-simple-viewer (WebGL)替代libredwg dwg_to_svg，支持所有DWG实体类型
+- [x] 隐藏cad-simple-viewer自带UI控件(关闭按钮、命令栏、下拉按钮)
+- [x] 更新右侧面板渲染引擎信息为CAD Viewer (WebGL)
