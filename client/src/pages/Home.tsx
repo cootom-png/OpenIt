@@ -17,15 +17,17 @@ import {
 import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
 import DxfViewerComponent from "@/components/DxfViewerComponent";
 import DwgViewerComponent from "@/components/DwgViewerComponent";
+import ImageViewer from "@/components/ImageViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG];
+const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE];
 const ACCEPT_STRING = ALL_SUPPORTED.map((e) => `.${e}`).join(",");
 
 export default function Home() {
@@ -41,6 +43,8 @@ export default function Home() {
   const [meshCount, setMeshCount] = useState<number>(0);
   const [vertexCount, setVertexCount] = useState<number>(0);
   const [dwgInfo, setDwgInfo] = useState<{ entityCount: number; layerCount: number } | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageInfo, setImageInfo] = useState<{ width: number; height: number } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,8 +66,26 @@ export default function Home() {
     setDxfFileUrl(null);
     setDwgFileBuffer(null);
     setDwgInfo(null);
+    setImageUrl(null);
+    setImageInfo(null);
 
-    if (SUPPORTED_2D_DWG.includes(ext)) {
+    if (SUPPORTED_IMAGE.includes(ext)) {
+      // Image file - use ImageViewer
+      setViewerMode("image");
+      setStatus("parsing");
+
+      try {
+        const blobUrl = URL.createObjectURL(file);
+        setImageUrl(blobUrl);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载图片文件时发生错误");
+      }
+    } else if (SUPPORTED_2D_DWG.includes(ext)) {
       // DWG file - use DwgViewer (libredwg-web WASM → SVG)
       setViewerMode("2d-dwg");
       setStatus("parsing");
@@ -158,6 +180,10 @@ export default function Home() {
     () => SUPPORTED_2D_DXF.includes(fileExt) || SUPPORTED_2D_DWG.includes(fileExt),
     [fileExt]
   );
+  const isImageFile = useMemo(
+    () => SUPPORTED_IMAGE.includes(fileExt),
+    [fileExt]
+  );
 
   // Reset file input value so the same file can be re-selected
   const triggerFileInput = useCallback(() => {
@@ -170,6 +196,13 @@ export default function Home() {
   const handleDwgParsed = useCallback(
     (info: { entityCount: number; layerCount: number }) => {
       setDwgInfo(info);
+    },
+    []
+  );
+
+  const handleImageLoaded = useCallback(
+    (info: { width: number; height: number }) => {
+      setImageInfo(info);
     },
     []
   );
@@ -208,6 +241,9 @@ export default function Home() {
             <Badge variant="outline" className="text-xs">
               CAD: DXF / DWG
             </Badge>
+            <Badge variant="outline" className="text-xs">
+              IMG: JPG / PNG / GIF
+            </Badge>
           </div>
         </div>
       </header>
@@ -241,7 +277,7 @@ export default function Home() {
                       <Upload className="w-10 h-10 text-primary" />
                     </div>
                     <h3 className="text-xl font-semibold text-foreground mb-2">
-                      上传 3D / CAD 文件
+                      上传 3D / CAD / 图片文件
                     </h3>
                     <p className="text-muted-foreground text-center max-w-md mb-4">
                       将文件拖拽到此处，或点击选择文件
@@ -261,6 +297,14 @@ export default function Home() {
                         </span>
                         <Badge variant="outline">.DXF</Badge>
                         <Badge variant="outline">.DWG</Badge>
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          图片:
+                        </span>
+                        <Badge variant="outline">.JPG</Badge>
+                        <Badge variant="outline">.PNG</Badge>
+                        <Badge variant="outline">.GIF</Badge>
                       </div>
                     </div>
                     {status === "error" && (
@@ -287,6 +331,12 @@ export default function Home() {
                       首次加载 STEP 文件需要初始化 WASM 引擎，可能需要几秒钟
                     </p>
                   </div>
+                ) : viewerMode === "image" ? (
+                  <ImageViewer
+                    imageUrl={imageUrl}
+                    fileName={fileName}
+                    onImageLoaded={handleImageLoaded}
+                  />
                 ) : viewerMode === "2d-dwg" ? (
                   <DwgViewerComponent
                     fileBuffer={dwgFileBuffer}
@@ -317,6 +367,21 @@ export default function Home() {
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
                       右键拖拽平移
+                    </span>
+                  </>
+                ) : viewerMode === "image" ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <Move className="w-3.5 h-3.5" />
+                      拖拽平移
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      滚轮缩放
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      工具栏旋转
                     </span>
                   </>
                 ) : (
@@ -375,10 +440,14 @@ export default function Home() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">类型</span>
                       <Badge
-                        variant={is2DFile ? "outline" : "secondary"}
+                        variant={is2DFile ? "outline" : isImageFile ? "default" : "secondary"}
                         className="text-xs"
                       >
-                        {is2DFile ? (
+                        {isImageFile ? (
+                          <span className="flex items-center gap-1">
+                            图片文件
+                          </span>
+                        ) : is2DFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
                             2D CAD 图纸
@@ -394,7 +463,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    请先上传 3D 或 CAD 文件
+                    请先上传 3D、CAD 或图片文件
                   </p>
                 )}
               </CardContent>
@@ -497,6 +566,60 @@ export default function Home() {
               </Card>
             )}
 
+            {/* Image Info */}
+            {status === "ready" && viewerMode === "image" && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Info className="w-4 h-4" />
+                    图片信息
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {imageInfo && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">分辨率</span>
+                        <span className="font-medium">
+                          {imageInfo.width} × {imageInfo.height}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">像素总数</span>
+                        <span className="font-medium">
+                          {(imageInfo.width * imageInfo.height).toLocaleString()}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">宽高比</span>
+                        <span className="font-medium">
+                          {(imageInfo.width / imageInfo.height).toFixed(2)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">透明通道</span>
+                    <span className="font-medium">
+                      {fileExt === "png" || fileExt === "gif" ? "支持" : "不支持"}
+                    </span>
+                  </div>
+                  {fileExt === "gif" && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">动画</span>
+                        <span className="font-medium">支持</span>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Upload another file */}
             {status === "ready" && (
               <Button
@@ -522,9 +645,14 @@ export default function Home() {
                     <span className="font-medium text-foreground">CAD 图纸</span>
                     ：支持 DXF 和 DWG 格式
                   </li>
+                  <li>
+                    <span className="font-medium text-foreground">图片</span>
+                    ：支持 JPG/JPEG、PNG、GIF 格式
+                  </li>
                   <li>• STEP 文件使用 WASM 引擎在浏览器端解析</li>
                   <li>• DXF 文件使用 WebGL 引擎直接渲染 2D 图纸</li>
                   <li>• DWG 文件使用 CAD Viewer WebGL 引擎直接渲染</li>
+                  <li>• 图片支持缩放、平移、旋转、下载</li>
                   <li>• 3D 模型：左键旋转 / 滚轮缩放 / 右键平移</li>
                   <li>• 2D 图纸：左键平移 / 滚轮缩放</li>
                   <li>• 大文件解析可能需要较长时间</li>
