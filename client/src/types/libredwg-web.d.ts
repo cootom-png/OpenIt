@@ -21,6 +21,7 @@ declare module "@mlightcad/libredwg-web" {
   }
 
   export function createModule(options?: {
+    wasmBinary?: ArrayBuffer;
     locateFile?: (filename: string) => string;
   }): Promise<any>;
 

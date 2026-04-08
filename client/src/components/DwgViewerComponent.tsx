@@ -107,20 +107,43 @@ export default function DwgViewerComponent({
         // Dynamic import to avoid SSR issues
         setProgress("正在加载 LibreDWG WASM 引擎...");
 
-        // We need to import the library and configure wasm path
         const libredwgModule = await import("@mlightcad/libredwg-web");
-        const { LibreDwg, Dwg_File_Type } = libredwgModule;
+        const { LibreDwg, Dwg_File_Type, createModule } = libredwgModule;
 
         if (cancelled) return;
 
-        // Create LibreDwg instance with custom wasm path
+        setProgress("正在下载 WASM 引擎...");
+
+        // Pre-fetch the WASM binary as ArrayBuffer to avoid MIME type issues
+        // This prevents the "wasm streaming compile failed" error
+        const wasmResponse = await fetch(LIBREDWG_WASM_CDN_URL);
+        if (!wasmResponse.ok) {
+          throw new Error(`WASM 引擎下载失败 (HTTP ${wasmResponse.status})`);
+        }
+        const wasmBinary = await wasmResponse.arrayBuffer();
+
+        if (cancelled) return;
+
         setProgress("正在初始化 LibreDWG...");
 
-        // Import createModule directly to control wasm loading
-        const { createModule } = libredwgModule;
+        // Suppress console.error temporarily during WASM init
+        // to prevent "falling back to ArrayBuffer" noise
+        const originalConsoleError = console.error;
+        const originalConsoleLog = console.log;
+        const suppressedMessages = [
+          "falling back to ArrayBuffer",
+          "wasm streaming compile failed",
+        ];
 
-        // Use createModule with locateFile to point to our CDN wasm
+        console.error = (...args: any[]) => {
+          const msg = args.join(" ");
+          if (suppressedMessages.some((s) => msg.includes(s))) return;
+          originalConsoleError.apply(console, args);
+        };
+
+        // Use createModule with wasmBinary to skip streaming compilation entirely
         const wasmInstance = await createModule({
+          wasmBinary,
           locateFile: (filename: string) => {
             if (filename.endsWith(".wasm")) {
               return LIBREDWG_WASM_CDN_URL;
@@ -129,15 +152,38 @@ export default function DwgViewerComponent({
           },
         });
 
+        // Restore console
+        console.error = originalConsoleError;
+        console.log = originalConsoleLog;
+
         const libredwg = LibreDwg.createByWasmInstance(wasmInstance);
 
         if (cancelled) return;
 
         setProgress("正在解析 DWG 文件...");
 
+        // Suppress the "Open dwg file with error code" log
+        console.log = (...args: any[]) => {
+          const msg = args.join(" ");
+          if (msg.includes("Open dwg file with error code")) return;
+          originalConsoleLog.apply(console, args);
+        };
+
         // Read DWG data
         const uint8Array = new Uint8Array(fileBuffer);
         const dwgData = libredwg.dwg_read_data(uint8Array, Dwg_File_Type.DWG);
+
+        // Restore console.log
+        console.log = originalConsoleLog;
+
+        if (!dwgData) {
+          throw new Error(
+            "DWG 文件解析失败。可能原因：\n" +
+            "1. 文件版本过新（仅支持 R13-R2018）\n" +
+            "2. 文件已损坏或加密\n" +
+            "3. 文件包含不支持的自定义对象"
+          );
+        }
 
         if (cancelled) return;
 
@@ -146,21 +192,33 @@ export default function DwgViewerComponent({
         // Convert to DwgDatabase
         const db = libredwg.convert(dwgData);
 
+        if (!db) {
+          throw new Error("DWG 数据转换失败，文件可能包含不兼容的内容");
+        }
+
         if (cancelled) return;
 
         setProgress("正在生成 SVG 预览...");
 
-        // Use built-in dwg_to_svg method (uses SvgConverter internally)
+        // Use built-in dwg_to_svg method
         const svg = libredwg.dwg_to_svg(db);
 
         if (cancelled) return;
+
+        if (!svg || svg.trim().length === 0) {
+          throw new Error("SVG 生成为空，DWG 文件可能不包含可显示的图形内容");
+        }
 
         // Extract info from database
         const entityCount: number = db.entities?.length ?? 0;
         const layerCount: number = db.tables?.LAYER?.entries?.length ?? 0;
 
         // Free memory
-        libredwg.dwg_free(dwgData);
+        try {
+          libredwg.dwg_free(dwgData);
+        } catch {
+          // Ignore cleanup errors
+        }
 
         setSvgContent(svg);
         setIsLoading(false);
@@ -234,7 +292,7 @@ export default function DwgViewerComponent({
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10">
           <div className="p-6 bg-destructive/10 text-destructive rounded-lg text-sm max-w-md text-center">
             <p className="font-medium mb-1">DWG 文件解析失败</p>
-            <p>{error}</p>
+            <p className="whitespace-pre-line">{error}</p>
           </div>
         </div>
       )}

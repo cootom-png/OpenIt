@@ -13,3 +13,4 @@
 - [x] 实现浏览器端DWG→SVG转换预览（libredwg-web WASM引擎 + dwg_to_svg方法）
 - [x] 前端集成DWG文件上传与预览流程
 - [x] DWG预览功能集成测试验证（15项测试全部通过）
+- [x] BUG修复：DWG文件打开时报"falling back to ArrayBuffer instantiation"错误
