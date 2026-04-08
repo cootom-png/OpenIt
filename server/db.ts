@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, desc, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, InsertFileUpload, users, fileUploads } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,74 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ─── File Upload Tracking ───
+
+export async function recordFileUpload(record: InsertFileUpload) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot record file upload: database not available");
+    return;
+  }
+  try {
+    await db.insert(fileUploads).values(record);
+  } catch (error) {
+    console.error("[Database] Failed to record file upload:", error);
+  }
+}
+
+export async function updateFileUploadPreview(id: number, success: boolean, errorMessage?: string) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.update(fileUploads)
+      .set({ previewSuccess: success, errorMessage: errorMessage || null })
+      .where(eq(fileUploads.id, id));
+  } catch (error) {
+    console.error("[Database] Failed to update file upload preview:", error);
+  }
+}
+
+export async function getFileUploads(opts: { page: number; pageSize: number; category?: string; isSupported?: boolean }) {
+  const db = await getDb();
+  if (!db) return { records: [], total: 0 };
+
+  const conditions: any[] = [];
+  if (opts.category) conditions.push(eq(fileUploads.category, opts.category));
+  if (opts.isSupported !== undefined) conditions.push(eq(fileUploads.isSupported, opts.isSupported));
+
+  const whereClause = conditions.length > 0
+    ? sql`${sql.join(conditions, sql` AND `)}`
+    : undefined;
+
+  const [records, totalResult] = await Promise.all([
+    whereClause
+      ? db.select().from(fileUploads).where(whereClause).orderBy(desc(fileUploads.createdAt)).limit(opts.pageSize).offset((opts.page - 1) * opts.pageSize)
+      : db.select().from(fileUploads).orderBy(desc(fileUploads.createdAt)).limit(opts.pageSize).offset((opts.page - 1) * opts.pageSize),
+    whereClause
+      ? db.select({ count: count() }).from(fileUploads).where(whereClause)
+      : db.select({ count: count() }).from(fileUploads),
+  ]);
+
+  return { records, total: totalResult[0]?.count || 0 };
+}
+
+export async function getFileUploadStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, byCategory: [], byExt: [], unsupported: [], recentUploads: [] };
+
+  const [totalResult, byCategoryResult, byExtResult, unsupportedResult, recentResult] = await Promise.all([
+    db.select({ count: count() }).from(fileUploads),
+    db.select({ category: fileUploads.category, count: count() }).from(fileUploads).groupBy(fileUploads.category),
+    db.select({ ext: fileUploads.fileExt, count: count() }).from(fileUploads).groupBy(fileUploads.fileExt).orderBy(desc(count())),
+    db.select({ ext: fileUploads.fileExt, count: count() }).from(fileUploads).where(eq(fileUploads.isSupported, false)).groupBy(fileUploads.fileExt).orderBy(desc(count())),
+    db.select().from(fileUploads).orderBy(desc(fileUploads.createdAt)).limit(20),
+  ]);
+
+  return {
+    total: totalResult[0]?.count || 0,
+    byCategory: byCategoryResult,
+    byExt: byExtResult,
+    unsupported: unsupportedResult,
+    recentUploads: recentResult,
+  };
+}
