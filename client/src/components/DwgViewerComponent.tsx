@@ -12,10 +12,6 @@ interface DwgViewerComponentProps {
  * so they don't clash with our own UI.
  */
 function hideCadViewerUI(container: HTMLElement) {
-  // The cad-simple-viewer creates:
-  // - .ml-cli-container: command line interface with close/dropdown buttons
-  // - .ml-ccl-overlay: command completion overlay
-  // We hide these to keep our own clean UI
   const style = document.createElement("style");
   style.textContent = `
     .ml-cli-container {
@@ -28,6 +24,14 @@ function hideCadViewerUI(container: HTMLElement) {
   container.appendChild(style);
 }
 
+/**
+ * Global singleton tracker for AcApDocManager.
+ * The library enforces a single instance, so we must destroy and recreate
+ * when mounting in a different container (e.g. navigating from Home to ShareView).
+ */
+let globalDocManager: any = null;
+let globalContainer: HTMLElement | null = null;
+
 export default function DwgViewerComponent({
   fileBuffer,
   fileName,
@@ -39,14 +43,6 @@ export default function DwgViewerComponent({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const initRef = useRef(false);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      initRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!fileBuffer || !containerRef.current) return;
@@ -60,7 +56,6 @@ export default function DwgViewerComponent({
       setProgress("正在初始化 CAD 查看器...");
 
       try {
-        // Dynamically import cad-simple-viewer
         setProgress("正在加载 CAD 引擎...");
         const { AcApDocManager } = await import("@mlightcad/cad-simple-viewer");
 
@@ -68,21 +63,57 @@ export default function DwgViewerComponent({
 
         setProgress("正在初始化渲染引擎...");
 
-        // Create or reuse the doc manager instance
-        if (!initRef.current) {
+        const currentContainer = containerRef.current!;
+
+        // If the singleton was created with a different container (e.g. user
+        // navigated from Home → ShareView), we must destroy and recreate it.
+        // AcApDocManager is a strict singleton — calling createInstance when
+        // one already exists throws. We detect this via our own tracking vars.
+        if (globalDocManager && globalContainer !== currentContainer) {
+          try {
+            // Try to destroy the old instance so we can create a fresh one
+            // bound to the new container.
+            if (typeof globalDocManager.destroy === "function") {
+              globalDocManager.destroy();
+            } else if (typeof globalDocManager.dispose === "function") {
+              globalDocManager.dispose();
+            }
+          } catch {
+            // ignore destroy errors
+          }
+
+          // Force-clear the internal singleton reference so createInstance works
+          try {
+            (AcApDocManager as any)._instance = null;
+          } catch {
+            // ignore
+          }
+
+          globalDocManager = null;
+          globalContainer = null;
+        }
+
+        if (!globalDocManager) {
           try {
             AcApDocManager.createInstance({
-              container: containerRef.current!,
+              container: currentContainer,
               autoResize: true,
-              baseUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
+              baseUrl:
+                "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
             });
-            initRef.current = true;
+            globalDocManager = AcApDocManager.instance;
+            globalContainer = currentContainer;
           } catch (e: any) {
-            // Instance might already exist - that's ok
-            if (!e.message?.includes("already") && !e.message?.includes("singleton")) {
+            // Instance might already exist — try to reuse it
+            if (
+              e.message?.includes("already") ||
+              e.message?.includes("singleton")
+            ) {
+              globalDocManager = AcApDocManager.instance;
+              globalContainer = currentContainer;
+            } else {
               throw e;
             }
-            initRef.current = true;
           }
         }
 
@@ -113,7 +144,6 @@ export default function DwgViewerComponent({
             const doc = AcApDocManager.instance.curDocument;
             if (doc && onParsed) {
               const db = doc.database as any;
-              // Try different property paths
               const entityCount =
                 db?.modelSpace?.length ??
                 db?.getModelSpace?.()?.length ??
@@ -176,6 +206,34 @@ export default function DwgViewerComponent({
     };
   }, [fileBuffer, fileName, onParsed]);
 
+  // Cleanup on unmount — reset the singleton so next mount gets a fresh instance
+  useEffect(() => {
+    return () => {
+      const cleanup = async () => {
+        try {
+          const { AcApDocManager } = await import("@mlightcad/cad-simple-viewer");
+          if (globalDocManager) {
+            if (typeof globalDocManager.destroy === "function") {
+              globalDocManager.destroy();
+            } else if (typeof globalDocManager.dispose === "function") {
+              globalDocManager.dispose();
+            }
+          }
+          try {
+            (AcApDocManager as any)._instance = null;
+          } catch {
+            // ignore
+          }
+        } catch {
+          // ignore
+        }
+        globalDocManager = null;
+        globalContainer = null;
+      };
+      cleanup();
+    };
+  }, []);
+
   return (
     <div
       className={`relative w-full h-full ${className || ""}`}
@@ -216,7 +274,7 @@ export default function DwgViewerComponent({
         </div>
       )}
 
-      {/* Hint - only show when no cad-viewer command bar is visible */}
+      {/* Hint */}
       {isReady && !isLoading && !error && (
         <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-muted-foreground border shadow-sm z-10">
           滚轮缩放 · 左键拖拽平移
