@@ -1,12 +1,11 @@
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
 
 export function useEmailAuth() {
   const { data: emailUser, isLoading, refetch } = trpc.emailAuth.me.useQuery();
   const loginMutation = trpc.emailAuth.login.useMutation();
   const logoutMutation = trpc.emailAuth.logout.useMutation();
   const registerMutation = trpc.emailAuth.register.useMutation();
-  const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
 
   const login = async (email: string, password: string) => {
     const result = await loginMutation.mutateAsync({ email, password });
@@ -34,10 +33,16 @@ export function useEmailAuth() {
   };
 
   const logout = async () => {
-    await logoutMutation.mutateAsync();
-    navigate("/");
-    // refetch after navigation to avoid component unmount issues
-    setTimeout(() => refetch(), 100);
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // Ignore errors during logout
+    }
+    // Clear both auth caches
+    utils.emailAuth.me.setData(undefined, null);
+    utils.auth.me.setData(undefined, null);
+    // Force full page reload to clear all state and navigate to home
+    window.location.href = "/";
   };
 
   return {

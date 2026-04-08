@@ -161,14 +161,7 @@ export default function AdminUsers() {
               variant="ghost"
               size="sm"
               className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
-              onClick={async () => {
-                try {
-                  await logout();
-                  navigate("/");
-                } catch {
-                  navigate("/");
-                }
-              }}
+              onClick={() => logout()}
             >
               <LogOut className="w-4 h-4" />
               退出

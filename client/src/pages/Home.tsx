@@ -194,7 +194,7 @@ const ACCEPT_STRING = "*/*";
 
 /** Header auth buttons — shows login/register or user dropdown */
 function HeaderAuth() {
-  const { user: oauthUser } = useAuth();
+  const { user: oauthUser, logout: oauthLogout } = useAuth();
   const { emailUser, isLoggedIn, isAdmin: isEmailAdmin, logout, isPending } = useEmailAuth();
 
   const isOAuthAdmin = oauthUser?.role === "admin";
@@ -252,6 +252,18 @@ function HeaderAuth() {
             </Button>
           </Link>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 text-xs text-muted-foreground"
+          onClick={async () => {
+            await oauthLogout();
+            window.location.href = "/";
+          }}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">退出</span>
+        </Button>
       </div>
     );
   }

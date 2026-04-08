@@ -102,15 +102,23 @@ describe("emailAuth", () => {
   });
 
   describe("emailAuth.logout", () => {
-    it("clears the email session cookie", async () => {
+    it("clears both email session and OAuth session cookies", async () => {
       const { ctx, clearedCookies } = createPublicContext();
       const caller = appRouter.createCaller(ctx);
       const result = await caller.emailAuth.logout();
 
       expect(result).toEqual({ success: true });
-      expect(clearedCookies).toHaveLength(1);
+      expect(clearedCookies).toHaveLength(2);
+      // First clears email_session
       expect(clearedCookies[0]?.name).toBe("email_session");
       expect(clearedCookies[0]?.options).toMatchObject({
+        maxAge: -1,
+        httpOnly: true,
+        path: "/",
+      });
+      // Then clears OAuth app_session_id
+      expect(clearedCookies[1]?.name).toBe("app_session_id");
+      expect(clearedCookies[1]?.options).toMatchObject({
         maxAge: -1,
         httpOnly: true,
         path: "/",
