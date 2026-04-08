@@ -26,6 +26,7 @@ import {
   HardDrive,
   Save,
   Box,
+  HelpCircle,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -1609,44 +1610,13 @@ export default function Home() {
               </Button>
             )}
 
-            {/* Tips */}
-            <Card className="bg-muted/30">
-              <CardContent className="pt-4">
-                <h4 className="text-sm font-medium mb-2">操作提示</h4>
-                <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li>
-                    <span className="font-medium text-foreground">3D 文件</span>
-                    ：支持 STP/STEP 和 STL 格式
-                  </li>
-                  <li>
-                    <span className="font-medium text-foreground">CAD 图纸</span>
-                    ：支持 DXF 和 DWG 格式
-                  </li>
-                  <li>
-                    <span className="font-medium text-foreground">图片</span>
-                    ：支持 JPG/JPEG、PNG、GIF 格式
-                  </li>
-                  <li>
-                    <span className="font-medium text-foreground">视频</span>
-                    ：支持 MP4、MOV、WebM、AVI 格式
-                  </li>
-                  <li>
-                    <span className="font-medium text-foreground">文档</span>
-                    ：支持 PDF、Word (DOC/DOCX)、Excel (XLS/XLSX) 格式
-                  </li>
-                  <li>• STEP 文件使用 WASM 引擎在浏览器端解析</li>
-                  <li>• DXF 文件使用 WebGL 引擎直接渲染 2D 图纸</li>
-                  <li>• DWG 文件使用 CAD Viewer WebGL 引擎直接渲染</li>
-                  <li>• 图片支持缩放、平移、旋转、下载</li>
-                  <li>• 视频支持播放、暂停、进度跳转、全屏</li>
-                  <li>• PDF 支持翻页、缩放、旋转、下载</li>
-                  <li>• Word/Excel 支持在线预览和下载</li>
-                  <li>• 3D 模型：左键旋转 / 滚轮缩放 / 右键平移</li>
-                  <li>• 2D 图纸：左键平移 / 滚轮缩放</li>
-                  <li>• 大文件解析可能需要较长时间</li>
-                </ul>
-              </CardContent>
-            </Card>
+            {/* Help Guide Link */}
+            <Link href="/help">
+              <Button variant="outline" className="w-full gap-2 text-muted-foreground hover:text-foreground">
+                <HelpCircle className="w-4 h-4" />
+                操作说明
+              </Button>
+            </Link>
           </div>
         </div>
       </main>

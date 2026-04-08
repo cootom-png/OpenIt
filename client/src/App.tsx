@@ -17,6 +17,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const ShareView = lazy(() => import("./pages/ShareView"));
 const PartsGallery = lazy(() => import("./pages/PartsGallery"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const HelpGuide = lazy(() => import("./pages/HelpGuide"));
 
 const LazyFallback = (
   <div className="min-h-screen flex items-center justify-center text-slate-400">加载中...</div>
@@ -34,6 +35,9 @@ function Router() {
       </Route>
       <Route path={"/parts"}>
         <Suspense fallback={LazyFallback}><PartsGallery /></Suspense>
+      </Route>
+      <Route path={"/help"}>
+        <Suspense fallback={LazyFallback}><HelpGuide /></Suspense>
       </Route>
       <Route path={"/profile"}>
         <Suspense fallback={LazyFallback}><Profile /></Suspense>

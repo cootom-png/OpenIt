@@ -146,3 +146,6 @@
 ### BUG修复
 - [x] BUG：后台管理页面退出按钮点击无反应（logout后先navigate再refetch）
 - [x] UI：去掉页眉上的格式标签文字（3D: STP/STEP/STL、CAD: DXF/DWG、IMG/DOC/PDF）
+- [x] 去掉首页右侧操作提示说明文字
+- [x] 新建独立"操作说明"帮助页面，介绍网站功能和使用注意事项
+- [x] 首页添加"操作说明"链接入口
