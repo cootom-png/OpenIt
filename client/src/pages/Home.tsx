@@ -772,17 +772,7 @@ export default function Home() {
                 3D零件库
               </Button>
             </Link>
-            <div className="hidden md:flex gap-1.5">
-              <Badge variant="secondary" className="text-xs">
-                3D: STP / STEP / STL
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                CAD: DXF / DWG
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                IMG / DOC / PDF
-              </Badge>
-            </div>
+
             <HeaderAuth />
           </div>
         </div>

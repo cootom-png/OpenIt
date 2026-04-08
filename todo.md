@@ -145,3 +145,4 @@
 
 ### BUG修复
 - [x] BUG：后台管理页面退出按钮点击无反应（logout后先navigate再refetch）
+- [x] UI：去掉页眉上的格式标签文字（3D: STP/STEP/STL、CAD: DXF/DWG、IMG/DOC/PDF）
