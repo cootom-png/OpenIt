@@ -19,3 +19,4 @@
 - [x] 改用cad-simple-viewer (WebGL)替代libredwg dwg_to_svg，支持所有DWG实体类型
 - [x] 隐藏cad-simple-viewer自带UI控件(关闭按钮、命令栏、下拉按钮)
 - [x] 更新右侧面板渲染引擎信息为CAD Viewer (WebGL)
+- [x] BUG修复：STP文件上传时报"falling back to ArrayBuffer instantiation"错误

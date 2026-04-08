@@ -9,10 +9,18 @@ let occtInstance: any = null;
 async function getOcctInstance(): Promise<any> {
   if (occtInstance) return occtInstance;
 
+  // Pre-fetch WASM as ArrayBuffer to avoid MIME type issues with instantiateStreaming
+  // CDN may not serve .wasm files with correct application/wasm MIME type,
+  // causing "falling back to ArrayBuffer instantiation" console errors
+  const wasmResponse = await fetch(WASM_CDN_URL);
+  const wasmBinary = await wasmResponse.arrayBuffer();
+
   // Dynamic import of occt-import-js
   const occtimportjs = (await import("occt-import-js")).default;
 
+  // Pass wasmBinary directly to bypass instantiateStreaming and avoid MIME errors
   occtInstance = await occtimportjs({
+    wasmBinary: wasmBinary,
     locateFile: (filename: string) => {
       if (filename.endsWith(".wasm")) {
         return WASM_CDN_URL;

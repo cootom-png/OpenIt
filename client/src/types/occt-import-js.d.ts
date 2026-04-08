@@ -1,6 +1,7 @@
 declare module "occt-import-js" {
   interface OcctImportJsOptions {
     locateFile?: (filename: string) => string;
+    wasmBinary?: ArrayBuffer;
   }
 
   interface OcctMeshAttribute {
