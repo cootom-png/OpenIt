@@ -136,8 +136,25 @@ export default function Home() {
   const fileExt = useMemo(() => getFileExtension(fileName), [fileName]);
   const is2DFile = useMemo(() => SUPPORTED_2D.includes(fileExt), [fileExt]);
 
+  // Reset file input value so the same file can be re-selected
+  const triggerFileInput = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Hidden file input - always in DOM */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT_STRING}
+        className="hidden"
+        onChange={handleInputChange}
+      />
+
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container flex items-center justify-between h-16">
@@ -188,15 +205,8 @@ export default function Home() {
                     onDrop={handleDrop}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={triggerFileInput}
                   >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept={ACCEPT_STRING}
-                      className="hidden"
-                      onChange={handleInputChange}
-                    />
                     <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
                       <Upload className="w-10 h-10 text-primary" />
                     </div>
@@ -416,7 +426,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={triggerFileInput}
               >
                 <Upload className="w-4 h-4 mr-2" />
                 上传其他文件
