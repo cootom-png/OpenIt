@@ -11,87 +11,95 @@ interface DwgViewerComponentProps {
 }
 
 /**
- * Parse the SVG string to extract viewBox or width/height,
- * then modify it so it fills the container properly.
+ * Process the raw SVG from libredwg:
+ * 1. Parse and extract/compute the real content bounding box
+ * 2. Invert colors for dark background display (CAD convention)
+ * 3. Return processed SVG and dimensions info
  */
-function prepareSvgForDisplay(svgString: string): {
+function processDwgSvg(svgString: string): {
   svg: string;
-  viewBox: { x: number; y: number; w: number; h: number } | null;
+  contentWidth: number;
+  contentHeight: number;
 } {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, "image/svg+xml");
   const svgEl = doc.querySelector("svg");
 
   if (!svgEl) {
-    return { svg: svgString, viewBox: null };
+    return { svg: svgString, contentWidth: 800, contentHeight: 600 };
   }
 
-  // Try to get viewBox
+  // Step 1: Determine the real content bounds
+  // First try the existing viewBox
   let vb = svgEl.getAttribute("viewBox");
-  let viewBox: { x: number; y: number; w: number; h: number } | null = null;
+  let vbX = 0, vbY = 0, vbW = 0, vbH = 0;
 
   if (vb) {
     const parts = vb.trim().split(/[\s,]+/).map(Number);
-    if (parts.length === 4 && parts.every((n) => !isNaN(n))) {
-      viewBox = { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+    if (parts.length === 4 && parts.every((n) => !isNaN(n) && isFinite(n))) {
+      [vbX, vbY, vbW, vbH] = parts;
     }
   }
 
-  // If no viewBox, try to compute from width/height attributes
-  if (!viewBox) {
+  // If viewBox is missing or degenerate, try width/height attrs
+  if (vbW <= 0 || vbH <= 0) {
     const w = parseFloat(svgEl.getAttribute("width") || "0");
     const h = parseFloat(svgEl.getAttribute("height") || "0");
     if (w > 0 && h > 0) {
-      viewBox = { x: 0, y: 0, w, h };
-      svgEl.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      vbX = 0; vbY = 0; vbW = w; vbH = h;
     }
   }
 
-  // If still no viewBox, try to compute bounding box from content
-  // by scanning path/line/circle/rect elements for coordinate hints
-  if (!viewBox) {
-    // Attempt to extract bounds from all geometric elements
-    const bounds = extractBoundsFromSvg(svgEl);
+  // If still nothing, scan geometry elements
+  if (vbW <= 0 || vbH <= 0) {
+    const bounds = scanGeometryBounds(svgEl);
     if (bounds) {
-      const padding = Math.max(bounds.w, bounds.h) * 0.05;
-      viewBox = {
-        x: bounds.x - padding,
-        y: bounds.y - padding,
-        w: bounds.w + padding * 2,
-        h: bounds.h + padding * 2,
-      };
-      svgEl.setAttribute(
-        "viewBox",
-        `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`
-      );
+      const pad = Math.max(bounds.w, bounds.h) * 0.05;
+      vbX = bounds.minX - pad;
+      vbY = bounds.minY - pad;
+      vbW = bounds.w + pad * 2;
+      vbH = bounds.h + pad * 2;
+    } else {
+      // Fallback
+      vbX = 0; vbY = 0; vbW = 800; vbH = 600;
     }
   }
 
-  // Make SVG responsive: remove fixed width/height, set to 100%
-  svgEl.setAttribute("width", "100%");
-  svgEl.setAttribute("height", "100%");
-  svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  // Step 2: Add padding around content (5%)
+  const padX = vbW * 0.05;
+  const padY = vbH * 0.05;
+  const finalVbX = vbX - padX;
+  const finalVbY = vbY - padY;
+  const finalVbW = vbW + padX * 2;
+  const finalVbH = vbH + padY * 2;
 
-  // Set a default background for visibility
+  // Step 3: Set viewBox and remove fixed dimensions
+  svgEl.setAttribute("viewBox", `${finalVbX} ${finalVbY} ${finalVbW} ${finalVbH}`);
+  svgEl.removeAttribute("width");
+  svgEl.removeAttribute("height");
+  svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svgEl.style.overflow = "visible";
 
+  // Step 4: Invert dark colors to light for visibility on dark background
+  invertColorsForDarkBg(svgEl);
+
   const serializer = new XMLSerializer();
-  return { svg: serializer.serializeToString(svgEl), viewBox };
+  return {
+    svg: serializer.serializeToString(svgEl),
+    contentWidth: finalVbW,
+    contentHeight: finalVbH,
+  };
 }
 
 /**
- * Extract approximate bounding box from SVG elements by scanning
- * path d attributes, line coordinates, circle cx/cy/r, rect x/y/w/h, etc.
+ * Scan all geometry elements to find actual content bounding box
  */
-function extractBoundsFromSvg(
-  svgEl: SVGSVGElement
-): { x: number; y: number; w: number; h: number } | null {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
+function scanGeometryBounds(svgEl: SVGSVGElement): {
+  minX: number; minY: number; w: number; h: number;
+} | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-  function updateBounds(x: number, y: number) {
+  function update(x: number, y: number) {
     if (isFinite(x) && isFinite(y)) {
       minX = Math.min(minX, x);
       minY = Math.min(minY, y);
@@ -100,87 +108,150 @@ function extractBoundsFromSvg(
     }
   }
 
-  // Scan lines
   svgEl.querySelectorAll("line").forEach((el) => {
-    updateBounds(
-      parseFloat(el.getAttribute("x1") || "0"),
-      parseFloat(el.getAttribute("y1") || "0")
-    );
-    updateBounds(
-      parseFloat(el.getAttribute("x2") || "0"),
-      parseFloat(el.getAttribute("y2") || "0")
-    );
+    update(parseFloat(el.getAttribute("x1") || "0"), parseFloat(el.getAttribute("y1") || "0"));
+    update(parseFloat(el.getAttribute("x2") || "0"), parseFloat(el.getAttribute("y2") || "0"));
   });
 
-  // Scan circles
   svgEl.querySelectorAll("circle").forEach((el) => {
     const cx = parseFloat(el.getAttribute("cx") || "0");
     const cy = parseFloat(el.getAttribute("cy") || "0");
     const r = parseFloat(el.getAttribute("r") || "0");
-    updateBounds(cx - r, cy - r);
-    updateBounds(cx + r, cy + r);
+    update(cx - r, cy - r);
+    update(cx + r, cy + r);
   });
 
-  // Scan ellipses
   svgEl.querySelectorAll("ellipse").forEach((el) => {
     const cx = parseFloat(el.getAttribute("cx") || "0");
     const cy = parseFloat(el.getAttribute("cy") || "0");
     const rx = parseFloat(el.getAttribute("rx") || "0");
     const ry = parseFloat(el.getAttribute("ry") || "0");
-    updateBounds(cx - rx, cy - ry);
-    updateBounds(cx + rx, cy + ry);
+    update(cx - rx, cy - ry);
+    update(cx + rx, cy + ry);
   });
 
-  // Scan rects
   svgEl.querySelectorAll("rect").forEach((el) => {
     const x = parseFloat(el.getAttribute("x") || "0");
     const y = parseFloat(el.getAttribute("y") || "0");
     const w = parseFloat(el.getAttribute("width") || "0");
     const h = parseFloat(el.getAttribute("height") || "0");
-    updateBounds(x, y);
-    updateBounds(x + w, y + h);
+    update(x, y);
+    update(x + w, y + h);
   });
 
-  // Scan polylines and polygons
   svgEl.querySelectorAll("polyline, polygon").forEach((el) => {
     const points = el.getAttribute("points") || "";
     const nums = points.trim().split(/[\s,]+/).map(Number);
     for (let i = 0; i < nums.length - 1; i += 2) {
-      updateBounds(nums[i], nums[i + 1]);
+      update(nums[i], nums[i + 1]);
     }
   });
 
-  // Scan paths - extract coordinate numbers from d attribute
   svgEl.querySelectorAll("path").forEach((el) => {
     const d = el.getAttribute("d") || "";
-    // Extract all numbers from path data
-    const nums = d.match(/-?\d+\.?\d*/g);
-    if (nums) {
-      for (let i = 0; i < nums.length - 1; i += 2) {
-        const x = parseFloat(nums[i]);
-        const y = parseFloat(nums[i + 1]);
-        updateBounds(x, y);
+    // Use a more careful regex to extract M/L/C coordinate pairs
+    const commands = d.match(/[MLCSTQAHVZmlcstqahvz][^MLCSTQAHVZmlcstqahvz]*/g);
+    if (commands) {
+      for (const cmd of commands) {
+        const nums = cmd.slice(1).match(/-?\d+\.?\d*/g);
+        if (nums) {
+          const letter = cmd[0];
+          if (letter === 'H' || letter === 'h') {
+            // Horizontal line - only x coordinate
+            update(parseFloat(nums[0]), 0);
+          } else if (letter === 'V' || letter === 'v') {
+            // Vertical line - only y coordinate
+            update(0, parseFloat(nums[0]));
+          } else if (letter !== 'Z' && letter !== 'z') {
+            // Other commands have x,y pairs
+            for (let i = 0; i < nums.length - 1; i += 2) {
+              update(parseFloat(nums[i]), parseFloat(nums[i + 1]));
+            }
+          }
+        }
       }
     }
   });
 
-  // Scan text elements
   svgEl.querySelectorAll("text").forEach((el) => {
     const x = parseFloat(el.getAttribute("x") || "0");
     const y = parseFloat(el.getAttribute("y") || "0");
-    updateBounds(x, y);
+    update(x, y);
   });
 
-  if (minX === Infinity || maxX === -Infinity) {
+  if (!isFinite(minX) || !isFinite(maxX) || maxX <= minX || maxY <= minY) {
     return null;
   }
 
-  const w = maxX - minX;
-  const h = maxY - minY;
+  return { minX, minY, w: maxX - minX, h: maxY - minY };
+}
 
-  if (w <= 0 || h <= 0) return null;
+/**
+ * Invert dark/black colors to light colors for dark background display.
+ * This modifies the SVG DOM in place.
+ */
+function invertColorsForDarkBg(svgEl: SVGSVGElement) {
+  const darkColors = new Set([
+    "rgb(0, 0, 0)", "rgb(0,0,0)", "#000000", "#000", "black",
+    "rgb(1, 1, 1)", "rgb(2, 2, 2)", // near-black
+  ]);
 
-  return { x: minX, y: minY, w, h };
+  function isNearBlack(color: string): boolean {
+    if (darkColors.has(color.trim().toLowerCase())) return true;
+    // Check rgb(r,g,b) where all values < 50
+    const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (rgbMatch) {
+      const [, r, g, b] = rgbMatch.map(Number);
+      if (r < 50 && g < 50 && b < 50) return true;
+    }
+    return false;
+  }
+
+  const lightColor = "#e0e0e0";
+  const textColor = "#c0c0c0";
+
+  // Process all elements with stroke/fill
+  svgEl.querySelectorAll("*").forEach((el) => {
+    const stroke = el.getAttribute("stroke");
+    const fill = el.getAttribute("fill");
+    const style = el.getAttribute("style");
+
+    if (stroke && isNearBlack(stroke)) {
+      el.setAttribute("stroke", lightColor);
+    }
+    if (fill && isNearBlack(fill)) {
+      // For text, use text color; for shapes, use light color
+      el.setAttribute("fill", el.tagName === "text" ? textColor : lightColor);
+    }
+
+    // Handle inline styles
+    if (style) {
+      let newStyle = style;
+      // Replace stroke colors in style
+      newStyle = newStyle.replace(/stroke\s*:\s*([^;]+)/gi, (match, val) => {
+        if (isNearBlack(val.trim())) return `stroke: ${lightColor}`;
+        return match;
+      });
+      // Replace fill colors in style
+      newStyle = newStyle.replace(/fill\s*:\s*([^;]+)/gi, (match, val) => {
+        if (isNearBlack(val.trim())) return `fill: ${lightColor}`;
+        return match;
+      });
+      if (newStyle !== style) {
+        el.setAttribute("style", newStyle);
+      }
+    }
+  });
+
+  // Set default stroke for elements that have no stroke set
+  const geometryTags = ["line", "path", "polyline", "polygon", "circle", "ellipse"];
+  geometryTags.forEach((tag) => {
+    svgEl.querySelectorAll(tag).forEach((el) => {
+      if (!el.getAttribute("stroke") && !el.getAttribute("style")?.includes("stroke")) {
+        el.setAttribute("stroke", lightColor);
+      }
+    });
+  });
 }
 
 export default function DwgViewerComponent({
@@ -195,9 +266,7 @@ export default function DwgViewerComponent({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [svgContent, setSvgContent] = useState<string | null>(null);
-  const [svgViewBox, setSvgViewBox] = useState<{
-    x: number;
-    y: number;
+  const [contentDims, setContentDims] = useState<{
     w: number;
     h: number;
   } | null>(null);
@@ -213,17 +282,14 @@ export default function DwgViewerComponent({
     setTranslate({ x: 0, y: 0 });
   }, []);
 
-  // Fit to container
-  const fitToView = useCallback(() => {
-    setScale(1);
-    setTranslate({ x: 0, y: 0 });
-  }, []);
-
-  // Mouse wheel zoom
+  // Mouse wheel zoom - zoom toward cursor position
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale((prev) => Math.max(0.1, Math.min(50, prev * delta)));
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale((prev) => {
+      const newScale = Math.max(0.05, Math.min(100, prev * factor));
+      return newScale;
+    });
   }, []);
 
   // Pan with left mouse button
@@ -282,12 +348,11 @@ export default function DwgViewerComponent({
       setIsLoading(true);
       setError(null);
       setSvgContent(null);
-      setSvgViewBox(null);
+      setContentDims(null);
       resetView();
       setProgress("正在初始化 DWG 解析引擎...");
 
       try {
-        // Dynamic import to avoid SSR issues
         setProgress("正在加载 LibreDWG WASM 引擎...");
 
         const libredwgModule = await import("@mlightcad/libredwg-web");
@@ -297,7 +362,6 @@ export default function DwgViewerComponent({
 
         setProgress("正在下载 WASM 引擎...");
 
-        // Pre-fetch the WASM binary as ArrayBuffer to avoid MIME type issues
         const wasmResponse = await fetch(LIBREDWG_WASM_CDN_URL);
         if (!wasmResponse.ok) {
           throw new Error(`WASM 引擎下载失败 (HTTP ${wasmResponse.status})`);
@@ -308,7 +372,7 @@ export default function DwgViewerComponent({
 
         setProgress("正在初始化 LibreDWG...");
 
-        // Suppress console.error temporarily during WASM init
+        // Suppress console noise during WASM init
         const originalConsoleError = console.error;
         const originalConsoleLog = console.log;
         const suppressedMessages = [
@@ -322,7 +386,6 @@ export default function DwgViewerComponent({
           originalConsoleError.apply(console, args);
         };
 
-        // Use createModule with wasmBinary to skip streaming compilation entirely
         const wasmInstance = await createModule({
           wasmBinary,
           locateFile: (filename: string) => {
@@ -333,7 +396,6 @@ export default function DwgViewerComponent({
           },
         });
 
-        // Restore console
         console.error = originalConsoleError;
         console.log = originalConsoleLog;
 
@@ -350,11 +412,9 @@ export default function DwgViewerComponent({
           originalConsoleLog.apply(console, args);
         };
 
-        // Read DWG data
         const uint8Array = new Uint8Array(fileBuffer);
         const dwgData = libredwg.dwg_read_data(uint8Array, Dwg_File_Type.DWG);
 
-        // Restore console.log
         console.log = originalConsoleLog;
 
         if (!dwgData) {
@@ -370,7 +430,6 @@ export default function DwgViewerComponent({
 
         setProgress("正在转换为数据库格式...");
 
-        // Convert to DwgDatabase
         const db = libredwg.convert(dwgData);
 
         if (!db) {
@@ -381,7 +440,6 @@ export default function DwgViewerComponent({
 
         setProgress("正在生成 SVG 预览...");
 
-        // Use built-in dwg_to_svg method
         const svg = libredwg.dwg_to_svg(db);
 
         if (cancelled) return;
@@ -393,9 +451,9 @@ export default function DwgViewerComponent({
         }
 
         // Process SVG for proper display
-        const { svg: processedSvg, viewBox } = prepareSvgForDisplay(svg);
+        const { svg: processedSvg, contentWidth, contentHeight } = processDwgSvg(svg);
 
-        // Extract info from database
+        // Extract info
         const entityCount: number = db.entities?.length ?? 0;
         const layerCount: number = db.tables?.LAYER?.entries?.length ?? 0;
 
@@ -407,7 +465,7 @@ export default function DwgViewerComponent({
         }
 
         setSvgContent(processedSvg);
-        setSvgViewBox(viewBox);
+        setContentDims({ w: contentWidth, h: contentHeight });
         setIsLoading(false);
         setProgress("");
 
@@ -433,6 +491,44 @@ export default function DwgViewerComponent({
     };
   }, [fileBuffer, resetView, onParsed]);
 
+  // Compute the aspect-ratio-aware dimensions for the SVG wrapper
+  const getSvgWrapperStyle = useCallback((): React.CSSProperties => {
+    if (!contentDims || !containerRef.current) {
+      return { width: "100%", height: "100%", position: "absolute", inset: "20px" };
+    }
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const cW = containerRect.width - 40; // 20px padding each side
+    const cH = containerRect.height - 40;
+
+    if (cW <= 0 || cH <= 0) {
+      return { width: "100%", height: "100%", position: "absolute", inset: "20px" };
+    }
+
+    const contentAR = contentDims.w / contentDims.h;
+    const containerAR = cW / cH;
+
+    let svgW: number, svgH: number;
+
+    if (contentAR > containerAR) {
+      // Content is wider than container - fit to width
+      svgW = cW;
+      svgH = cW / contentAR;
+    } else {
+      // Content is taller than container - fit to height
+      svgH = cH;
+      svgW = cH * contentAR;
+    }
+
+    return {
+      width: `${svgW}px`,
+      height: `${svgH}px`,
+      position: "absolute",
+      left: `${20 + (cW - svgW) / 2}px`,
+      top: `${20 + (cH - svgH) / 2}px`,
+    };
+  }, [contentDims]);
+
   return (
     <div
       ref={containerRef}
@@ -450,25 +546,20 @@ export default function DwgViewerComponent({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* SVG content - fills the entire container */}
+      {/* SVG content */}
       {svgContent && (
         <div
           ref={svgContainerRef}
-          className="absolute inset-0"
           style={{
+            ...getSvgWrapperStyle(),
             transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
             transformOrigin: "center center",
             transition: isPanningRef.current
               ? "none"
               : "transform 0.1s ease-out",
-            padding: "20px",
           }}
-        >
-          <div
-            className="w-full h-full dwg-svg-container"
-            dangerouslySetInnerHTML={{ __html: svgContent }}
-          />
-        </div>
+          dangerouslySetInnerHTML={{ __html: svgContent }}
+        />
       )}
 
       {/* Loading overlay */}
@@ -499,31 +590,24 @@ export default function DwgViewerComponent({
         <div className="absolute bottom-3 right-3 flex gap-1 z-10">
           <button
             className="w-8 h-8 rounded bg-background/90 backdrop-blur-sm border shadow-sm flex items-center justify-center text-sm font-medium hover:bg-accent transition-colors"
-            onClick={() => setScale((s) => Math.min(50, s * 1.2))}
+            onClick={() => setScale((s) => Math.min(100, s * 1.3))}
             title="放大"
           >
             +
           </button>
           <button
             className="w-8 h-8 rounded bg-background/90 backdrop-blur-sm border shadow-sm flex items-center justify-center text-sm font-medium hover:bg-accent transition-colors"
-            onClick={() => setScale((s) => Math.max(0.1, s / 1.2))}
+            onClick={() => setScale((s) => Math.max(0.05, s / 1.3))}
             title="缩小"
           >
             -
           </button>
           <button
             className="w-8 h-8 rounded bg-background/90 backdrop-blur-sm border shadow-sm flex items-center justify-center text-xs hover:bg-accent transition-colors"
-            onClick={fitToView}
+            onClick={resetView}
             title="适应窗口"
           >
             ⊞
-          </button>
-          <button
-            className="w-8 h-8 rounded bg-background/90 backdrop-blur-sm border shadow-sm flex items-center justify-center text-xs hover:bg-accent transition-colors"
-            onClick={resetView}
-            title="重置视图"
-          >
-            1:1
           </button>
         </div>
       )}
@@ -532,59 +616,21 @@ export default function DwgViewerComponent({
       {svgContent && !isLoading && !error && (
         <div className="absolute top-3 left-3 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-muted-foreground border shadow-sm z-10">
           缩放: {(scale * 100).toFixed(0)}%
-          {svgViewBox && (
+          {contentDims && (
             <span className="ml-2 opacity-70">
-              | 图幅: {svgViewBox.w.toFixed(0)} × {svgViewBox.h.toFixed(0)}
+              | 图幅: {contentDims.w.toFixed(0)} × {contentDims.h.toFixed(0)}
             </span>
           )}
         </div>
       )}
 
-      {/* Global SVG styles */}
+      {/* SVG styles for vector rendering */}
       <style>{`
-        .dwg-svg-container svg {
+        .dwg-svg-container svg,
+        div[dangerouslysetinnerhtml] svg {
           width: 100% !important;
           height: 100% !important;
           display: block;
-        }
-        .dwg-svg-container svg * {
-          vector-effect: non-scaling-stroke;
-        }
-        /* Make lines visible on dark background */
-        .dwg-svg-container svg line,
-        .dwg-svg-container svg path,
-        .dwg-svg-container svg polyline,
-        .dwg-svg-container svg polygon,
-        .dwg-svg-container svg circle,
-        .dwg-svg-container svg ellipse,
-        .dwg-svg-container svg rect {
-          stroke-width: 1px;
-        }
-        /* Ensure strokes are visible - if stroke is black or not set, make it white for dark bg */
-        .dwg-svg-container svg [stroke="rgb(0, 0, 0)"],
-        .dwg-svg-container svg [stroke="#000000"],
-        .dwg-svg-container svg [stroke="#000"],
-        .dwg-svg-container svg [stroke="black"] {
-          stroke: #e0e0e0 !important;
-        }
-        /* Default stroke color for elements without explicit stroke */
-        .dwg-svg-container svg line:not([stroke]),
-        .dwg-svg-container svg path:not([stroke]),
-        .dwg-svg-container svg polyline:not([stroke]),
-        .dwg-svg-container svg polygon:not([stroke]),
-        .dwg-svg-container svg circle:not([stroke]),
-        .dwg-svg-container svg ellipse:not([stroke]) {
-          stroke: #e0e0e0;
-        }
-        /* Text visibility */
-        .dwg-svg-container svg text {
-          fill: #c0c0c0;
-        }
-        .dwg-svg-container svg text[fill="rgb(0, 0, 0)"],
-        .dwg-svg-container svg text[fill="#000000"],
-        .dwg-svg-container svg text[fill="#000"],
-        .dwg-svg-container svg text[fill="black"] {
-          fill: #e0e0e0 !important;
         }
       `}</style>
     </div>

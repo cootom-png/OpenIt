@@ -15,3 +15,4 @@
 - [x] DWG预览功能集成测试验证（15项测试全部通过）
 - [x] BUG修复：DWG文件打开时报"falling back to ArrayBuffer instantiation"错误
 - [x] BUG修复：DWG文件预览时图像显示非常小，大片空白区域
+- [x] BUG修复：DWG文件预览显示为一片黑色，SVG viewBox宽高比极端不均衡(34483×300)
