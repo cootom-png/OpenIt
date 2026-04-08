@@ -6,7 +6,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   FileBox,
   Info,
-  Download,
   ArrowLeft,
   User,
   Clock,
@@ -218,14 +217,7 @@ export default function ShareView() {
               <span className="text-sm font-medium">文件分享</span>
             </div>
           </div>
-          {sharedFile.s3Url && (
-            <a href={sharedFile.s3Url} download={sharedFile.fileName}>
-              <Button variant="outline" size="sm" className="gap-1">
-                <Download className="w-3.5 h-3.5" />
-                下载
-              </Button>
-            </a>
-          )}
+
         </div>
       </header>
 
@@ -411,15 +403,6 @@ export default function ShareView() {
               </Card>
             )}
 
-            {/* Download */}
-            {sharedFile.s3Url && (
-              <a href={sharedFile.s3Url} download={sharedFile.fileName} className="block">
-                <Button variant="outline" className="w-full gap-2">
-                  <Download className="w-4 h-4" />
-                  下载文件
-                </Button>
-              </a>
-            )}
 
             {/* Branding */}
             <Card className="bg-muted/30">

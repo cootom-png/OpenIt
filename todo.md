@@ -90,3 +90,9 @@
 - [x] BUG修复：DWG文件缩略图截取为黑色（改用WebGL readPixels直接读取像素+白色背景填充+增加等待时间）
 - [x] BUG修复：DWG/STP缩略图改用组件ref方法截取（DWG在渲染帧内readPixels+Three.js强制render+toDataURL）
 - [x] 功能：后台管理页面添加退出登录按钮（用户管理、文件管理、统计页面）
+- [x] BUG修复：DWG文件分享页面加载失败（Worker路径404错误 → 添加Express静态路由/assets/）
+- [x] BUG修复：DWG文件分享加载失败（baseUrl 403错误 → 改用CloudFront CDN地址）
+- [x] 将CAD Viewer需要的字体资源下载到自己CDN上，不引用外部网站资源
+- [x] 去掉分享页面的下载按钮（分享不允许下载源文件）
+- [x] 用实际DWG文件测试分享链接功能（验证通过）
+- [x] BUG修复：DWG缩略图截取为全黑（monkey-patch getContext强制preserveDrawingBuffer:true）

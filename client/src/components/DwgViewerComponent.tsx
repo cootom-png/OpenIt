@@ -53,6 +53,40 @@ async function destroySingleton(): Promise<void> {
   }
 }
 
+/**
+ * Monkey-patch HTMLCanvasElement.prototype.getContext within a container
+ * to force preserveDrawingBuffer: true for WebGL contexts.
+ * This allows us to capture screenshots from the CAD viewer's canvas.
+ *
+ * Returns a cleanup function that restores the original getContext.
+ */
+function patchGetContextForPreserveBuffer(): () => void {
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+
+  (HTMLCanvasElement.prototype as any).getContext = function (
+    this: HTMLCanvasElement,
+    contextId: string,
+    options?: any
+  ) {
+    if (
+      contextId === "webgl" ||
+      contextId === "webgl2" ||
+      contextId === "experimental-webgl"
+    ) {
+      const patchedOptions = {
+        ...(options || {}),
+        preserveDrawingBuffer: true,
+      };
+      return (originalGetContext as any).call(this, contextId, patchedOptions);
+    }
+    return (originalGetContext as any).call(this, contextId, options);
+  };
+
+  return () => {
+    HTMLCanvasElement.prototype.getContext = originalGetContext;
+  };
+}
+
 const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
   function DwgViewerComponent({ fileBuffer, fileName, className, onParsed }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +117,17 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
 
         const canvas = bestCanvas as HTMLCanvasElement;
 
-        // Try to get the WebGL context and read pixels in the same frame
+        // With preserveDrawingBuffer: true (patched), toDataURL should work directly
+        try {
+          const dataUrl = canvas.toDataURL("image/png");
+          if (dataUrl && dataUrl.length > 1000) {
+            return dataUrl;
+          }
+        } catch (err) {
+          console.warn("DWG canvas toDataURL failed:", err);
+        }
+
+        // Fallback: try readPixels
         try {
           const gl =
             canvas.getContext("webgl2") ||
@@ -95,33 +139,28 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
             const width = canvas.width;
             const height = canvas.height;
 
-            // Force a render by triggering the CAD viewer to redraw
-            try {
-              if (cachedModule) {
-                const { AcApDocManager } = cachedModule;
-                const view = AcApDocManager.instance?.curView;
-                if (view && typeof view.render === "function") {
-                  view.render();
-                }
-              }
-            } catch {
-              // render trigger is optional
-            }
-
-            // Read pixels immediately
             const pixels = new Uint8Array(width * height * 4);
-            glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels);
+            glCtx.readPixels(
+              0,
+              0,
+              width,
+              height,
+              glCtx.RGBA,
+              glCtx.UNSIGNED_BYTE,
+              pixels
+            );
 
-            // Check if we got meaningful content (not all dark background)
+            // Check if we got meaningful content
             let hasContent = false;
-            const bgR = 0x1e, bgG = 0x1e, bgB = 0x2e; // #1e1e2e background
+            const bgR = 0x1e,
+              bgG = 0x1e,
+              bgB = 0x2e;
             for (let i = 0; i < pixels.length; i += 400) {
               const r = pixels[i];
               const g = pixels[i + 1];
               const b = pixels[i + 2];
               const a = pixels[i + 3];
               if (a > 0) {
-                // Check if pixel differs significantly from background
                 const diffR = Math.abs(r - bgR);
                 const diffG = Math.abs(g - bgG);
                 const diffB = Math.abs(b - bgB);
@@ -133,14 +172,12 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
             }
 
             if (hasContent) {
-              // Convert pixels to canvas (WebGL pixels are bottom-up)
               const tempCanvas = document.createElement("canvas");
               tempCanvas.width = width;
               tempCanvas.height = height;
               const ctx = tempCanvas.getContext("2d")!;
               const imageData = ctx.createImageData(width, height);
 
-              // Flip vertically
               for (let y = 0; y < height; y++) {
                 const srcRow = (height - 1 - y) * width * 4;
                 const dstRow = y * width * 4;
@@ -157,16 +194,6 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
           console.warn("DWG WebGL readPixels failed:", err);
         }
 
-        // Fallback: try toDataURL directly (might work on some browsers)
-        try {
-          const dataUrl = canvas.toDataURL("image/png");
-          if (dataUrl && dataUrl.length > 500) {
-            return dataUrl;
-          }
-        } catch {
-          // tainted canvas
-        }
-
         return null;
       },
     }));
@@ -175,6 +202,7 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
       if (!fileBuffer || !containerRef.current) return;
 
       let cancelled = false;
+      let unpatchGetContext: (() => void) | null = null;
 
       const loadDwg = async () => {
         setIsLoading(true);
@@ -206,12 +234,27 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
             .querySelectorAll("canvas, .ml-cli-container, .ml-ccl-overlay")
             .forEach((el) => el.remove());
 
+          // Monkey-patch getContext to force preserveDrawingBuffer: true
+          // This is needed so we can capture screenshots from the WebGL canvas later
+          unpatchGetContext = patchGetContextForPreserveBuffer();
+
           AcApDocManager.createInstance({
             container: currentContainer,
             autoResize: true,
             baseUrl:
-              "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
+              "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/cad-data/",
+            webworkerFileUrls: {
+              dwgParser: "/assets/libredwg-parser-worker.js",
+              dxfParser: "/assets/dxf-parser-worker.js",
+              mtextRender: "/assets/mtext-renderer-worker.js",
+            },
           });
+
+          // Restore original getContext after the CAD viewer has created its canvas
+          if (unpatchGetContext) {
+            unpatchGetContext();
+            unpatchGetContext = null;
+          }
 
           if (cancelled) return;
 
@@ -288,6 +331,11 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
             setIsLoading(false);
             setProgress("");
           }
+        } finally {
+          // Ensure we always restore getContext even if an error occurs
+          if (unpatchGetContext) {
+            unpatchGetContext();
+          }
         }
       };
 
@@ -295,6 +343,9 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
 
       return () => {
         cancelled = true;
+        if (unpatchGetContext) {
+          unpatchGetContext();
+        }
       };
     }, [fileBuffer, fileName]);
 
