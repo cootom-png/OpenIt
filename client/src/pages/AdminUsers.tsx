@@ -19,13 +19,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, CheckCircle, XCircle, Trash2, Search, Users, Clock, UserCheck, UserX,
-  Shield, Loader2, ChevronLeft, ChevronRight, BarChart3,
+  Shield, Loader2, ChevronLeft, ChevronRight, BarChart3, LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminUsers() {
   const { user: oauthUser } = useAuth();
-  const { emailUser, isAdmin: isEmailAdmin } = useEmailAuth();
+  const { emailUser, isAdmin: isEmailAdmin, logout } = useEmailAuth();
   const [, navigate] = useLocation();
 
   const isAdmin = oauthUser?.role === "admin" || isEmailAdmin;
@@ -133,6 +133,22 @@ export default function AdminUsers() {
                 统计
               </Button>
             </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
+              onClick={async () => {
+                try {
+                  await logout();
+                  navigate("/");
+                } catch {
+                  navigate("/");
+                }
+              }}
+            >
+              <LogOut className="w-4 h-4" />
+              退出
+            </Button>
           </div>
         </div>
       </div>

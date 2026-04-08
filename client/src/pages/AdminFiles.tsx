@@ -41,8 +41,9 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  LogOut,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -71,7 +72,8 @@ const categoryLabels: Record<string, string> = {
 
 export default function AdminFiles() {
   const { user: oauthUser } = useAuth();
-  const { emailUser, isLoggedIn, isAdmin: isEmailAdmin } = useEmailAuth();
+  const { emailUser, isLoggedIn, isAdmin: isEmailAdmin, logout } = useEmailAuth();
+  const [, navigate] = useLocation();
 
   const isOAuthAdmin = oauthUser?.role === "admin";
   const isAdmin = isOAuthAdmin || isEmailAdmin;
@@ -146,6 +148,22 @@ export default function AdminFiles() {
           <Button variant="outline" size="sm" className="gap-1" onClick={() => refetch()}>
             <RefreshCw className="w-3.5 h-3.5" />
             刷新
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
+            onClick={async () => {
+              try {
+                await logout();
+                navigate("/");
+              } catch {
+                navigate("/");
+              }
+            }}
+          >
+            <LogOut className="w-4 h-4" />
+            退出
           </Button>
         </div>
       </header>

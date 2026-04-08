@@ -89,3 +89,4 @@
 - [x] 改用 canvas.toDataURL 直接从 WebGL canvas 获取截图替代 html2canvas（Three.js设置preserveDrawingBuffer+智能选择最大canvas）
 - [x] BUG修复：DWG文件缩略图截取为黑色（改用WebGL readPixels直接读取像素+白色背景填充+增加等待时间）
 - [x] BUG修复：DWG/STP缩略图改用组件ref方法截取（DWG在渲染帧内readPixels+Three.js强制render+toDataURL）
+- [x] 功能：后台管理页面添加退出登录按钮（用户管理、文件管理、统计页面）

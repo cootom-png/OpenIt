@@ -17,8 +17,10 @@ import {
   ChevronRight,
   Shield,
   LogIn,
+  LogOut,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useEmailAuth } from "@/hooks/useEmailAuth";
 
 const CATEGORY_LABELS: Record<string, string> = {
   "3d": "3D 模型",
@@ -58,6 +60,8 @@ function formatDate(date: Date | string) {
 
 export default function AdminStats() {
   const { user, loading: authLoading } = useAuth();
+  const { logout } = useEmailAuth();
+  const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
   const [filterSupported, setFilterSupported] = useState<boolean | undefined>(undefined);
@@ -152,6 +156,22 @@ export default function AdminStats() {
           >
             <RefreshCw className="w-4 h-4 mr-1" />
             刷新
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
+            onClick={async () => {
+              try {
+                await logout();
+                navigate("/");
+              } catch {
+                navigate("/");
+              }
+            }}
+          >
+            <LogOut className="w-4 h-4" />
+            退出
           </Button>
         </div>
       </header>
