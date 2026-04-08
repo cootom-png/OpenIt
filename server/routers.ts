@@ -1,13 +1,17 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { recordFileUpload, updateFileUploadPreview, getFileUploads, getFileUploadStats } from "./db";
+import {
+  recordFileUpload, updateFileUploadPreview, getFileUploads, getFileUploadStats,
+  listEmailUsers, updateEmailUserStatus, updateEmailUserRole, deleteEmailUser, getEmailUserStats,
+  getEmailUserById,
+} from "./db";
+import { registerEmailUser, loginEmailUser, createEmailSessionToken, EMAIL_COOKIE_NAME } from "./emailAuth";
 import { TRPCError } from "@trpc/server";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -20,6 +24,153 @@ export const appRouter = router({
     }),
   }),
 
+  // ─── Email Auth ───
+  emailAuth: router({
+    /** Register a new email user */
+    register: publicProcedure
+      .input(z.object({
+        email: z.string().email("请输入有效的邮箱地址"),
+        password: z.string().min(6, "密码至少6位").max(64, "密码最长64位"),
+        nickname: z.string().min(1, "请输入昵称").max(50, "昵称最长50个字符"),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const userId = await registerEmailUser(input);
+          return { success: true, message: "注册成功，请等待管理员审核", userId };
+        } catch (error: any) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error.message || "注册失败",
+          });
+        }
+      }),
+
+    /** Login with email and password */
+    login: publicProcedure
+      .input(z.object({
+        email: z.string().email("请输入有效的邮箱地址"),
+        password: z.string().min(1, "请输入密码"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const user = await loginEmailUser(input.email, input.password);
+          const token = await createEmailSessionToken(user);
+
+          // Set cookie
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(EMAIL_COOKIE_NAME, token, {
+            ...cookieOptions,
+            maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+          });
+
+          return {
+            success: true,
+            user: {
+              id: user.id,
+              email: user.email,
+              nickname: user.nickname,
+              status: user.status,
+              role: user.role,
+            },
+          };
+        } catch (error: any) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: error.message || "登录失败",
+          });
+        }
+      }),
+
+    /** Get current email user info */
+    me: publicProcedure.query(({ ctx }) => {
+      if (!ctx.emailUser) return null;
+      return {
+        id: ctx.emailUser.id,
+        email: ctx.emailUser.email,
+        nickname: ctx.emailUser.nickname,
+        status: ctx.emailUser.status,
+        role: ctx.emailUser.role,
+        fileCount: ctx.emailUser.fileCount,
+        totalFileSize: ctx.emailUser.totalFileSize,
+        createdAt: ctx.emailUser.createdAt,
+        lastSignedIn: ctx.emailUser.lastSignedIn,
+      };
+    }),
+
+    /** Logout email user */
+    logout: publicProcedure.mutation(({ ctx }) => {
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.clearCookie(EMAIL_COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      return { success: true };
+    }),
+  }),
+
+  // ─── Admin: User Management ───
+  adminUsers: router({
+    /** List all email users (admin only) */
+    list: adminProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(20),
+        status: z.enum(["pending", "approved", "rejected"]).optional(),
+        search: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        return listEmailUsers(input);
+      }),
+
+    /** Get user stats (admin only) */
+    stats: adminProcedure.query(async () => {
+      return getEmailUserStats();
+    }),
+
+    /** Approve a user (admin only) */
+    approve: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await updateEmailUserStatus(input.userId, "approved");
+        return { success: true };
+      }),
+
+    /** Reject a user (admin only) */
+    reject: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await updateEmailUserStatus(input.userId, "rejected");
+        return { success: true };
+      }),
+
+    /** Update user role (admin only) */
+    updateRole: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        role: z.enum(["user", "admin"]),
+      }))
+      .mutation(async ({ input }) => {
+        await updateEmailUserRole(input.userId, input.role);
+        return { success: true };
+      }),
+
+    /** Delete a user (admin only) */
+    delete: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteEmailUser(input.userId);
+        return { success: true };
+      }),
+
+    /** Get single user detail (admin only) */
+    getById: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ input }) => {
+        const user = await getEmailUserById(input.userId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        const { passwordHash, ...safeUser } = user;
+        return safeUser;
+      }),
+  }),
+
+  // ─── File Upload Tracking ───
   fileUpload: router({
     /** Record a file upload event (public - no login required) */
     record: publicProcedure
@@ -53,31 +204,24 @@ export const appRouter = router({
         errorMessage: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        // We don't have the ID easily, so this is a best-effort update
         return { success: true };
       }),
 
     /** Get upload records (admin only) */
-    list: protectedProcedure
+    list: adminProcedure
       .input(z.object({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(100).default(20),
         category: z.string().optional(),
         isSupported: z.boolean().optional(),
       }))
-      .query(async ({ input, ctx }) => {
-        if (ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-        }
+      .query(async ({ input }) => {
         return getFileUploads(input);
       }),
 
     /** Get upload statistics (admin only) */
-    stats: protectedProcedure
-      .query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-        }
+    stats: adminProcedure
+      .query(async () => {
         return getFileUploadStats();
       }),
   }),

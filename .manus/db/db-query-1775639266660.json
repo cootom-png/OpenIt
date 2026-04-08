@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `user_files` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`fileName` varchar(512) NOT NULL,\n\t`fileExt` varchar(32) NOT NULL,\n\t`fileSize` bigint NOT NULL,\n\t`mimeType` varchar(128),\n\t`category` varchar(32) NOT NULL,\n\t`s3Key` varchar(1024) NOT NULL,\n\t`s3Url` text NOT NULL,\n\t`shareToken` varchar(64),\n\t`shareEnabled` boolean NOT NULL DEFAULT false,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `user_files_id` PRIMARY KEY(`id`),\n\tCONSTRAINT `user_files_shareToken_unique` UNIQUE(`shareToken`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user JW59rFo8u4CuLLx.ea2bdef2a3b8 --database 3j4sFbGUefQfhYED2wtVaa --execute CREATE TABLE `user_files` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`fileName` varchar(512) NOT NULL,\n\t`fileExt` varchar(32) NOT NULL,\n\t`fileSize` bigint NOT NULL,\n\t`mimeType` varchar(128),\n\t`category` varchar(32) NOT NULL,\n\t`s3Key` varchar(1024) NOT NULL,\n\t`s3Url` text NOT NULL,\n\t`shareToken` varchar(64),\n\t`shareEnabled` boolean NOT NULL DEFAULT false,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `user_files_id` PRIMARY KEY(`id`),\n\tCONSTRAINT `user_files_shareToken_unique` UNIQUE(`shareToken`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 191
+}

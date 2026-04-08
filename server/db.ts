@@ -1,6 +1,6 @@
-import { eq, desc, sql, count } from "drizzle-orm";
+import { eq, desc, sql, count, and, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, InsertFileUpload, users, fileUploads } from "../drizzle/schema";
+import { InsertUser, InsertFileUpload, users, fileUploads, emailUsers, InsertEmailUser, EmailUser } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -87,6 +87,129 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+// ─── Email User Auth ───
+
+export async function createEmailUser(data: { email: string; passwordHash: string; nickname: string }): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(emailUsers).values({
+    email: data.email,
+    passwordHash: data.passwordHash,
+    nickname: data.nickname,
+    status: "pending",
+    role: "user",
+  });
+
+  return result[0].insertId;
+}
+
+export async function getEmailUserByEmail(email: string): Promise<EmailUser | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(emailUsers).where(eq(emailUsers.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getEmailUserById(id: number): Promise<EmailUser | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(emailUsers).where(eq(emailUsers.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateEmailUserLastSignedIn(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(emailUsers).set({ lastSignedIn: new Date() }).where(eq(emailUsers.id, id));
+}
+
+// ─── Admin: Email User Management ───
+
+export async function listEmailUsers(opts: {
+  page: number;
+  pageSize: number;
+  status?: "pending" | "approved" | "rejected";
+  search?: string;
+}) {
+  const db = await getDb();
+  if (!db) return { records: [], total: 0 };
+
+  const conditions: any[] = [];
+  if (opts.status) {
+    conditions.push(eq(emailUsers.status, opts.status));
+  }
+  if (opts.search) {
+    conditions.push(
+      or(
+        like(emailUsers.email, `%${opts.search}%`),
+        like(emailUsers.nickname, `%${opts.search}%`)
+      )
+    );
+  }
+
+  const whereClause = conditions.length > 0
+    ? and(...conditions)
+    : undefined;
+
+  const [records, totalResult] = await Promise.all([
+    whereClause
+      ? db.select().from(emailUsers).where(whereClause).orderBy(desc(emailUsers.createdAt)).limit(opts.pageSize).offset((opts.page - 1) * opts.pageSize)
+      : db.select().from(emailUsers).orderBy(desc(emailUsers.createdAt)).limit(opts.pageSize).offset((opts.page - 1) * opts.pageSize),
+    whereClause
+      ? db.select({ count: count() }).from(emailUsers).where(whereClause)
+      : db.select({ count: count() }).from(emailUsers),
+  ]);
+
+  // Strip passwordHash from results
+  const safeRecords = records.map(({ passwordHash, ...rest }) => rest);
+
+  return { records: safeRecords, total: totalResult[0]?.count || 0 };
+}
+
+export async function updateEmailUserStatus(id: number, status: "approved" | "rejected"): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(emailUsers).set({ status }).where(eq(emailUsers.id, id));
+}
+
+export async function updateEmailUserRole(id: number, role: "user" | "admin"): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(emailUsers).set({ role }).where(eq(emailUsers.id, id));
+}
+
+export async function deleteEmailUser(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(emailUsers).where(eq(emailUsers.id, id));
+}
+
+export async function getEmailUserStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, pending: 0, approved: 0, rejected: 0 };
+
+  const [totalResult, pendingResult, approvedResult, rejectedResult] = await Promise.all([
+    db.select({ count: count() }).from(emailUsers),
+    db.select({ count: count() }).from(emailUsers).where(eq(emailUsers.status, "pending")),
+    db.select({ count: count() }).from(emailUsers).where(eq(emailUsers.status, "approved")),
+    db.select({ count: count() }).from(emailUsers).where(eq(emailUsers.status, "rejected")),
+  ]);
+
+  return {
+    total: totalResult[0]?.count || 0,
+    pending: pendingResult[0]?.count || 0,
+    approved: approvedResult[0]?.count || 0,
+    rejected: rejectedResult[0]?.count || 0,
+  };
 }
 
 // ─── File Upload Tracking ───

@@ -13,7 +13,15 @@ import {
   Layers,
   Info,
   FileType,
+  LogIn,
+  UserPlus,
+  LogOut,
+  Settings,
+  User,
 } from "lucide-react";
+import { Link } from "wouter";
+import { useEmailAuth } from "@/hooks/useEmailAuth";
+import { useAuth } from "@/_core/hooks/useAuth";
 import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
 import DxfViewerComponent from "@/components/DxfViewerComponent";
 import DwgViewerComponent from "@/components/DwgViewerComponent";
@@ -41,6 +49,78 @@ const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
 // the extension in handleFile() instead.
 const ACCEPT_STRING = "*/*";
+
+/** Header auth buttons — shows login/register or user dropdown */
+function HeaderAuth() {
+  const { user: oauthUser } = useAuth();
+  const { emailUser, isLoggedIn, isAdmin: isEmailAdmin, logout, isPending } = useEmailAuth();
+
+  const isOAuthAdmin = oauthUser?.role === "admin";
+  const showAdmin = isOAuthAdmin || isEmailAdmin;
+
+  if (isLoggedIn) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
+          <User className="w-3.5 h-3.5" />
+          <span className="max-w-[120px] truncate">{emailUser?.nickname}</span>
+          {isPending && (
+            <Badge variant="outline" className="text-[10px] py-0 px-1 text-yellow-600 border-yellow-300">待审核</Badge>
+          )}
+        </div>
+        {showAdmin && (
+          <Link href="/admin/users">
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">管理</span>
+            </Button>
+          </Link>
+        )}
+        <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-muted-foreground" onClick={logout}>
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">退出</span>
+        </Button>
+      </div>
+    );
+  }
+
+  // Also check OAuth user
+  if (oauthUser) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
+          <User className="w-3.5 h-3.5" />
+          <span className="max-w-[120px] truncate">{oauthUser.name || oauthUser.email}</span>
+        </div>
+        {isOAuthAdmin && (
+          <Link href="/admin/users">
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">管理</span>
+            </Button>
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Link href="/login">
+        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+          <LogIn className="w-3.5 h-3.5" />
+          登录
+        </Button>
+      </Link>
+      <Link href="/register">
+        <Button size="sm" className="h-8 gap-1 text-xs">
+          <UserPlus className="w-3.5 h-3.5" />
+          注册
+        </Button>
+      </Link>
+    </div>
+  );
+}
 
 export default function Home() {
   const [meshData, setMeshData] = useState<ParsedMeshData | null>(null);
@@ -393,19 +473,19 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <div className="flex gap-1.5">
-            <Badge variant="secondary" className="text-xs">
-              3D: STP / STEP / STL
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              CAD: DXF / DWG
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              IMG: JPG / PNG / GIF
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              DOC: PDF / Word / Excel
-            </Badge>
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex gap-1.5">
+              <Badge variant="secondary" className="text-xs">
+                3D: STP / STEP / STL
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                CAD: DXF / DWG
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                IMG / DOC / PDF
+              </Badge>
+            </div>
+            <HeaderAuth />
           </div>
         </div>
       </header>

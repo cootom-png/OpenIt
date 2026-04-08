@@ -31,7 +31,11 @@ export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
+    // Allow both OAuth admin and email admin
+    const isOAuthAdmin = ctx.user && ctx.user.role === 'admin';
+    const isEmailAdmin = ctx.emailUser && ctx.emailUser.role === 'admin';
+
+    if (!isOAuthAdmin && !isEmailAdmin) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
@@ -39,6 +43,7 @@ export const adminProcedure = t.procedure.use(
       ctx: {
         ...ctx,
         user: ctx.user,
+        emailUser: ctx.emailUser,
       },
     });
   }),

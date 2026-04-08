@@ -1,17 +1,11 @@
 import { bigint, boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
+ * Core user table backing Manus OAuth auth flow.
+ * Keep this for existing OAuth users.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -26,34 +20,83 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
+ * Email-based users — independent from Manus OAuth.
+ * Registration requires admin approval before full access.
+ */
+export const emailUsers = mysqlTable("email_users", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Email address, unique per user */
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  /** bcrypt hashed password */
+  passwordHash: varchar("passwordHash", { length: 256 }).notNull(),
+  /** Display name / nickname */
+  nickname: varchar("nickname", { length: 128 }).notNull(),
+  /** Account status: pending (awaiting approval), approved, rejected */
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  /** Role: user or admin */
+  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  /** Total number of files uploaded (for quota tracking) */
+  fileCount: int("fileCount").default(0).notNull(),
+  /** Total file size in bytes (for quota tracking) */
+  totalFileSize: bigint("totalFileSize", { mode: "number" }).default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn"),
+});
+
+export type EmailUser = typeof emailUsers.$inferSelect;
+export type InsertEmailUser = typeof emailUsers.$inferInsert;
+
+/**
+ * User files — files uploaded by registered (approved) users.
+ * These are persisted permanently (until user or admin deletes).
+ * Guest uploads are NOT stored here — they are temporary and cleaned daily.
+ */
+export const userFiles = mysqlTable("user_files", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Owner user ID (references emailUsers.id) */
+  userId: int("userId").notNull(),
+  /** Original file name */
+  fileName: varchar("fileName", { length: 512 }).notNull(),
+  /** File extension (lowercase, without dot) */
+  fileExt: varchar("fileExt", { length: 32 }).notNull(),
+  /** File size in bytes */
+  fileSize: bigint("fileSize", { mode: "number" }).notNull(),
+  /** MIME type */
+  mimeType: varchar("mimeType", { length: 128 }),
+  /** Category: '3d', 'cad', 'image', 'video', 'document' */
+  category: varchar("category", { length: 32 }).notNull(),
+  /** S3 storage key */
+  s3Key: varchar("s3Key", { length: 1024 }).notNull(),
+  /** S3 public URL */
+  s3Url: text("s3Url").notNull(),
+  /** Share token — unique random string for sharing */
+  shareToken: varchar("shareToken", { length: 64 }).unique(),
+  /** Whether sharing is enabled */
+  shareEnabled: boolean("shareEnabled").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserFile = typeof userFiles.$inferSelect;
+export type InsertUserFile = typeof userFiles.$inferInsert;
+
+/**
  * File upload records - tracks every file uploaded by users for analytics.
  * Records both supported and unsupported file formats.
  */
 export const fileUploads = mysqlTable("file_uploads", {
   id: int("id").autoincrement().primaryKey(),
-  /** File name as uploaded by the user */
   fileName: varchar("fileName", { length: 512 }).notNull(),
-  /** File extension (lowercase, without dot), e.g. 'stp', 'dwg', 'pdf' */
   fileExt: varchar("fileExt", { length: 32 }).notNull(),
-  /** File size in bytes */
   fileSize: bigint("fileSize", { mode: "number" }).notNull(),
-  /** MIME type if available */
   mimeType: varchar("mimeType", { length: 128 }),
-  /** Category: '3d', 'cad', 'image', 'video', 'document', 'unknown' */
   category: varchar("category", { length: 32 }).notNull(),
-  /** Whether this format is supported by our viewer */
   isSupported: boolean("isSupported").notNull().default(true),
-  /** Whether the file was successfully previewed (parsed without error) */
   previewSuccess: boolean("previewSuccess"),
-  /** Error message if preview failed */
   errorMessage: text("errorMessage"),
-  /** User agent string for device/browser analytics */
   userAgent: text("userAgent"),
-  /** IP address (anonymized) for geographic analytics */
   ipAddress: varchar("ipAddress", { length: 64 }),
-  /** Logged-in user ID (nullable for anonymous uploads) */
   userId: int("userId"),
-  /** User name if logged in */
   userName: text("userName"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
