@@ -40,6 +40,7 @@ import {
   Save,
   X,
   ExternalLink,
+  Eye,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -391,8 +392,15 @@ export default function Profile() {
                                   </Button>
                                 )}
                                 {file.s3Url && (
+                                  <Link href={`/?preview=${encodeURIComponent(file.s3Url)}&name=${encodeURIComponent(file.fileName)}`}>
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="预览文件">
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </Link>
+                                )}
+                                {file.s3Url && (
                                   <a href={file.s3Url} target="_blank" rel="noopener noreferrer">
-                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="打开文件">
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="下载文件">
                                       <ExternalLink className="w-3.5 h-3.5" />
                                     </Button>
                                   </a>

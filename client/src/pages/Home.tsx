@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,137 @@ import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
+
+/**
+ * Load a remote file from S3 URL into the viewer.
+ * Used when navigating from Profile with ?preview=<url>&name=<filename> params.
+ */
+async function loadRemoteFile(
+  url: string,
+  name: string,
+  setters: {
+    setFileName: (v: string) => void;
+    setFileSize: (v: number) => void;
+    setStatus: (v: FileStatus) => void;
+    setViewerMode: (v: ViewerMode) => void;
+    setMeshData: (v: ParsedMeshData | null) => void;
+    setDxfFileUrl: (v: string | null) => void;
+    setDwgFileBuffer: (v: ArrayBuffer | null) => void;
+    setImageUrl: (v: string | null) => void;
+    setVideoUrl: (v: string | null) => void;
+    setDocFile: (v: File | null) => void;
+    setParseTime: (v: number) => void;
+    setMeshCount: (v: number) => void;
+    setVertexCount: (v: number) => void;
+    setErrorMsg: (v: string) => void;
+    setCurrentFileObj: (v: File | null) => void;
+    setSavedFileId: (v: number | null) => void;
+    setShareLink: (v: string | null) => void;
+    setLinkCopied: (v: boolean) => void;
+    setDwgInfo: (v: any) => void;
+    setImageInfo: (v: any) => void;
+    setVideoInfo: (v: any) => void;
+    setPdfInfo: (v: any) => void;
+    setWordInfo: (v: any) => void;
+    setExcelInfo: (v: any) => void;
+  }
+) {
+  const ext = getFileExtension(name);
+  const s = setters;
+
+  // Reset all state
+  s.setFileName(name);
+  s.setErrorMsg("");
+  s.setCurrentFileObj(null);
+  s.setSavedFileId(null);
+  s.setShareLink(null);
+  s.setLinkCopied(false);
+  s.setMeshData(null);
+  s.setDxfFileUrl(null);
+  s.setDwgFileBuffer(null);
+  s.setDwgInfo(null);
+  s.setImageUrl(null);
+  s.setImageInfo(null);
+  s.setVideoUrl(null);
+  s.setVideoInfo(null);
+  s.setDocFile(null);
+  s.setPdfInfo(null);
+  s.setWordInfo(null);
+  s.setExcelInfo(null);
+  s.setParseTime(0);
+  s.setMeshCount(0);
+  s.setVertexCount(0);
+
+  try {
+    if (SUPPORTED_IMAGE.includes(ext)) {
+      s.setViewerMode("image");
+      s.setImageUrl(url);
+      s.setStatus("ready");
+    } else if (SUPPORTED_VIDEO.includes(ext)) {
+      s.setViewerMode("video");
+      s.setVideoUrl(url);
+      s.setStatus("ready");
+    } else if (SUPPORTED_PDF.includes(ext)) {
+      s.setViewerMode("pdf");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      s.setFileSize(blob.size);
+      s.setDocFile(new File([blob], name, { type: "application/pdf" }));
+      s.setStatus("ready");
+    } else if (SUPPORTED_WORD.includes(ext)) {
+      s.setViewerMode("word");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      s.setFileSize(blob.size);
+      s.setDocFile(new File([blob], name));
+      s.setStatus("ready");
+    } else if (SUPPORTED_EXCEL.includes(ext)) {
+      s.setViewerMode("excel");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      s.setFileSize(blob.size);
+      s.setDocFile(new File([blob], name));
+      s.setStatus("ready");
+    } else if (SUPPORTED_2D_DXF.includes(ext)) {
+      s.setViewerMode("2d-dxf");
+      s.setStatus("parsing");
+      s.setDxfFileUrl(url);
+      s.setStatus("ready");
+    } else if (SUPPORTED_2D_DWG.includes(ext)) {
+      s.setViewerMode("2d-dwg");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const buffer = await resp.arrayBuffer();
+      s.setFileSize(buffer.byteLength);
+      s.setDwgFileBuffer(buffer);
+      s.setStatus("ready");
+    } else if (SUPPORTED_3D.includes(ext)) {
+      s.setViewerMode("3d");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      s.setFileSize(blob.size);
+      const file = new File([blob], name);
+      const { data, parseTime: pt } = await parseFile(file);
+      s.setMeshData(data);
+      s.setParseTime(pt);
+      s.setMeshCount(data.meshes.length);
+      let totalVerts = 0;
+      data.meshes.forEach((m) => { totalVerts += m.attributes.position.array.length / 3; });
+      s.setVertexCount(totalVerts);
+      s.setStatus("ready");
+    } else {
+      s.setStatus("error");
+      s.setErrorMsg("不支持预览此文件格式");
+    }
+  } catch (err: any) {
+    s.setStatus("error");
+    s.setErrorMsg(err.message || "加载远程文件失败");
+  }
+}
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
 type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | null;
@@ -160,6 +291,28 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
+
+  // Handle ?preview=<url>&name=<filename> from Profile page
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const previewUrl = params.get("preview");
+    const previewName = params.get("name");
+    if (previewUrl && previewName) {
+      // Clean URL params without reload
+      window.history.replaceState({}, "", "/");
+      setStatus("loading");
+      loadRemoteFile(previewUrl, previewName, {
+        setFileName, setFileSize, setStatus, setViewerMode,
+        setMeshData, setDxfFileUrl, setDwgFileBuffer,
+        setImageUrl, setVideoUrl, setDocFile,
+        setParseTime, setMeshCount, setVertexCount,
+        setErrorMsg, setCurrentFileObj, setSavedFileId,
+        setShareLink, setLinkCopied, setDwgInfo,
+        setImageInfo, setVideoInfo, setPdfInfo,
+        setWordInfo, setExcelInfo,
+      });
+    }
+  }, []);
   const { data: quota, refetch: refetchQuota } = trpc.userFiles.quota.useQuery(undefined, { enabled: isLoggedIn && isApproved });
   const uploadMut = trpc.userFiles.upload.useMutation();
   const toggleShareMut = trpc.userFiles.toggleShare.useMutation();
