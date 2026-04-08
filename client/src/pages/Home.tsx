@@ -18,16 +18,18 @@ import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
 import DxfViewerComponent from "@/components/DxfViewerComponent";
 import DwgViewerComponent from "@/components/DwgViewerComponent";
 import ImageViewer from "@/components/ImageViewer";
+import VideoViewer from "@/components/VideoViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
 const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE];
+const SUPPORTED_VIDEO = ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO];
 const ACCEPT_STRING = ALL_SUPPORTED.map((e) => `.${e}`).join(",");
 
 export default function Home() {
@@ -45,6 +47,8 @@ export default function Home() {
   const [dwgInfo, setDwgInfo] = useState<{ entityCount: number; layerCount: number } | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number } | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoInfo, setVideoInfo] = useState<{ width: number; height: number; duration: number } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,8 +72,26 @@ export default function Home() {
     setDwgInfo(null);
     setImageUrl(null);
     setImageInfo(null);
+    setVideoUrl(null);
+    setVideoInfo(null);
 
-    if (SUPPORTED_IMAGE.includes(ext)) {
+    if (SUPPORTED_VIDEO.includes(ext)) {
+      // Video file - use VideoViewer
+      setViewerMode("video");
+      setStatus("parsing");
+
+      try {
+        const blobUrl = URL.createObjectURL(file);
+        setVideoUrl(blobUrl);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载视频文件时发生错误");
+      }
+    } else if (SUPPORTED_IMAGE.includes(ext)) {
       // Image file - use ImageViewer
       setViewerMode("image");
       setStatus("parsing");
@@ -184,6 +206,10 @@ export default function Home() {
     () => SUPPORTED_IMAGE.includes(fileExt),
     [fileExt]
   );
+  const isVideoFile = useMemo(
+    () => SUPPORTED_VIDEO.includes(fileExt),
+    [fileExt]
+  );
 
   // Reset file input value so the same file can be re-selected
   const triggerFileInput = useCallback(() => {
@@ -203,6 +229,13 @@ export default function Home() {
   const handleImageLoaded = useCallback(
     (info: { width: number; height: number }) => {
       setImageInfo(info);
+    },
+    []
+  );
+
+  const handleVideoLoaded = useCallback(
+    (info: { width: number; height: number; duration: number }) => {
+      setVideoInfo(info);
     },
     []
   );
@@ -277,7 +310,7 @@ export default function Home() {
                       <Upload className="w-10 h-10 text-primary" />
                     </div>
                     <h3 className="text-xl font-semibold text-foreground mb-2">
-                      上传 3D / CAD / 图片文件
+                      上传 3D / CAD / 图片 / 视频文件
                     </h3>
                     <p className="text-muted-foreground text-center max-w-md mb-4">
                       将文件拖拽到此处，或点击选择文件
@@ -306,6 +339,14 @@ export default function Home() {
                         <Badge variant="outline">.PNG</Badge>
                         <Badge variant="outline">.GIF</Badge>
                       </div>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          视频:
+                        </span>
+                        <Badge variant="outline">.MP4</Badge>
+                        <Badge variant="outline">.MOV</Badge>
+                        <Badge variant="outline">.WebM</Badge>
+                      </div>
                     </div>
                     {status === "error" && (
                       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-lg text-sm max-w-md text-center">
@@ -331,6 +372,12 @@ export default function Home() {
                       首次加载 STEP 文件需要初始化 WASM 引擎，可能需要几秒钟
                     </p>
                   </div>
+                ) : viewerMode === "video" ? (
+                  <VideoViewer
+                    videoUrl={videoUrl}
+                    fileName={fileName}
+                    onVideoLoaded={handleVideoLoaded}
+                  />
                 ) : viewerMode === "image" ? (
                   <ImageViewer
                     imageUrl={imageUrl}
@@ -367,6 +414,21 @@ export default function Home() {
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
                       右键拖拽平移
+                    </span>
+                  </>
+                ) : viewerMode === "video" ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <Move className="w-3.5 h-3.5" />
+                      点击播放/暂停
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      全屏播放
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      拖动进度条跳转
                     </span>
                   </>
                 ) : viewerMode === "image" ? (
@@ -440,10 +502,14 @@ export default function Home() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">类型</span>
                       <Badge
-                        variant={is2DFile ? "outline" : isImageFile ? "default" : "secondary"}
+                        variant={is2DFile ? "outline" : isImageFile ? "default" : isVideoFile ? "default" : "secondary"}
                         className="text-xs"
                       >
-                        {isImageFile ? (
+                        {isVideoFile ? (
+                          <span className="flex items-center gap-1">
+                            视频文件
+                          </span>
+                        ) : isImageFile ? (
                           <span className="flex items-center gap-1">
                             图片文件
                           </span>
@@ -463,7 +529,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    请先上传 3D、CAD 或图片文件
+                    请先上传 3D、CAD、图片或视频文件
                   </p>
                 )}
               </CardContent>
@@ -620,6 +686,51 @@ export default function Home() {
               </Card>
             )}
 
+            {/* Video Info */}
+            {status === "ready" && viewerMode === "video" && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Info className="w-4 h-4" />
+                    视频信息
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {videoInfo && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">分辨率</span>
+                        <span className="font-medium">
+                          {videoInfo.width} × {videoInfo.height}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">时长</span>
+                        <span className="font-medium">
+                          {Math.floor(videoInfo.duration / 60)}:{Math.floor(videoInfo.duration % 60).toString().padStart(2, '0')}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">宽高比</span>
+                        <span className="font-medium">
+                          {(videoInfo.width / videoInfo.height).toFixed(2)}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">画质</span>
+                        <span className="font-medium">
+                          {videoInfo.height >= 2160 ? '4K' : videoInfo.height >= 1080 ? '1080p' : videoInfo.height >= 720 ? '720p' : videoInfo.height >= 480 ? '480p' : `${videoInfo.height}p`}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Upload another file */}
             {status === "ready" && (
               <Button
@@ -649,10 +760,15 @@ export default function Home() {
                     <span className="font-medium text-foreground">图片</span>
                     ：支持 JPG/JPEG、PNG、GIF 格式
                   </li>
+                  <li>
+                    <span className="font-medium text-foreground">视频</span>
+                    ：支持 MP4、MOV、WebM、AVI 格式
+                  </li>
                   <li>• STEP 文件使用 WASM 引擎在浏览器端解析</li>
                   <li>• DXF 文件使用 WebGL 引擎直接渲染 2D 图纸</li>
                   <li>• DWG 文件使用 CAD Viewer WebGL 引擎直接渲染</li>
                   <li>• 图片支持缩放、平移、旋转、下载</li>
+                  <li>• 视频支持播放、暂停、进度跳转、全屏</li>
                   <li>• 3D 模型：左键旋转 / 滚轮缩放 / 右键平移</li>
                   <li>• 2D 图纸：左键平移 / 滚轮缩放</li>
                   <li>• 大文件解析可能需要较长时间</li>

@@ -22,3 +22,4 @@
 - [x] BUG修复：STP文件上传时报"falling back to ArrayBuffer instantiation"错误
 - [x] 将常用CAD字体预集成到CDN，避免每次打开DWG文件都从外网下载字体
 - [x] 添加图片格式（JPG/JPEG、PNG、GIF）上传和预览支持
+- [x] 添加视频格式（MP4、MOV、WebM、AVI等）上传和预览支持
