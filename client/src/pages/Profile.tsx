@@ -126,6 +126,7 @@ export default function Profile() {
   // Mutations
   const deleteFile = trpc.userFiles.delete.useMutation();
   const toggleShare = trpc.userFiles.toggleShare.useMutation();
+  const renewShare = trpc.userFiles.renewShare.useMutation();
 
   // Copy share link
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -187,6 +188,16 @@ export default function Profile() {
       toast.success("链接已复制");
       setTimeout(() => setCopiedId(null), 2000);
     });
+  };
+
+  const handleRenewShare = async (fileId: number) => {
+    try {
+      await renewShare.mutateAsync({ fileId });
+      toast.success("分享已续期 7 天");
+      refetchFiles();
+    } catch (e: any) {
+      toast.error(e.message || "续期失败");
+    }
   };
 
   const totalPages = Math.ceil((filesData?.total || 0) / pageSize);
@@ -516,13 +527,21 @@ export default function Profile() {
                             {categoryLabels[file.category] || file.category}
                           </Badge>
 
-                          {/* Share indicator */}
+                          {/* Share indicator with expiry */}
                           {file.shareEnabled && (
                             <Badge
-                              className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 bg-primary/90 text-white shadow-sm"
+                              className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 shadow-sm ${
+                                file.shareExpiresAt && new Date(file.shareExpiresAt) < new Date()
+                                  ? 'bg-red-500/90 text-white'
+                                  : file.shareExpiresAt && new Date(file.shareExpiresAt).getTime() - Date.now() < 2 * 24 * 60 * 60 * 1000
+                                  ? 'bg-orange-500/90 text-white'
+                                  : 'bg-primary/90 text-white'
+                              }`}
                             >
                               <Link2 className="w-2.5 h-2.5 mr-0.5" />
-                              已分享
+                              {file.shareExpiresAt && new Date(file.shareExpiresAt) < new Date()
+                                ? '已过期'
+                                : '分享中'}
                             </Badge>
                           )}
                         </div>
@@ -598,6 +617,28 @@ export default function Profile() {
                                   <Copy className="w-3.5 h-3.5" />
                                 )}
                                 {copiedId === file.id ? "已复制" : "链接"}
+                              </Button>
+                            )}
+
+                            {/* Renew share */}
+                            {file.shareEnabled && file.shareExpiresAt && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={`h-8 text-xs gap-1 px-2.5 ${
+                                  new Date(file.shareExpiresAt) < new Date()
+                                    ? 'text-red-500 border-red-300 hover:bg-red-50'
+                                    : new Date(file.shareExpiresAt).getTime() - Date.now() < 2 * 24 * 60 * 60 * 1000
+                                    ? 'text-orange-500 border-orange-300 hover:bg-orange-50'
+                                    : 'text-green-600 border-green-300 hover:bg-green-50'
+                                }`}
+                                onClick={() => handleRenewShare(file.id)}
+                                disabled={renewShare.isPending}
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                                {new Date(file.shareExpiresAt) < new Date()
+                                  ? '重新分享'
+                                  : '续期7天'}
                               </Button>
                             )}
 

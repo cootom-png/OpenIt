@@ -189,6 +189,29 @@ export default function ShareView() {
     );
   }
 
+  // Check if share has expired
+  if (sharedFile.expired) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="pt-6 text-center">
+            <Clock className="w-12 h-12 mx-auto mb-3 text-orange-400" />
+            <h2 className="text-lg font-semibold mb-2">分享已过期</h2>
+            <p className="text-sm text-muted-foreground mb-2">
+              该分享链接已超过有效期，无法查看文件内容。
+            </p>
+            <p className="text-xs text-muted-foreground mb-4">
+              请联系文件所有者重新开启分享。
+            </p>
+            <Link href="/">
+              <Button variant="outline">返回首页</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const is3D = SUPPORTED_3D.includes(fileExt);
   const isDxf = SUPPORTED_2D_DXF.includes(fileExt);
   const isDwg = SUPPORTED_2D_DWG.includes(fileExt);
@@ -349,6 +372,17 @@ export default function ShareView() {
                   <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />上传时间</span>
                   <span className="text-xs">{formatDate(sharedFile.createdAt)}</span>
                 </div>
+                {sharedFile.shareExpiresAt && (
+                  <>
+                    <Separator />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />分享到期</span>
+                      <span className={`text-xs ${new Date(sharedFile.shareExpiresAt) < new Date() ? 'text-red-500' : new Date(sharedFile.shareExpiresAt).getTime() - Date.now() < 2 * 24 * 60 * 60 * 1000 ? 'text-orange-500' : 'text-green-600'}`}>
+                        {formatDate(sharedFile.shareExpiresAt)}
+                      </span>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

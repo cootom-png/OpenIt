@@ -1,0 +1,1 @@
+ALTER TABLE `user_files` ADD `shareExpiresAt` timestamp;

@@ -22,7 +22,10 @@ import {
   User,
   Calendar,
   FileText,
+  Search,
+  X,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 const StepPreview = lazy(() => import("@/components/StepPreview"));
@@ -42,10 +45,23 @@ const formatDate = (d: Date | string | null) => {
 export default function PartsGallery() {
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
   const [page, setPage] = useState(1);
+  const [searchText, setSearchText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const pageSize = 20;
-  const queryInput = useMemo(() => ({ page, pageSize }), [page]);
+  const queryInput = useMemo(() => ({ page, pageSize, search: searchQuery || undefined }), [page, searchQuery]);
 
   const { data, isLoading } = trpc.partsGallery.list.useQuery(queryInput);
+
+  const handleSearch = () => {
+    setSearchQuery(searchText.trim());
+    setPage(1);
+  };
+
+  const handleClearSearch = () => {
+    setSearchText("");
+    setSearchQuery("");
+    setPage(1);
+  };
 
   // Preview dialog state
   const [previewFileId, setPreviewFileId] = useState<number | null>(null);
@@ -124,13 +140,47 @@ export default function PartsGallery() {
           </p>
         </div>
 
+        {/* Search Bar */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索零件名称..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              className="pl-9 pr-9 h-10"
+            />
+            {searchText && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <Button onClick={handleSearch} size="sm" className="h-10 px-4">
+            <Search className="w-4 h-4 mr-1.5" />
+            搜索
+          </Button>
+        </div>
+
         {/* Stats */}
         {data && (
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center gap-4 mb-4">
             <Badge variant="secondary" className="gap-1">
               <Box className="w-3.5 h-3.5" />
-              共 {data.total} 个零件
+              {searchQuery ? `找到 ${data.total} 个零件` : `共 ${data.total} 个零件`}
             </Badge>
+            {searchQuery && (
+              <Badge variant="outline" className="gap-1 text-xs">
+                搜索：{searchQuery}
+                <button onClick={handleClearSearch} className="ml-1 hover:text-foreground">
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            )}
           </div>
         )}
 

@@ -11,7 +11,7 @@ import {
 import { registerEmailUser, loginEmailUser, createEmailSessionToken, EMAIL_COOKIE_NAME, validatePasswordStrength, changePassword, resetPasswordWithCode } from "./emailAuth";
 import {
   getUserQuota, checkQuota, uploadUserFile, listUserFiles, deleteUserFile,
-  toggleFileShare, getFileByShareToken,
+  toggleFileShare, renewFileShare, getFileByShareToken,
   adminListFiles, adminDeleteFile, adminGetFileStats,
   updateEmailUserNickname, updateFileThumbnail,
   listPublic3DParts,
@@ -278,6 +278,17 @@ export const appRouter = router({
         if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权操作" });
         return { success: true, file };
       }),
+
+    /** Renew share — reset expiry to 7 days from now */
+    renewShare: publicProcedure
+      .input(z.object({ fileId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        if (ctx.emailUser.status !== "approved") throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
+        const file = await renewFileShare(input.fileId, ctx.emailUser.id);
+        if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权操作" });
+        return { success: true, file };
+      }),
   }),
 
   // ─── Share (public access) ───
@@ -299,6 +310,7 @@ export const appRouter = router({
       .input(z.object({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(50).default(20),
+        search: z.string().optional(),
       }))
       .query(async ({ input }) => {
         return listPublic3DParts(input);

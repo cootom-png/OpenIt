@@ -43,6 +43,13 @@
       "when": 1775658077573,
       "tag": "0005_nosy_captain_midlands",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1775660729990,
+      "tag": "0006_pale_triton",
+      "breakpoints": true
     }
   ]
 }

@@ -186,9 +186,43 @@ export async function toggleFileShare(fileId: number, userId: number, enabled: b
     shareToken = generateShareToken();
   }
 
+  // When enabling share, set 7-day expiry; when disabling, clear expiry
+  const shareExpiresAt = enabled ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
+
   await db
     .update(userFiles)
-    .set({ shareEnabled: enabled, shareToken })
+    .set({ shareEnabled: enabled, shareToken, shareExpiresAt })
+    .where(eq(userFiles.id, fileId));
+
+  const updated = await db.select().from(userFiles).where(eq(userFiles.id, fileId)).limit(1);
+  return updated[0] || null;
+}
+
+/**
+ * Renew share — reset the expiry to 7 days from now.
+ * Only works if the file is currently shared.
+ */
+export async function renewFileShare(fileId: number, userId: number): Promise<UserFile | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const file = await db
+    .select()
+    .from(userFiles)
+    .where(and(eq(userFiles.id, fileId), eq(userFiles.userId, userId)))
+    .limit(1);
+
+  if (!file.length) return null;
+
+  const shareExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  let shareToken = file[0].shareToken;
+  if (!shareToken) {
+    shareToken = generateShareToken();
+  }
+
+  await db
+    .update(userFiles)
+    .set({ shareEnabled: true, shareToken, shareExpiresAt })
     .where(eq(userFiles.id, fileId));
 
   const updated = await db.select().from(userFiles).where(eq(userFiles.id, fileId)).limit(1);
@@ -197,7 +231,7 @@ export async function toggleFileShare(fileId: number, userId: number, enabled: b
 
 // ─── Share ───
 
-export async function getFileByShareToken(token: string): Promise<(UserFile & { ownerNickname: string }) | null> {
+export async function getFileByShareToken(token: string): Promise<(UserFile & { ownerNickname: string; expired: boolean }) | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -213,7 +247,11 @@ export async function getFileByShareToken(token: string): Promise<(UserFile & { 
 
   if (!result.length) return null;
 
-  return { ...result[0].file, ownerNickname: result[0].ownerNickname };
+  // Check if share has expired
+  const file = result[0].file;
+  const expired = file.shareExpiresAt ? new Date(file.shareExpiresAt) < new Date() : false;
+
+  return { ...file, ownerNickname: result[0].ownerNickname, expired };
 }
 
 // ─── Admin File Operations ───
@@ -328,15 +366,19 @@ export async function adminGetFileStats() {
 
 // ─── Public 3D Parts Gallery ───
 
-export async function listPublic3DParts(opts: { page: number; pageSize: number }) {
+export async function listPublic3DParts(opts: { page: number; pageSize: number; search?: string }) {
   const db = await getDb();
   if (!db) return { records: [], total: 0 };
 
-  // List all 3D category files that have share enabled or are public gallery items
-  // Show all 3D files from approved users with thumbnails
-  const conditions = [
+  // List all 3D category files from approved users
+  const conditions: any[] = [
     eq(userFiles.category, "3d"),
   ];
+
+  // Add search filter if provided
+  if (opts.search && opts.search.trim()) {
+    conditions.push(like(userFiles.fileName, `%${opts.search.trim()}%`));
+  }
 
   const whereClause = and(...conditions);
 
