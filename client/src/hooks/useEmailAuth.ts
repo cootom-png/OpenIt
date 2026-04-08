@@ -35,8 +35,9 @@ export function useEmailAuth() {
 
   const logout = async () => {
     await logoutMutation.mutateAsync();
-    await refetch();
     navigate("/");
+    // refetch after navigation to avoid component unmount issues
+    setTimeout(() => refetch(), 100);
   };
 
   return {
