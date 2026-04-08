@@ -1,6 +1,6 @@
 import { eq, desc, sql, count, and, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, InsertFileUpload, users, fileUploads, emailUsers, InsertEmailUser, EmailUser } from "../drizzle/schema";
+import { InsertUser, InsertFileUpload, users, fileUploads, emailUsers, InsertEmailUser, EmailUser, passwordResetTokens } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -91,7 +91,14 @@ export async function getUserByOpenId(openId: string) {
 
 // ─── Email User Auth ───
 
-export async function createEmailUser(data: { email: string; passwordHash: string; nickname: string }): Promise<number> {
+export async function createEmailUser(data: {
+  email: string;
+  passwordHash: string;
+  nickname: string;
+  realName?: string;
+  company?: string;
+  phone?: string;
+}): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -99,11 +106,69 @@ export async function createEmailUser(data: { email: string; passwordHash: strin
     email: data.email,
     passwordHash: data.passwordHash,
     nickname: data.nickname,
+    realName: data.realName || null,
+    company: data.company || null,
+    phone: data.phone || null,
     status: "pending",
     role: "user",
   });
 
   return result[0].insertId;
+}
+
+/** Update email user's password hash */
+export async function updateEmailUserPassword(id: number, passwordHash: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(emailUsers).set({ passwordHash }).where(eq(emailUsers.id, id));
+}
+
+// ─── Password Reset Tokens ───
+
+export async function createPasswordResetToken(data: {
+  userId: number;
+  email: string;
+  resetCode: string;
+  expiresAt: Date;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(passwordResetTokens).values(data);
+  return result[0].insertId;
+}
+
+export async function getValidResetToken(email: string, resetCode: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(passwordResetTokens)
+    .where(and(
+      eq(passwordResetTokens.email, email),
+      eq(passwordResetTokens.resetCode, resetCode),
+      eq(passwordResetTokens.used, false),
+    ))
+    .orderBy(desc(passwordResetTokens.createdAt))
+    .limit(1);
+  if (result.length === 0) return undefined;
+  const token = result[0];
+  // Check expiry
+  if (new Date() > token.expiresAt) return undefined;
+  return token;
+}
+
+export async function markResetTokenUsed(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(passwordResetTokens).set({ used: true }).where(eq(passwordResetTokens.id, id));
+}
+
+export async function getPendingResetRequests() {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select().from(passwordResetTokens)
+    .where(eq(passwordResetTokens.used, false))
+    .orderBy(desc(passwordResetTokens.createdAt))
+    .limit(50);
+  return result;
 }
 
 export async function getEmailUserByEmail(email: string): Promise<EmailUser | undefined> {

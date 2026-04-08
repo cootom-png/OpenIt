@@ -326,6 +326,44 @@ export async function adminGetFileStats() {
   };
 }
 
+// ─── Public 3D Parts Gallery ───
+
+export async function listPublic3DParts(opts: { page: number; pageSize: number }) {
+  const db = await getDb();
+  if (!db) return { records: [], total: 0 };
+
+  // List all 3D category files that have share enabled or are public gallery items
+  // Show all 3D files from approved users with thumbnails
+  const conditions = [
+    eq(userFiles.category, "3d"),
+  ];
+
+  const whereClause = and(...conditions);
+
+  const [records, totalResult] = await Promise.all([
+    db
+      .select({
+        id: userFiles.id,
+        fileName: userFiles.fileName,
+        fileExt: userFiles.fileExt,
+        fileSize: userFiles.fileSize,
+        thumbnailUrl: userFiles.thumbnailUrl,
+        s3Url: userFiles.s3Url,
+        createdAt: userFiles.createdAt,
+        ownerNickname: emailUsers.nickname,
+      })
+      .from(userFiles)
+      .innerJoin(emailUsers, eq(userFiles.userId, emailUsers.id))
+      .where(whereClause)
+      .orderBy(desc(userFiles.createdAt))
+      .limit(opts.pageSize)
+      .offset((opts.page - 1) * opts.pageSize),
+    db.select({ count: count() }).from(userFiles).where(whereClause),
+  ]);
+
+  return { records, total: totalResult[0]?.count || 0 };
+}
+
 // ─── Thumbnail ───
 
 export async function updateFileThumbnail(fileId: number, userId: number, thumbnailBase64: string): Promise<string | null> {

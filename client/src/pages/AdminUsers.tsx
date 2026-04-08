@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, CheckCircle, XCircle, Trash2, Search, Users, Clock, UserCheck, UserX,
-  Shield, Loader2, ChevronLeft, ChevronRight, BarChart3, LogOut,
+  Shield, Loader2, ChevronLeft, ChevronRight, BarChart3, LogOut, KeyRound, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -66,6 +66,30 @@ export default function AdminUsers() {
     onSuccess: () => { toast.success("角色已更新"); refetch(); },
     onError: (err) => toast.error(err.message),
   });
+  const generateResetCodeMutation = trpc.adminUsers.generateResetCode.useMutation({
+    onSuccess: (data) => {
+      setResetCodeResult(data);
+      toast.success(`重置码已生成: ${data.resetCode}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const { data: resetRequests } = trpc.adminUsers.pendingResetRequests.useQuery(undefined, {
+    enabled: isAdmin,
+  });
+
+  const [resetCodeResult, setResetCodeResult] = useState<{ resetCode: string; email: string; nickname: string } | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  const copyResetCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+      toast.success("重置码已复制");
+    } catch {
+      toast.error("复制失败");
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -243,6 +267,83 @@ export default function AdminUsers() {
           </CardContent>
         </Card>
 
+        {/* Reset Code Result Dialog */}
+        {resetCodeResult && (
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium text-blue-800 flex items-center gap-2">
+                    <KeyRound className="w-4 h-4" />
+                    密码重置码已生成
+                  </p>
+                  <p className="text-sm text-blue-700">
+                    用户: {resetCodeResult.nickname} ({resetCodeResult.email})
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="font-mono text-2xl font-bold tracking-widest text-blue-900">
+                      {resetCodeResult.resetCode}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-blue-300 text-blue-700 hover:bg-blue-100"
+                      onClick={() => copyResetCode(resetCodeResult.resetCode)}
+                    >
+                      {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1">有效期 24 小时，请尽快将重置码告知用户</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-blue-600 hover:bg-blue-100"
+                  onClick={() => setResetCodeResult(null)}
+                >
+                  关闭
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pending Reset Requests */}
+        {resetRequests && resetRequests.length > 0 && (
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base text-yellow-800 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                待处理的密码重置请求 ({resetRequests.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {resetRequests.map((req: any) => (
+                <div key={req.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-yellow-100">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{req.email}</p>
+                    <p className="text-xs text-slate-500">
+                      请求时间: {new Date(req.createdAt).toLocaleString("zh-CN")}
+                    </p>
+                  </div>
+                  {req.userId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-blue-600 border-blue-200 hover:bg-blue-50"
+                      onClick={() => generateResetCodeMutation.mutate({ userId: req.userId })}
+                      disabled={generateResetCodeMutation.isPending}
+                    >
+                      <KeyRound className="w-3.5 h-3.5 mr-1" />
+                      生成重置码
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Users Table */}
         <Card>
           <CardHeader className="pb-3">
@@ -348,6 +449,17 @@ export default function AdminUsers() {
                                   取消管理员
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-blue-600 hover:bg-blue-50 border-blue-200"
+                                onClick={() => generateResetCodeMutation.mutate({ userId: user.id })}
+                                disabled={generateResetCodeMutation.isPending}
+                                title="生成密码重置码"
+                              >
+                                <KeyRound className="w-3.5 h-3.5 mr-1" />
+                                重置码
+                              </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button

@@ -42,7 +42,21 @@ import {
   Ruler,
   Link2,
   Camera,
+  Lock,
+  Building2,
+  Phone,
+  KeyRound,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { trpc } from "@/lib/trpc";
@@ -93,6 +107,14 @@ export default function Profile() {
   const [editingNickname, setEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState("");
   const updateNickname = trpc.emailAuth.updateNickname.useMutation();
+
+  // Change password
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const changePasswordMutation = trpc.emailAuth.changePassword.useMutation();
 
   // File list
   const [page, setPage] = useState(1);
@@ -262,6 +284,130 @@ export default function Profile() {
                   {formatDate(emailUser?.createdAt || null)}
                 </div>
               </div>
+
+              {/* Real Name */}
+              {emailUser?.realName && (
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">姓名</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="w-3.5 h-3.5 text-muted-foreground" />
+                    {emailUser.realName}
+                  </div>
+                </div>
+              )}
+
+              {/* Company */}
+              {emailUser?.company && (
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">公司</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                    {emailUser.company}
+                  </div>
+                </div>
+              )}
+
+              {/* Phone */}
+              {emailUser?.phone && (
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">电话</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                    {emailUser.phone}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Change Password Button */}
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">账号安全</div>
+              <Dialog open={showPasswordDialog} onOpenChange={(open) => {
+                setShowPasswordDialog(open);
+                if (!open) {
+                  setOldPassword("");
+                  setNewPassword("");
+                  setConfirmNewPassword("");
+                  setPasswordError("");
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    修改密码
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[400px]">
+                  <DialogHeader>
+                    <DialogTitle>修改密码</DialogTitle>
+                    <DialogDescription>请输入原密码和新密码。新密码需至少8位，包含大小写字母和数字。</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setPasswordError("");
+                    if (newPassword !== confirmNewPassword) {
+                      setPasswordError("两次输入的新密码不一致");
+                      return;
+                    }
+                    try {
+                      await changePasswordMutation.mutateAsync({ oldPassword, newPassword });
+                      toast.success("密码修改成功");
+                      setShowPasswordDialog(false);
+                      setOldPassword("");
+                      setNewPassword("");
+                      setConfirmNewPassword("");
+                    } catch (err: any) {
+                      setPasswordError(err.message || "密码修改失败");
+                    }
+                  }} className="space-y-4">
+                    {passwordError && (
+                      <div className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-md p-2">
+                        {passwordError}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="oldPassword">原密码</Label>
+                      <Input
+                        id="oldPassword"
+                        type="password"
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        required
+                        placeholder="请输入原密码"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">新密码</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        minLength={8}
+                        placeholder="至少8位，含大小写字母和数字"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmNewPassword">确认新密码</Label>
+                      <Input
+                        id="confirmNewPassword"
+                        type="password"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        required
+                        placeholder="再次输入新密码"
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit" disabled={changePasswordMutation.isPending} className="w-full">
+                        {changePasswordMutation.isPending ? "修改中..." : "确认修改"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           </CardContent>
         </Card>

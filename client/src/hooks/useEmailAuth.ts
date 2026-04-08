@@ -14,8 +14,22 @@ export function useEmailAuth() {
     return result;
   };
 
-  const register = async (email: string, password: string, nickname: string) => {
-    const result = await registerMutation.mutateAsync({ email, password, nickname });
+  const register = async (
+    email: string,
+    password: string,
+    nickname: string,
+    realName?: string,
+    company?: string,
+    phone?: string,
+  ) => {
+    const result = await registerMutation.mutateAsync({
+      email,
+      password,
+      nickname,
+      realName: realName || undefined,
+      company: company || undefined,
+      phone: phone || undefined,
+    });
     return result;
   };
 

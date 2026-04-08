@@ -25,6 +25,7 @@ import {
   FolderOpen,
   HardDrive,
   Save,
+  Box,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -198,6 +199,8 @@ function HeaderAuth() {
   const isOAuthAdmin = oauthUser?.role === "admin";
   const showAdmin = isOAuthAdmin || isEmailAdmin;
 
+  const isApproved = emailUser?.status === "approved";
+
   if (isLoggedIn) {
     return (
       <div className="flex items-center gap-2">
@@ -208,6 +211,14 @@ function HeaderAuth() {
             <Badge variant="outline" className="text-[10px] py-0 px-1 text-yellow-600 border-yellow-300">待审核</Badge>
           )}
         </div>
+        {isApproved && (
+          <Link href="/profile">
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">我的文件</span>
+            </Button>
+          </Link>
+        )}
         {showAdmin && (
           <Link href="/admin/users">
             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
@@ -755,6 +766,12 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/parts">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
+                <Box className="w-3.5 h-3.5" />
+                3D零件库
+              </Button>
+            </Link>
             <div className="hidden md:flex gap-1.5">
               <Badge variant="secondary" className="text-xs">
                 3D: STP / STEP / STL

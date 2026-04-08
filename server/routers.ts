@@ -8,13 +8,17 @@ import {
   listEmailUsers, updateEmailUserStatus, updateEmailUserRole, deleteEmailUser, getEmailUserStats,
   getEmailUserById,
 } from "./db";
-import { registerEmailUser, loginEmailUser, createEmailSessionToken, EMAIL_COOKIE_NAME } from "./emailAuth";
+import { registerEmailUser, loginEmailUser, createEmailSessionToken, EMAIL_COOKIE_NAME, validatePasswordStrength, changePassword, resetPasswordWithCode } from "./emailAuth";
 import {
   getUserQuota, checkQuota, uploadUserFile, listUserFiles, deleteUserFile,
   toggleFileShare, getFileByShareToken,
   adminListFiles, adminDeleteFile, adminGetFileStats,
   updateEmailUserNickname, updateFileThumbnail,
+  listPublic3DParts,
 } from "./fileManager";
+import { createPasswordResetToken, getPendingResetRequests } from "./db";
+import { notifyOwner } from "./_core/notification";
+import crypto from "crypto";
 import { TRPCError } from "@trpc/server";
 import { cleanupGuestUploadRecords } from "./cleanup";
 import { initTRPC } from "@trpc/server";
@@ -54,10 +58,18 @@ export const appRouter = router({
     register: publicProcedure
       .input(z.object({
         email: z.string().email("请输入有效的邮箱地址"),
-        password: z.string().min(6, "密码至少6位").max(64, "密码最长64位"),
+        password: z.string().min(8, "密码至少8位").max(64, "密码最长64位"),
         nickname: z.string().min(1, "请输入昵称").max(50, "昵称最长50个字符"),
+        realName: z.string().min(1, "请输入姓名").max(50, "姓名最长50个字符").optional(),
+        company: z.string().min(1, "请输入公司名称").max(100, "公司名称最长100个字符").optional(),
+        phone: z.string().min(1, "请输入电话号码").max(20, "电话号码最长20位").optional(),
       }))
       .mutation(async ({ input }) => {
+        // Validate password strength
+        const strength = validatePasswordStrength(input.password);
+        if (!strength.ok) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: strength.message! });
+        }
         try {
           const userId = await registerEmailUser(input);
           return { success: true, message: "注册成功，请等待管理员审核", userId };
@@ -95,6 +107,9 @@ export const appRouter = router({
         id: ctx.emailUser.id,
         email: ctx.emailUser.email,
         nickname: ctx.emailUser.nickname,
+        realName: ctx.emailUser.realName,
+        company: ctx.emailUser.company,
+        phone: ctx.emailUser.phone,
         status: ctx.emailUser.status,
         role: ctx.emailUser.role,
         fileCount: ctx.emailUser.fileCount,
@@ -117,6 +132,60 @@ export const appRouter = router({
         if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
         await updateEmailUserNickname(ctx.emailUser.id, input.nickname);
         return { success: true };
+      }),
+
+    /** Change password (logged-in user) */
+    changePassword: publicProcedure
+      .input(z.object({
+        oldPassword: z.string().min(1, "请输入原密码"),
+        newPassword: z.string().min(8, "新密码至少8位").max(64),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        try {
+          await changePassword(ctx.emailUser.id, input.oldPassword, input.newPassword);
+          return { success: true, message: "密码修改成功" };
+        } catch (error: any) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message || "密码修改失败" });
+        }
+      }),
+
+    /** Request password reset (public, sends notification to admin) */
+    requestPasswordReset: publicProcedure
+      .input(z.object({
+        email: z.string().email("请输入有效的邮箱地址"),
+      }))
+      .mutation(async ({ input }) => {
+        // Always return success to prevent email enumeration
+        try {
+          const user = await import("./db").then(m => m.getEmailUserByEmail(input.email));
+          if (user) {
+            // Notify admin about the reset request
+            await notifyOwner({
+              title: "密码重置请求",
+              content: `用户 ${user.nickname}（${user.email}）请求重置密码。\n请在管理后台用户管理页面为该用户生成重置码。`,
+            });
+          }
+        } catch (err) {
+          console.warn("Password reset request notification failed:", err);
+        }
+        return { success: true, message: "如果该邮箱已注册，管理员将收到您的重置请求。请联系管理员获取重置码。" };
+      }),
+
+    /** Reset password with code (public) */
+    resetPasswordWithCode: publicProcedure
+      .input(z.object({
+        email: z.string().email("请输入有效的邮箱地址"),
+        resetCode: z.string().min(1, "请输入重置码"),
+        newPassword: z.string().min(8, "新密码至少8位").max(64),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          await resetPasswordWithCode(input.email, input.resetCode, input.newPassword);
+          return { success: true, message: "密码重置成功，请使用新密码登录" };
+        } catch (error: any) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message || "密码重置失败" });
+        }
       }),
   }),
 
@@ -223,6 +292,46 @@ export const appRouter = router({
       }),
   }),
 
+  // ─── Public 3D Parts Gallery ───
+  partsGallery: router({
+    /** Public list of 3D parts with thumbnails */
+    list: publicProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      }))
+      .query(async ({ input }) => {
+        return listPublic3DParts(input);
+      }),
+
+    /** Get 3D file URL for preview (requires approved email user) */
+    getFileUrl: publicProcedure
+      .input(z.object({ fileId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        // Check if user is an approved email user
+        if (!ctx.emailUser) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        }
+        if (ctx.emailUser.status !== "approved") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
+        }
+        const db = (await import("./db")).getDb;
+        const dbInstance = await db();
+        if (!dbInstance) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+        const { userFiles } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const file = await dbInstance
+          .select({ id: userFiles.id, s3Url: userFiles.s3Url, fileName: userFiles.fileName, fileExt: userFiles.fileExt, category: userFiles.category })
+          .from(userFiles)
+          .where(eq(userFiles.id, input.fileId))
+          .limit(1);
+        if (!file.length || file[0].category !== "3d") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在" });
+        }
+        return { s3Url: file[0].s3Url, fileName: file[0].fileName, fileExt: file[0].fileExt };
+      }),
+  }),
+
   // ─── Admin: User Management ───
   adminUsers: router({
     list: adminProcedure
@@ -278,6 +387,40 @@ export const appRouter = router({
         if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
         const { passwordHash, ...safeUser } = user;
         return safeUser;
+      }),
+
+    /** Generate a password reset code for a user */
+    generateResetCode: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        const user = await getEmailUserById(input.userId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+
+        // Generate a 6-digit reset code
+        const resetCode = crypto.randomInt(100000, 999999).toString();
+        // Expires in 24 hours
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await createPasswordResetToken({
+          userId: user.id,
+          email: user.email,
+          resetCode,
+          expiresAt,
+        });
+
+        return {
+          success: true,
+          resetCode,
+          email: user.email,
+          nickname: user.nickname,
+          expiresAt: expiresAt.toISOString(),
+        };
+      }),
+
+    /** List pending password reset requests */
+    pendingResetRequests: adminProcedure
+      .query(async () => {
+        return getPendingResetRequests();
       }),
   }),
 

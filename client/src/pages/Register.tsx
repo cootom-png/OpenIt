@@ -5,13 +5,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { AlertCircle, Loader2, Mail, Lock, User, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Loader2, Mail, Lock, User, ArrowLeft, CheckCircle2, Building2, Phone, Info } from "lucide-react";
+
+function PasswordStrengthIndicator({ password }: { password: string }) {
+  const checks = [
+    { label: "至少8位", ok: password.length >= 8 },
+    { label: "包含大写字母", ok: /[A-Z]/.test(password) },
+    { label: "包含小写字母", ok: /[a-z]/.test(password) },
+    { label: "包含数字", ok: /[0-9]/.test(password) },
+  ];
+  if (!password) return null;
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+      {checks.map((c) => (
+        <span key={c.label} className={`text-xs ${c.ok ? "text-green-400" : "text-slate-500"}`}>
+          {c.ok ? "✓" : "○"} {c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [nickname, setNickname] = useState("");
+  const [realName, setRealName] = useState("");
+  const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const { register, registerLoading } = useEmailAuth();
@@ -25,13 +47,14 @@ export default function Register() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("密码至少需要6位");
-      return;
-    }
+    // Client-side password strength validation
+    if (password.length < 8) { setError("密码至少8位"); return; }
+    if (!/[A-Z]/.test(password)) { setError("密码需包含至少一个大写字母"); return; }
+    if (!/[a-z]/.test(password)) { setError("密码需包含至少一个小写字母"); return; }
+    if (!/[0-9]/.test(password)) { setError("密码需包含至少一个数字"); return; }
 
     try {
-      await register(email, password, nickname);
+      await register(email, password, nickname, realName, company, phone);
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || "注册失败，请重试");
@@ -91,6 +114,12 @@ export default function Register() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Important notice */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm mb-4">
+              <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>请填写真实的公司名称、姓名和电话，否则将无法使用文件保存和分享功能。管理员将根据您提供的信息进行审核。</span>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
@@ -99,69 +128,144 @@ export default function Register() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="nickname" className="text-slate-300">昵称</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <Input
-                    id="nickname"
-                    type="text"
-                    placeholder="您的昵称"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    required
-                    maxLength={50}
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-                  />
+              {/* Section: Personal Info */}
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">个人信息</p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="realName" className="text-slate-300">
+                    姓名 <span className="text-red-400">*</span>
+                  </Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="realName"
+                      type="text"
+                      placeholder="您的真实姓名"
+                      value={realName}
+                      onChange={(e) => setRealName(e.target.value)}
+                      required
+                      maxLength={50}
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company" className="text-slate-300">
+                    公司名称 <span className="text-red-400">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="company"
+                      type="text"
+                      placeholder="您所在的公司名称"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      required
+                      maxLength={100}
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-slate-300">
+                    电话 <span className="text-red-400">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="您的联系电话"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      required
+                      maxLength={20}
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-300">邮箱</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
+              {/* Section: Account Info */}
+              <div className="space-y-3 pt-2 border-t border-slate-700/50">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider pt-2">账号信息</p>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-300">密码</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="至少6位密码"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="nickname" className="text-slate-300">昵称</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="nickname"
+                      type="text"
+                      placeholder="显示用的昵称"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      required
+                      maxLength={50}
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-slate-300">确认密码</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="再次输入密码"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-slate-300">
+                    邮箱 <span className="text-red-400">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="your@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-slate-300">
+                    密码 <span className="text-red-400">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="至少8位，含大小写字母和数字"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <PasswordStrengthIndicator password={password} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="text-slate-300">确认密码</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="再次输入密码"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {confirmPassword && password !== confirmPassword && (
+                    <p className="text-xs text-red-400">两次输入的密码不一致</p>
+                  )}
                 </div>
               </div>
 
