@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+
+export interface DwgViewerHandle {
+  captureScreenshot: () => Promise<string | null>;
+}
 
 interface DwgViewerComponentProps {
   fileBuffer: ArrayBuffer | null;
@@ -49,200 +53,307 @@ async function destroySingleton(): Promise<void> {
   }
 }
 
-export default function DwgViewerComponent({
-  fileBuffer,
-  fileName,
-  className,
-  onParsed,
-}: DwgViewerComponentProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isReady, setIsReady] = useState(false);
+const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
+  function DwgViewerComponent({ fileBuffer, fileName, className, onParsed }, ref) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [progress, setProgress] = useState("");
+    const [error, setError] = useState<string | null>(null);
+    const [isReady, setIsReady] = useState(false);
 
-  useEffect(() => {
-    if (!fileBuffer || !containerRef.current) return;
+    // Expose captureScreenshot method via ref
+    useImperativeHandle(ref, () => ({
+      captureScreenshot: async () => {
+        const container = containerRef.current;
+        if (!container) return null;
 
-    let cancelled = false;
-
-    const loadDwg = async () => {
-      setIsLoading(true);
-      setError(null);
-      setIsReady(false);
-      setProgress("正在初始化 CAD 查看器...");
-
-      try {
-        setProgress("正在加载 CAD 引擎...");
-        const mod = await import("@mlightcad/cad-simple-viewer");
-        cachedModule = mod;
-        const { AcApDocManager } = mod;
-
-        if (cancelled) return;
-
-        setProgress("正在初始化渲染引擎...");
-
-        const currentContainer = containerRef.current!;
-
-        // Always destroy any existing singleton first, then create fresh.
-        // This guarantees the new instance binds to our current container.
-        if ((AcApDocManager as any)._instance) {
-          await destroySingleton();
-        }
-
-        if (cancelled) return;
-
-        // Clear any leftover DOM content from a previous instance
-        currentContainer.querySelectorAll("canvas, .ml-cli-container, .ml-ccl-overlay").forEach(el => el.remove());
-
-        AcApDocManager.createInstance({
-          container: currentContainer,
-          autoResize: true,
-          baseUrl:
-            "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
+        // Find the largest canvas in the container
+        const canvases = container.querySelectorAll("canvas");
+        let bestCanvas: HTMLCanvasElement | null = null;
+        let bestArea = 0;
+        canvases.forEach((c) => {
+          const area = c.width * c.height;
+          if (area > bestArea) {
+            bestArea = area;
+            bestCanvas = c;
+          }
         });
 
-        if (cancelled) return;
+        if (!bestCanvas || bestArea === 0) return null;
 
-        setProgress("正在解析 DWG 文件...");
+        const canvas = bestCanvas as HTMLCanvasElement;
 
-        const options = {
-          minimumChunkSize: 1000,
-          readOnly: true,
-        };
+        // Try to get the WebGL context and read pixels in the same frame
+        try {
+          const gl =
+            canvas.getContext("webgl2") ||
+            canvas.getContext("webgl") ||
+            canvas.getContext("experimental-webgl");
 
-        const success = await AcApDocManager.instance.openDocument(
-          fileName || "drawing.dwg",
-          fileBuffer,
-          options
-        );
+          if (gl) {
+            const glCtx = gl as WebGLRenderingContext;
+            const width = canvas.width;
+            const height = canvas.height;
 
-        if (cancelled) return;
-
-        if (success) {
-          setIsReady(true);
-          setIsLoading(false);
-          setProgress("");
-
-          // Try to get entity/layer info
-          try {
-            const doc = AcApDocManager.instance.curDocument;
-            if (doc && onParsed) {
-              const db = doc.database as any;
-              const entityCount =
-                db?.modelSpace?.length ??
-                db?.getModelSpace?.()?.length ??
-                0;
-              const layerCount =
-                db?.layerTable?.length ??
-                db?.getLayerTable?.()?.length ??
-                0;
-              onParsed({ entityCount, layerCount });
+            // Force a render by triggering the CAD viewer to redraw
+            try {
+              if (cachedModule) {
+                const { AcApDocManager } = cachedModule;
+                const view = AcApDocManager.instance?.curView;
+                if (view && typeof view.render === "function") {
+                  view.render();
+                }
+              }
+            } catch {
+              // render trigger is optional
             }
-          } catch {
-            if (onParsed) {
-              onParsed({ entityCount: 0, layerCount: 0 });
-            }
-          }
 
-          // Zoom to fit after rendering completes
-          setTimeout(() => {
-            if (!cancelled) {
-              try {
-                AcApDocManager.instance?.curView?.zoomToFitDrawing();
-              } catch {
-                // Zoom is optional
+            // Read pixels immediately
+            const pixels = new Uint8Array(width * height * 4);
+            glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels);
+
+            // Check if we got meaningful content (not all dark background)
+            let hasContent = false;
+            const bgR = 0x1e, bgG = 0x1e, bgB = 0x2e; // #1e1e2e background
+            for (let i = 0; i < pixels.length; i += 400) {
+              const r = pixels[i];
+              const g = pixels[i + 1];
+              const b = pixels[i + 2];
+              const a = pixels[i + 3];
+              if (a > 0) {
+                // Check if pixel differs significantly from background
+                const diffR = Math.abs(r - bgR);
+                const diffG = Math.abs(g - bgG);
+                const diffB = Math.abs(b - bgB);
+                if (diffR > 20 || diffG > 20 || diffB > 20) {
+                  hasContent = true;
+                  break;
+                }
               }
             }
-          }, 800);
 
-          // Hide cad-simple-viewer's built-in UI
-          if (containerRef.current) {
-            hideCadViewerUI(containerRef.current);
+            if (hasContent) {
+              // Convert pixels to canvas (WebGL pixels are bottom-up)
+              const tempCanvas = document.createElement("canvas");
+              tempCanvas.width = width;
+              tempCanvas.height = height;
+              const ctx = tempCanvas.getContext("2d")!;
+              const imageData = ctx.createImageData(width, height);
+
+              // Flip vertically
+              for (let y = 0; y < height; y++) {
+                const srcRow = (height - 1 - y) * width * 4;
+                const dstRow = y * width * 4;
+                for (let x = 0; x < width * 4; x++) {
+                  imageData.data[dstRow + x] = pixels[srcRow + x];
+                }
+              }
+
+              ctx.putImageData(imageData, 0, 0);
+              return tempCanvas.toDataURL("image/png");
+            }
           }
-        } else {
-          throw new Error(
-            "DWG 文件加载失败。可能原因：\n" +
-              "1. 文件版本不兼容\n" +
-              "2. 文件已损坏或加密\n" +
-              "3. 文件包含不支持的内容"
-          );
+        } catch (err) {
+          console.warn("DWG WebGL readPixels failed:", err);
         }
-      } catch (err: any) {
-        if (!cancelled) {
-          console.error("DWG load error:", err);
-          setError(
-            err.message || "解析 DWG 文件失败，请确认文件格式正确"
-          );
-          setIsLoading(false);
-          setProgress("");
+
+        // Fallback: try toDataURL directly (might work on some browsers)
+        try {
+          const dataUrl = canvas.toDataURL("image/png");
+          if (dataUrl && dataUrl.length > 500) {
+            return dataUrl;
+          }
+        } catch {
+          // tainted canvas
         }
-      }
-    };
 
-    loadDwg();
+        return null;
+      },
+    }));
 
-    return () => {
-      cancelled = true;
-    };
-  }, [fileBuffer, fileName]);
+    useEffect(() => {
+      if (!fileBuffer || !containerRef.current) return;
 
-  // Cleanup on unmount — destroy the singleton so next mount gets a fresh instance.
-  // We use a synchronous cleanup that fires the async destroy without awaiting it,
-  // but since the next mount's loadDwg() also awaits destroySingleton() before
-  // creating a new instance, this is safe.
-  useEffect(() => {
-    return () => {
-      destroySingleton();
-    };
-  }, []);
+      let cancelled = false;
 
-  return (
-    <div
-      className={`relative w-full h-full ${className || ""}`}
-      style={{ minHeight: "400px" }}
-    >
-      {/* CAD Viewer Container */}
+      const loadDwg = async () => {
+        setIsLoading(true);
+        setError(null);
+        setIsReady(false);
+        setProgress("正在初始化 CAD 查看器...");
+
+        try {
+          setProgress("正在加载 CAD 引擎...");
+          const mod = await import("@mlightcad/cad-simple-viewer");
+          cachedModule = mod;
+          const { AcApDocManager } = mod;
+
+          if (cancelled) return;
+
+          setProgress("正在初始化渲染引擎...");
+
+          const currentContainer = containerRef.current!;
+
+          // Always destroy any existing singleton first, then create fresh.
+          if ((AcApDocManager as any)._instance) {
+            await destroySingleton();
+          }
+
+          if (cancelled) return;
+
+          // Clear any leftover DOM content from a previous instance
+          currentContainer
+            .querySelectorAll("canvas, .ml-cli-container, .ml-ccl-overlay")
+            .forEach((el) => el.remove());
+
+          AcApDocManager.createInstance({
+            container: currentContainer,
+            autoResize: true,
+            baseUrl:
+              "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
+          });
+
+          if (cancelled) return;
+
+          setProgress("正在解析 DWG 文件...");
+
+          const options = {
+            minimumChunkSize: 1000,
+            readOnly: true,
+          };
+
+          const success = await AcApDocManager.instance.openDocument(
+            fileName || "drawing.dwg",
+            fileBuffer,
+            options
+          );
+
+          if (cancelled) return;
+
+          if (success) {
+            setIsReady(true);
+            setIsLoading(false);
+            setProgress("");
+
+            // Try to get entity/layer info
+            try {
+              const doc = AcApDocManager.instance.curDocument;
+              if (doc && onParsed) {
+                const db = doc.database as any;
+                const entityCount =
+                  db?.modelSpace?.length ??
+                  db?.getModelSpace?.()?.length ??
+                  0;
+                const layerCount =
+                  db?.layerTable?.length ??
+                  db?.getLayerTable?.()?.length ??
+                  0;
+                onParsed({ entityCount, layerCount });
+              }
+            } catch {
+              if (onParsed) {
+                onParsed({ entityCount: 0, layerCount: 0 });
+              }
+            }
+
+            // Zoom to fit after rendering completes
+            setTimeout(() => {
+              if (!cancelled) {
+                try {
+                  AcApDocManager.instance?.curView?.zoomToFitDrawing();
+                } catch {
+                  // Zoom is optional
+                }
+              }
+            }, 800);
+
+            // Hide cad-simple-viewer's built-in UI
+            if (containerRef.current) {
+              hideCadViewerUI(containerRef.current);
+            }
+          } else {
+            throw new Error(
+              "DWG 文件加载失败。可能原因：\n" +
+                "1. 文件版本不兼容\n" +
+                "2. 文件已损坏或加密\n" +
+                "3. 文件包含不支持的内容"
+            );
+          }
+        } catch (err: any) {
+          if (!cancelled) {
+            console.error("DWG load error:", err);
+            setError(
+              err.message || "解析 DWG 文件失败，请确认文件格式正确"
+            );
+            setIsLoading(false);
+            setProgress("");
+          }
+        }
+      };
+
+      loadDwg();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [fileBuffer, fileName]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+      return () => {
+        destroySingleton();
+      };
+    }, []);
+
+    return (
       <div
-        ref={containerRef}
-        className="w-full h-full"
-        style={{
-          minHeight: "400px",
-          background: "#1e1e2e",
-        }}
-      />
+        className={`relative w-full h-full ${className || ""}`}
+        style={{ minHeight: "400px" }}
+      >
+        {/* CAD Viewer Container */}
+        <div
+          ref={containerRef}
+          className="w-full h-full"
+          style={{
+            minHeight: "400px",
+            background: "#1e1e2e",
+          }}
+        />
 
-      {/* Loading overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10">
-          <div className="relative mb-6">
-            <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10">
+            <div className="relative mb-6">
+              <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            </div>
+            <p className="text-sm font-medium text-foreground">{progress}</p>
+            {fileName && (
+              <p className="text-xs text-muted-foreground mt-2 max-w-[300px] truncate">
+                {fileName}
+              </p>
+            )}
           </div>
-          <p className="text-sm font-medium text-foreground">{progress}</p>
-          {fileName && (
-            <p className="text-xs text-muted-foreground mt-2 max-w-[300px] truncate">
-              {fileName}
-            </p>
-          )}
-        </div>
-      )}
+        )}
 
-      {/* Error overlay */}
-      {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10">
-          <div className="p-6 bg-destructive/10 text-destructive rounded-lg text-sm max-w-md text-center">
-            <p className="font-medium mb-1">DWG 文件解析失败</p>
-            <p className="whitespace-pre-line">{error}</p>
+        {/* Error overlay */}
+        {error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10">
+            <div className="p-6 bg-destructive/10 text-destructive rounded-lg text-sm max-w-md text-center">
+              <p className="font-medium mb-1">DWG 文件解析失败</p>
+              <p className="whitespace-pre-line">{error}</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Hint */}
-      {isReady && !isLoading && !error && (
-        <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-muted-foreground border shadow-sm z-10">
-          滚轮缩放 · 左键拖拽平移
-        </div>
-      )}
-    </div>
-  );
-}
+        {/* Hint */}
+        {isReady && !isLoading && !error && (
+          <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-muted-foreground border shadow-sm z-10">
+            滚轮缩放 · 左键拖拽平移
+          </div>
+        )}
+      </div>
+    );
+  }
+);
+
+export default DwgViewerComponent;

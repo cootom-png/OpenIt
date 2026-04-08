@@ -88,3 +88,4 @@
 - [x] BUG修复：DWG/STP等WebGL渲染文件缩略图无法生成（改用canvas.toDataURL直接截取）
 - [x] 改用 canvas.toDataURL 直接从 WebGL canvas 获取截图替代 html2canvas（Three.js设置preserveDrawingBuffer+智能选择最大canvas）
 - [x] BUG修复：DWG文件缩略图截取为黑色（改用WebGL readPixels直接读取像素+白色背景填充+增加等待时间）
+- [x] BUG修复：DWG/STP缩略图改用组件ref方法截取（DWG在渲染帧内readPixels+Three.js强制render+toDataURL）

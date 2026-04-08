@@ -30,9 +30,9 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { useAuth } from "@/_core/hooks/useAuth";
-import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
+import ThreeViewer, { type ParsedMeshData, type ThreeViewerHandle } from "@/components/ThreeViewer";
 import DxfViewerComponent from "@/components/DxfViewerComponent";
-import DwgViewerComponent from "@/components/DwgViewerComponent";
+import DwgViewerComponent, { type DwgViewerHandle } from "@/components/DwgViewerComponent";
 import ImageViewer from "@/components/ImageViewer";
 import VideoViewer from "@/components/VideoViewer";
 import PdfViewer from "@/components/PdfViewer";
@@ -291,6 +291,8 @@ export default function Home() {
   const [linkCopied, setLinkCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const threeViewerRef = useRef<ThreeViewerHandle>(null);
+  const dwgViewerRef = useRef<DwgViewerHandle>(null);
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
 
@@ -323,6 +325,71 @@ export default function Home() {
     }
   }, []);
 
+  /**
+   * Convert a data URL to a resized thumbnail base64 string.
+   */
+  const dataUrlToThumbBase64 = (dataUrl: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 400;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const thumbDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          resolve(thumbDataUrl.split(",")[1] || null);
+        } else {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  };
+
+  /**
+   * Helper: capture thumbnail using viewer ref methods first, then fallback to generic capture.
+   * DWG viewer ref can capture within the rendering frame (bypasses preserveDrawingBuffer issue).
+   * Three.js viewer ref forces a render + toDataURL (reliable with preserveDrawingBuffer).
+   */
+  const captureThumbFromViewer = async (): Promise<string | null> => {
+    // Try DWG viewer ref first
+    if (viewerMode === "2d-dwg" && dwgViewerRef.current) {
+      try {
+        const dataUrl = await dwgViewerRef.current.captureScreenshot();
+        if (dataUrl && dataUrl.length > 500) {
+          // Convert to resized base64 thumbnail
+          return await dataUrlToThumbBase64(dataUrl);
+        }
+      } catch (err) {
+        console.warn("DWG ref capture failed:", err);
+      }
+    }
+    // Try Three.js viewer ref
+    if (viewerMode === "3d" && threeViewerRef.current) {
+      try {
+        const dataUrl = await threeViewerRef.current.captureScreenshot();
+        if (dataUrl && dataUrl.length > 500) {
+          return await dataUrlToThumbBase64(dataUrl);
+        }
+      } catch (err) {
+        console.warn("Three.js ref capture failed:", err);
+      }
+    }
+    // Fallback to generic container capture (html2canvas for Word/Excel/PDF, etc.)
+    const container = viewerContainerRef.current;
+    if (container) {
+      return await captureViewerThumbnail(container);
+    }
+    return null;
+  };
+
   // Auto-generate thumbnail when preview loads with generateThumb param
   useEffect(() => {
     if (pendingThumbFileId && status === "ready" && viewerContainerRef.current) {
@@ -330,11 +397,11 @@ export default function Home() {
       setPendingThumbFileId(null);
       (async () => {
         try {
-          // Wait for rendering to fully complete (DWG CAD viewer needs extra time)
-          await new Promise(r => setTimeout(r, 3500));
-          const container = viewerContainerRef.current;
-          if (!container) return;
-          const thumbBase64 = await captureViewerThumbnail(container);
+          // Wait for rendering to fully complete
+          // DWG CAD viewer needs extra time to render + zoomToFit
+          const waitTime = viewerMode === "2d-dwg" ? 5000 : 2000;
+          await new Promise(r => setTimeout(r, waitTime));
+          const thumbBase64 = await captureThumbFromViewer();
           if (thumbBase64) {
             await uploadThumbnailMut.mutateAsync({
               fileId,
@@ -833,6 +900,7 @@ export default function Home() {
                   />
                 ) : viewerMode === "2d-dwg" ? (
                   <DwgViewerComponent
+                    ref={dwgViewerRef}
                     fileBuffer={dwgFileBuffer}
                     fileName={fileName}
                     onParsed={handleDwgParsed}
@@ -840,7 +908,7 @@ export default function Home() {
                 ) : viewerMode === "2d-dxf" ? (
                   <DxfViewerComponent fileUrl={dxfFileUrl} />
                 ) : (
-                  <ThreeViewer meshData={meshData} />
+                  <ThreeViewer ref={threeViewerRef} meshData={meshData} />
                 )}
               </div>
             </Card>
@@ -1431,17 +1499,15 @@ export default function Home() {
                     const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
                     if (!isImageFile) {
                       try {
-                        const container = viewerContainerRef.current;
-                        if (container) {
-                          // Wait for WebGL rendering to complete (DWG needs extra time)
-                          await new Promise(r => setTimeout(r, 3500));
-                          const thumbBase64 = await captureViewerThumbnail(container);
-                          if (thumbBase64) {
-                            await uploadThumbnailMut.mutateAsync({
-                              fileId: result.file.id,
-                              thumbnailBase64: thumbBase64,
-                            });
-                          }
+                        // Wait for rendering (DWG needs extra time for zoomToFit)
+                        const waitMs = viewerMode === "2d-dwg" ? 5000 : 2000;
+                        await new Promise(r => setTimeout(r, waitMs));
+                        const thumbBase64 = await captureThumbFromViewer();
+                        if (thumbBase64) {
+                          await uploadThumbnailMut.mutateAsync({
+                            fileId: result.file.id,
+                            thumbnailBase64: thumbBase64,
+                          });
                         }
                       } catch (thumbErr) {
                         console.warn("Thumbnail generation failed:", thumbErr);
