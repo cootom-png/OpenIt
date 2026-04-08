@@ -16,6 +16,7 @@ import {
   updateEmailUserNickname,
 } from "./fileManager";
 import { TRPCError } from "@trpc/server";
+import { cleanupGuestUploadRecords } from "./cleanup";
 import { initTRPC } from "@trpc/server";
 import type { TrpcContext } from "./_core/context";
 
@@ -343,6 +344,19 @@ export const appRouter = router({
     stats: adminProcedure
       .query(async () => {
         return getFileUploadStats();
+      }),
+  }),
+
+  // ─── Admin: Cleanup ───
+  adminCleanup: router({
+    /** Manually trigger guest upload records cleanup */
+    runGuestCleanup: adminProcedure
+      .input(z.object({
+        olderThanDays: z.number().min(1).max(365).default(7),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await cleanupGuestUploadRecords(input.olderThanDays);
+        return result;
       }),
   }),
 });
