@@ -37,7 +37,10 @@ const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
 const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL];
-const ACCEPT_STRING = ALL_SUPPORTED.map((e) => `.${e}`).join(",");
+// On iOS Safari, the accept attribute greys out files with unrecognized MIME types
+// (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
+// the extension in handleFile() instead.
+const ACCEPT_STRING = "*/*";
 
 export default function Home() {
   const [meshData, setMeshData] = useState<ParsedMeshData | null>(null);
@@ -372,6 +375,7 @@ export default function Home() {
         className="hidden"
         onChange={handleInputChange}
       />
+      {/* Note: accept allows all files on iOS; extension validation is done in handleFile */}
 
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
