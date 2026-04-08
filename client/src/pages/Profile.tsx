@@ -41,6 +41,7 @@ import {
   Box,
   Ruler,
   Link2,
+  Camera,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
@@ -407,6 +408,20 @@ export default function Profile() {
                                 >
                                   <Eye className="w-3.5 h-3.5" />
                                   预览
+                                </Button>
+                              </Link>
+                            )}
+
+                            {/* Generate thumbnail (only show when no thumbnail exists) */}
+                            {!file.thumbnailUrl && file.s3Url && (
+                              <Link href={`/?preview=${encodeURIComponent(file.s3Url)}&name=${encodeURIComponent(file.fileName)}&generateThumb=${file.id}`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1 px-2.5 text-amber-600 border-amber-300 hover:bg-amber-50"
+                                >
+                                  <Camera className="w-3.5 h-3.5" />
+                                  生成缩略图
                                 </Button>
                               </Link>
                             )}

@@ -79,6 +79,9 @@ export async function uploadUserFile(params: {
   // Generate share token
   const shareToken = generateShareToken();
 
+  // For image files, use the S3 URL directly as thumbnail
+  const isImage = ["jpg", "jpeg", "png", "gif", "webp", "bmp"].includes(fileExt.toLowerCase());
+
   // Insert record
   const result = await db.insert(userFiles).values({
     userId,
@@ -91,6 +94,7 @@ export async function uploadUserFile(params: {
     s3Url,
     shareToken,
     shareEnabled: false,
+    thumbnailUrl: isImage ? s3Url : null,
   });
 
   // Update user quota counters

@@ -294,14 +294,21 @@ export default function Home() {
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
 
-  // Handle ?preview=<url>&name=<filename> from Profile page
+  // Pending thumbnail generation for a specific file ID
+  const [pendingThumbFileId, setPendingThumbFileId] = useState<number | null>(null);
+
+  // Handle ?preview=<url>&name=<filename>&generateThumb=<fileId> from Profile page
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const previewUrl = params.get("preview");
     const previewName = params.get("name");
+    const generateThumbId = params.get("generateThumb");
     if (previewUrl && previewName) {
       // Clean URL params without reload
       window.history.replaceState({}, "", "/");
+      if (generateThumbId) {
+        setPendingThumbFileId(parseInt(generateThumbId, 10));
+      }
       setStatus("loading");
       loadRemoteFile(previewUrl, previewName, {
         setFileName, setFileSize, setStatus, setViewerMode,
@@ -315,6 +322,52 @@ export default function Home() {
       });
     }
   }, []);
+
+  // Auto-generate thumbnail when preview loads with generateThumb param
+  useEffect(() => {
+    if (pendingThumbFileId && status === "ready" && viewerContainerRef.current) {
+      const fileId = pendingThumbFileId;
+      setPendingThumbFileId(null);
+      (async () => {
+        try {
+          // Wait for rendering to fully complete
+          await new Promise(r => setTimeout(r, 1500));
+          const container = viewerContainerRef.current;
+          if (!container) return;
+          const canvas = await html2canvas(container, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 0.5,
+            width: container.offsetWidth,
+            height: container.offsetHeight,
+            logging: false,
+            backgroundColor: "#ffffff",
+          });
+          const thumbCanvas = document.createElement("canvas");
+          const maxW = 300;
+          const ratio = canvas.height / canvas.width;
+          thumbCanvas.width = maxW;
+          thumbCanvas.height = Math.round(maxW * ratio);
+          const tctx = thumbCanvas.getContext("2d");
+          if (tctx) {
+            tctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+            const thumbDataUrl = thumbCanvas.toDataURL("image/png");
+            const thumbBase64 = thumbDataUrl.split(",")[1];
+            if (thumbBase64) {
+              await uploadThumbnailMut.mutateAsync({
+                fileId,
+                thumbnailBase64: thumbBase64,
+              });
+              toast.success("缩略图已生成");
+            }
+          }
+        } catch (err) {
+          console.warn("Auto thumbnail generation failed:", err);
+          toast.error("缩略图生成失败");
+        }
+      })();
+    }
+  }, [pendingThumbFileId, status]);
   const { data: quota, refetch: refetchQuota } = trpc.userFiles.quota.useQuery(undefined, { enabled: isLoggedIn && isApproved });
   const uploadMut = trpc.userFiles.upload.useMutation();
   const toggleShareMut = trpc.userFiles.toggleShare.useMutation();
@@ -1391,42 +1444,45 @@ export default function Home() {
                     toast.success("文件已保存到您的账户");
 
                     // Auto-capture thumbnail from preview area
-                    try {
-                      const container = viewerContainerRef.current;
-                      if (container) {
-                        // Small delay to ensure rendering is complete
-                        await new Promise(r => setTimeout(r, 500));
-                        const canvas = await html2canvas(container, {
-                          useCORS: true,
-                          allowTaint: true,
-                          scale: 0.5, // Lower resolution for thumbnail
-                          width: container.offsetWidth,
-                          height: container.offsetHeight,
-                          logging: false,
-                          backgroundColor: "#ffffff",
-                        });
-                        // Resize to max 300px wide thumbnail
-                        const thumbCanvas = document.createElement("canvas");
-                        const maxW = 300;
-                        const ratio = canvas.height / canvas.width;
-                        thumbCanvas.width = maxW;
-                        thumbCanvas.height = Math.round(maxW * ratio);
-                        const tctx = thumbCanvas.getContext("2d");
-                        if (tctx) {
-                          tctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-                          const thumbDataUrl = thumbCanvas.toDataURL("image/png");
-                          const thumbBase64 = thumbDataUrl.split(",")[1];
-                          if (thumbBase64) {
-                            await uploadThumbnailMut.mutateAsync({
-                              fileId: result.file.id,
-                              thumbnailBase64: thumbBase64,
-                            });
+                    // Skip for image files — backend already uses S3 URL as thumbnail
+                    const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
+                    if (!isImageFile) {
+                      try {
+                        const container = viewerContainerRef.current;
+                        if (container) {
+                          // Wait for rendering to complete
+                          await new Promise(r => setTimeout(r, 1000));
+                          const canvas = await html2canvas(container, {
+                            useCORS: true,
+                            allowTaint: true,
+                            scale: 0.5,
+                            width: container.offsetWidth,
+                            height: container.offsetHeight,
+                            logging: false,
+                            backgroundColor: "#ffffff",
+                          });
+                          // Resize to max 300px wide thumbnail
+                          const thumbCanvas = document.createElement("canvas");
+                          const maxW = 300;
+                          const ratio = canvas.height / canvas.width;
+                          thumbCanvas.width = maxW;
+                          thumbCanvas.height = Math.round(maxW * ratio);
+                          const tctx = thumbCanvas.getContext("2d");
+                          if (tctx) {
+                            tctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+                            const thumbDataUrl = thumbCanvas.toDataURL("image/png");
+                            const thumbBase64 = thumbDataUrl.split(",")[1];
+                            if (thumbBase64) {
+                              await uploadThumbnailMut.mutateAsync({
+                                fileId: result.file.id,
+                                thumbnailBase64: thumbBase64,
+                              });
+                            }
                           }
                         }
+                      } catch (thumbErr) {
+                        console.warn("Thumbnail generation failed:", thumbErr);
                       }
-                    } catch (thumbErr) {
-                      // Thumbnail generation is best-effort, don't block the save
-                      console.warn("Thumbnail generation failed:", thumbErr);
                     }
                   } catch (err: any) {
                     toast.error(err.message || "保存失败");
