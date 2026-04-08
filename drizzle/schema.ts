@@ -74,6 +74,8 @@ export const userFiles = mysqlTable("user_files", {
   shareToken: varchar("shareToken", { length: 64 }).unique(),
   /** Whether sharing is enabled */
   shareEnabled: boolean("shareEnabled").default(false).notNull(),
+  /** Thumbnail image URL (stored in S3) */
+  thumbnailUrl: text("thumbnailUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

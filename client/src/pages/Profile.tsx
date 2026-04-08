@@ -6,14 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -32,7 +24,6 @@ import {
   FileBox,
   Trash2,
   Share2,
-  Link as LinkIcon,
   Copy,
   Check,
   ArrowLeft,
@@ -43,6 +34,13 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  Video,
+  Box,
+  Ruler,
+  Link2,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
@@ -70,6 +68,22 @@ const categoryLabels: Record<string, string> = {
   document: "文档",
 };
 
+const categoryIcons: Record<string, React.ReactNode> = {
+  "3d": <Box className="w-5 h-5" />,
+  cad: <Ruler className="w-5 h-5" />,
+  image: <ImageIcon className="w-5 h-5" />,
+  video: <Video className="w-5 h-5" />,
+  document: <FileText className="w-5 h-5" />,
+};
+
+const categoryColors: Record<string, string> = {
+  "3d": "from-blue-500/20 to-blue-600/10 text-blue-600",
+  cad: "from-purple-500/20 to-purple-600/10 text-purple-600",
+  image: "from-green-500/20 to-green-600/10 text-green-600",
+  video: "from-orange-500/20 to-orange-600/10 text-orange-600",
+  document: "from-gray-500/20 to-gray-600/10 text-gray-600",
+};
+
 export default function Profile() {
   const { emailUser, isLoggedIn, isLoading: authLoading, isApproved, isPending, isRejected } = useEmailAuth();
   const [, navigate] = useLocation();
@@ -81,7 +95,7 @@ export default function Profile() {
 
   // File list
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 12;
   const queryInput = useMemo(() => ({ page, pageSize }), [page, pageSize]);
   const { data: filesData, refetch: refetchFiles } = trpc.userFiles.list.useQuery(queryInput, { enabled: isLoggedIn });
   const { data: quota, refetch: refetchQuota } = trpc.userFiles.quota.useQuery(undefined, { enabled: isLoggedIn });
@@ -184,7 +198,7 @@ export default function Profile() {
         </div>
       </header>
 
-      <main className="container py-6 max-w-4xl mx-auto space-y-6">
+      <main className="container py-6 max-w-5xl mx-auto space-y-6 px-4">
         {/* Profile Info */}
         <Card>
           <CardHeader className="pb-3">
@@ -306,180 +320,225 @@ export default function Profile() {
           </Card>
         )}
 
-        {/* My Files */}
+        {/* My Files - Card Layout */}
         {isApproved && (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <FileBox className="w-4 h-4" />
-                  我的文件
-                  {filesData && (
-                    <Badge variant="secondary" className="text-xs ml-1">
-                      {filesData.total} 个
-                    </Badge>
-                  )}
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {filesData && filesData.records.length > 0 ? (
-                <>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[180px]">文件名</TableHead>
-                          <TableHead className="w-[80px]">格式</TableHead>
-                          <TableHead className="w-[80px]">大小</TableHead>
-                          <TableHead className="w-[80px]">类别</TableHead>
-                          <TableHead className="w-[140px]">上传时间</TableHead>
-                          <TableHead className="w-[80px]">分享</TableHead>
-                          <TableHead className="w-[120px] text-right">操作</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filesData.records.map((file) => (
-                          <TableRow key={file.id}>
-                            <TableCell>
-                              <span className="text-sm truncate block max-w-[200px]" title={file.fileName}>
-                                {file.fileName}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs">
-                                {file.fileExt.toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {formatFileSize(file.fileSize)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="text-xs">
-                                {categoryLabels[file.category] || file.category}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {formatDate(file.createdAt)}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant={file.shareEnabled ? "default" : "outline"}
-                                size="sm"
-                                className="h-7 text-xs gap-1"
-                                onClick={() => handleToggleShare(file.id, !file.shareEnabled)}
-                                disabled={toggleShare.isPending}
-                              >
-                                <Share2 className="w-3 h-3" />
-                                {file.shareEnabled ? "开" : "关"}
-                              </Button>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                {file.shareEnabled && file.shareToken && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0"
-                                    onClick={() => handleCopyLink(file.shareToken!, file.id)}
-                                    title="复制分享链接"
-                                  >
-                                    {copiedId === file.id ? (
-                                      <Check className="w-3.5 h-3.5 text-green-600" />
-                                    ) : (
-                                      <Copy className="w-3.5 h-3.5" />
-                                    )}
-                                  </Button>
-                                )}
-                                {file.s3Url && (
-                                  <Link href={`/?preview=${encodeURIComponent(file.s3Url)}&name=${encodeURIComponent(file.fileName)}`}>
-                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="预览文件">
-                                      <Eye className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </Link>
-                                )}
-                                {file.s3Url && (
-                                  <a href={file.s3Url} target="_blank" rel="noopener noreferrer">
-                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="下载文件">
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </a>
-                                )}
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" title="删除">
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>确认删除</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        确定要删除文件 "{file.fileName}" 吗？此操作不可撤销。
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>取消</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDeleteFile(file.id)}>
-                                        确认删除
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <FileBox className="w-4 h-4" />
+                我的文件
+                {filesData && (
+                  <Badge variant="secondary" className="text-xs ml-1">
+                    {filesData.total} 个
+                  </Badge>
+                )}
+              </h2>
+            </div>
 
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t">
-                      <span className="text-xs text-muted-foreground">
-                        共 {filesData.total} 个文件
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7"
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          disabled={page <= 1}
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          {page} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7"
-                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                          disabled={page >= totalPages}
-                        >
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileBox className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">暂无文件</p>
-                  <p className="text-xs mt-1">在首页上传文件后，文件将自动保存到这里</p>
-                  <Link href="/">
-                    <Button variant="outline" size="sm" className="mt-3">
-                      去上传文件
-                    </Button>
-                  </Link>
+            {filesData && filesData.records.length > 0 ? (
+              <>
+                {/* Card Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filesData.records.map((file) => {
+                    const colorClass = categoryColors[file.category] || categoryColors.document;
+                    const icon = categoryIcons[file.category] || categoryIcons.document;
+
+                    return (
+                      <Card key={file.id} className="overflow-hidden hover:shadow-md transition-shadow group">
+                        {/* Thumbnail / Placeholder */}
+                        <div className={`relative h-36 bg-gradient-to-br ${colorClass} flex items-center justify-center overflow-hidden`}>
+                          {file.thumbnailUrl ? (
+                            <img
+                              src={file.thumbnailUrl}
+                              alt={file.fileName}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center gap-2 opacity-60">
+                              {icon}
+                              <span className="text-xs font-medium uppercase">{file.fileExt}</span>
+                            </div>
+                          )}
+
+                          {/* Category badge overlay */}
+                          <Badge
+                            variant="secondary"
+                            className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-white/90 text-gray-700 shadow-sm"
+                          >
+                            {categoryLabels[file.category] || file.category}
+                          </Badge>
+
+                          {/* Share indicator */}
+                          {file.shareEnabled && (
+                            <Badge
+                              className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 bg-primary/90 text-white shadow-sm"
+                            >
+                              <Link2 className="w-2.5 h-2.5 mr-0.5" />
+                              已分享
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* File Info */}
+                        <CardContent className="p-3 space-y-2">
+                          <div className="space-y-1">
+                            <h3
+                              className="text-sm font-medium truncate"
+                              title={file.fileName}
+                            >
+                              {file.fileName}
+                            </h3>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>{formatFileSize(file.fileSize)}</span>
+                              <span>{formatDate(file.createdAt)}</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                            {/* Preview */}
+                            {file.s3Url && (
+                              <Link href={`/?preview=${encodeURIComponent(file.s3Url)}&name=${encodeURIComponent(file.fileName)}`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1 px-2.5"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  预览
+                                </Button>
+                              </Link>
+                            )}
+
+                            {/* Share toggle */}
+                            <Button
+                              variant={file.shareEnabled ? "default" : "outline"}
+                              size="sm"
+                              className="h-8 text-xs gap-1 px-2.5"
+                              onClick={() => handleToggleShare(file.id, !file.shareEnabled)}
+                              disabled={toggleShare.isPending}
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                              {file.shareEnabled ? "分享中" : "分享"}
+                            </Button>
+
+                            {/* Copy share link */}
+                            {file.shareEnabled && file.shareToken && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs gap-1 px-2.5"
+                                onClick={() => handleCopyLink(file.shareToken!, file.id)}
+                              >
+                                {copiedId === file.id ? (
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                                {copiedId === file.id ? "已复制" : "链接"}
+                              </Button>
+                            )}
+
+                            {/* Download */}
+                            {file.s3Url && (
+                              <a href={file.s3Url} target="_blank" rel="noopener noreferrer">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1 px-2.5"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  下载
+                                </Button>
+                              </a>
+                            )}
+
+                            {/* Delete */}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs gap-1 px-2.5 text-red-500 hover:text-red-700 hover:border-red-300 ml-auto"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  删除
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    确定要删除文件 "{file.fileName}" 吗？此操作不可撤销。
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>取消</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteFile(file.id)}>
+                                    确认删除
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs text-muted-foreground">
+                      共 {filesData.total} 个文件
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page <= 1}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                        上一页
+                      </Button>
+                      <span className="text-xs text-muted-foreground px-2">
+                        {page} / {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages}
+                      >
+                        下一页
+                        <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Card>
+                <CardContent className="py-12">
+                  <div className="text-center text-muted-foreground">
+                    <FileBox className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-medium">暂无文件</p>
+                    <p className="text-xs mt-1">在首页上传文件后，点击"保存到我的文件"即可保存</p>
+                    <Link href="/">
+                      <Button variant="outline" size="sm" className="mt-4">
+                        去上传文件
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </main>
     </div>

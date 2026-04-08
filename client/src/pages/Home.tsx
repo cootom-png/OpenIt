@@ -40,6 +40,7 @@ import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
+import html2canvas from "html2canvas";
 
 /**
  * Load a remote file from S3 URL into the viewer.
@@ -289,6 +290,7 @@ export default function Home() {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
 
@@ -316,6 +318,7 @@ export default function Home() {
   const { data: quota, refetch: refetchQuota } = trpc.userFiles.quota.useQuery(undefined, { enabled: isLoggedIn && isApproved });
   const uploadMut = trpc.userFiles.upload.useMutation();
   const toggleShareMut = trpc.userFiles.toggleShare.useMutation();
+  const uploadThumbnailMut = trpc.userFiles.uploadThumbnail.useMutation();
 
   const recordUpload = trpc.fileUpload.record.useMutation();
 
@@ -671,6 +674,7 @@ export default function Home() {
           <div className="space-y-4">
             <Card className="overflow-hidden">
               <div
+                ref={viewerContainerRef}
                 className={`relative ${
                   status === "ready"
                     ? "h-[calc(100vh-220px)] min-h-[500px]"
@@ -1385,6 +1389,45 @@ export default function Home() {
                     setSavedFileId(result.file.id);
                     refetchQuota();
                     toast.success("文件已保存到您的账户");
+
+                    // Auto-capture thumbnail from preview area
+                    try {
+                      const container = viewerContainerRef.current;
+                      if (container) {
+                        // Small delay to ensure rendering is complete
+                        await new Promise(r => setTimeout(r, 500));
+                        const canvas = await html2canvas(container, {
+                          useCORS: true,
+                          allowTaint: true,
+                          scale: 0.5, // Lower resolution for thumbnail
+                          width: container.offsetWidth,
+                          height: container.offsetHeight,
+                          logging: false,
+                          backgroundColor: "#ffffff",
+                        });
+                        // Resize to max 300px wide thumbnail
+                        const thumbCanvas = document.createElement("canvas");
+                        const maxW = 300;
+                        const ratio = canvas.height / canvas.width;
+                        thumbCanvas.width = maxW;
+                        thumbCanvas.height = Math.round(maxW * ratio);
+                        const tctx = thumbCanvas.getContext("2d");
+                        if (tctx) {
+                          tctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+                          const thumbDataUrl = thumbCanvas.toDataURL("image/png");
+                          const thumbBase64 = thumbDataUrl.split(",")[1];
+                          if (thumbBase64) {
+                            await uploadThumbnailMut.mutateAsync({
+                              fileId: result.file.id,
+                              thumbnailBase64: thumbBase64,
+                            });
+                          }
+                        }
+                      }
+                    } catch (thumbErr) {
+                      // Thumbnail generation is best-effort, don't block the save
+                      console.warn("Thumbnail generation failed:", thumbErr);
+                    }
                   } catch (err: any) {
                     toast.error(err.message || "保存失败");
                   } finally {

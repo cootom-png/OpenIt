@@ -25,12 +25,29 @@ function hideCadViewerUI(container: HTMLElement) {
 }
 
 /**
- * Global singleton tracker for AcApDocManager.
- * The library enforces a single instance, so we must destroy and recreate
- * when mounting in a different container (e.g. navigating from Home to ShareView).
+ * We keep a module-level reference to the AcApDocManager module so we don't
+ * need to dynamic-import it again during cleanup.
  */
-let globalDocManager: any = null;
-let globalContainer: HTMLElement | null = null;
+let cachedModule: any = null;
+
+/**
+ * Properly destroy the singleton AcApDocManager instance.
+ * The library's destroy() is async and sets _instance = undefined internally.
+ * We must await it before creating a new instance.
+ */
+async function destroySingleton(): Promise<void> {
+  if (!cachedModule) return;
+  const { AcApDocManager } = cachedModule;
+  const inst = (AcApDocManager as any)._instance;
+  if (inst) {
+    try {
+      await inst.destroy(); // async — sets AcApDocManager._instance = undefined
+    } catch {
+      // If destroy fails, force-clear the singleton reference
+      (AcApDocManager as any)._instance = undefined;
+    }
+  }
+}
 
 export default function DwgViewerComponent({
   fileBuffer,
@@ -57,7 +74,9 @@ export default function DwgViewerComponent({
 
       try {
         setProgress("正在加载 CAD 引擎...");
-        const { AcApDocManager } = await import("@mlightcad/cad-simple-viewer");
+        const mod = await import("@mlightcad/cad-simple-viewer");
+        cachedModule = mod;
+        const { AcApDocManager } = mod;
 
         if (cancelled) return;
 
@@ -65,57 +84,23 @@ export default function DwgViewerComponent({
 
         const currentContainer = containerRef.current!;
 
-        // If the singleton was created with a different container (e.g. user
-        // navigated from Home → ShareView), we must destroy and recreate it.
-        // AcApDocManager is a strict singleton — calling createInstance when
-        // one already exists throws. We detect this via our own tracking vars.
-        if (globalDocManager && globalContainer !== currentContainer) {
-          try {
-            // Try to destroy the old instance so we can create a fresh one
-            // bound to the new container.
-            if (typeof globalDocManager.destroy === "function") {
-              globalDocManager.destroy();
-            } else if (typeof globalDocManager.dispose === "function") {
-              globalDocManager.dispose();
-            }
-          } catch {
-            // ignore destroy errors
-          }
-
-          // Force-clear the internal singleton reference so createInstance works
-          try {
-            (AcApDocManager as any)._instance = null;
-          } catch {
-            // ignore
-          }
-
-          globalDocManager = null;
-          globalContainer = null;
+        // Always destroy any existing singleton first, then create fresh.
+        // This guarantees the new instance binds to our current container.
+        if ((AcApDocManager as any)._instance) {
+          await destroySingleton();
         }
 
-        if (!globalDocManager) {
-          try {
-            AcApDocManager.createInstance({
-              container: currentContainer,
-              autoResize: true,
-              baseUrl:
-                "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
-            });
-            globalDocManager = AcApDocManager.instance;
-            globalContainer = currentContainer;
-          } catch (e: any) {
-            // Instance might already exist — try to reuse it
-            if (
-              e.message?.includes("already") ||
-              e.message?.includes("singleton")
-            ) {
-              globalDocManager = AcApDocManager.instance;
-              globalContainer = currentContainer;
-            } else {
-              throw e;
-            }
-          }
-        }
+        if (cancelled) return;
+
+        // Clear any leftover DOM content from a previous instance
+        currentContainer.querySelectorAll("canvas, .ml-cli-container, .ml-ccl-overlay").forEach(el => el.remove());
+
+        AcApDocManager.createInstance({
+          container: currentContainer,
+          autoResize: true,
+          baseUrl:
+            "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/",
+        });
 
         if (cancelled) return;
 
@@ -161,19 +146,15 @@ export default function DwgViewerComponent({
           }
 
           // Zoom to fit after rendering completes
-          try {
-            setTimeout(() => {
-              if (!cancelled) {
-                try {
-                  AcApDocManager.instance.curView?.zoomToFitDrawing();
-                } catch {
-                  // Zoom is optional
-                }
+          setTimeout(() => {
+            if (!cancelled) {
+              try {
+                AcApDocManager.instance?.curView?.zoomToFitDrawing();
+              } catch {
+                // Zoom is optional
               }
-            }, 800);
-          } catch {
-            // Zoom is optional
-          }
+            }
+          }, 800);
 
           // Hide cad-simple-viewer's built-in UI
           if (containerRef.current) {
@@ -204,33 +185,15 @@ export default function DwgViewerComponent({
     return () => {
       cancelled = true;
     };
-  }, [fileBuffer, fileName, onParsed]);
+  }, [fileBuffer, fileName]);
 
-  // Cleanup on unmount — reset the singleton so next mount gets a fresh instance
+  // Cleanup on unmount — destroy the singleton so next mount gets a fresh instance.
+  // We use a synchronous cleanup that fires the async destroy without awaiting it,
+  // but since the next mount's loadDwg() also awaits destroySingleton() before
+  // creating a new instance, this is safe.
   useEffect(() => {
     return () => {
-      const cleanup = async () => {
-        try {
-          const { AcApDocManager } = await import("@mlightcad/cad-simple-viewer");
-          if (globalDocManager) {
-            if (typeof globalDocManager.destroy === "function") {
-              globalDocManager.destroy();
-            } else if (typeof globalDocManager.dispose === "function") {
-              globalDocManager.dispose();
-            }
-          }
-          try {
-            (AcApDocManager as any)._instance = null;
-          } catch {
-            // ignore
-          }
-        } catch {
-          // ignore
-        }
-        globalDocManager = null;
-        globalContainer = null;
-      };
-      cleanup();
+      destroySingleton();
     };
   }, []);
 

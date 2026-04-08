@@ -13,7 +13,7 @@ import {
   getUserQuota, checkQuota, uploadUserFile, listUserFiles, deleteUserFile,
   toggleFileShare, getFileByShareToken,
   adminListFiles, adminDeleteFile, adminGetFileStats,
-  updateEmailUserNickname,
+  updateEmailUserNickname, updateFileThumbnail,
 } from "./fileManager";
 import { TRPCError } from "@trpc/server";
 import { cleanupGuestUploadRecords } from "./cleanup";
@@ -184,6 +184,19 @@ export const appRouter = router({
         const ok = await deleteUserFile(input.fileId, ctx.emailUser.id);
         if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权删除" });
         return { success: true };
+      }),
+
+    /** Upload thumbnail for a file */
+    uploadThumbnail: publicProcedure
+      .input(z.object({
+        fileId: z.number(),
+        thumbnailBase64: z.string(), // base64 encoded PNG
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        const url = await updateFileThumbnail(input.fileId, ctx.emailUser.id, input.thumbnailBase64);
+        if (!url) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权操作" });
+        return { success: true, thumbnailUrl: url };
       }),
 
     /** Toggle file sharing */

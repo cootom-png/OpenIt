@@ -322,6 +322,28 @@ export async function adminGetFileStats() {
   };
 }
 
+// ─── Thumbnail ───
+
+export async function updateFileThumbnail(fileId: number, userId: number, thumbnailBase64: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Verify ownership
+  const file = await db.select().from(userFiles).where(and(eq(userFiles.id, fileId), eq(userFiles.userId, userId))).limit(1);
+  if (!file.length) return null;
+
+  // Decode base64 and upload thumbnail to S3
+  const thumbBuffer = Buffer.from(thumbnailBase64, "base64");
+  const randomSuffix = crypto.randomBytes(4).toString("hex");
+  const thumbKey = `user-files/${userId}/thumbs/${fileId}-${randomSuffix}.png`;
+  const { url: thumbnailUrl } = await storagePut(thumbKey, thumbBuffer, "image/png");
+
+  // Update record
+  await db.update(userFiles).set({ thumbnailUrl }).where(eq(userFiles.id, fileId));
+
+  return thumbnailUrl;
+}
+
 // ─── Update user profile ───
 
 export async function updateEmailUserNickname(userId: number, nickname: string): Promise<void> {
