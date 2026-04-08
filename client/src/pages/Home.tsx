@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import {
   Upload,
   RotateCcw,
@@ -18,8 +19,15 @@ import {
   LogOut,
   Settings,
   User,
+  Share2,
+  Copy,
+  Check,
+  FolderOpen,
+  HardDrive,
+  Save,
 } from "lucide-react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { useAuth } from "@/_core/hooks/useAuth";
 import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
@@ -144,7 +152,17 @@ export default function Home() {
   const [wordInfo, setWordInfo] = useState<{ paragraphs: number; images: number; tables: number } | null>(null);
   const [excelInfo, setExcelInfo] = useState<{ sheets: number; sheetNames: string[]; rows: number; cols: number } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [currentFileObj, setCurrentFileObj] = useState<File | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedFileId, setSavedFileId] = useState<number | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
+  const { data: quota, refetch: refetchQuota } = trpc.userFiles.quota.useQuery(undefined, { enabled: isLoggedIn && isApproved });
+  const uploadMut = trpc.userFiles.upload.useMutation();
+  const toggleShareMut = trpc.userFiles.toggleShare.useMutation();
 
   const recordUpload = trpc.fileUpload.record.useMutation();
 
@@ -191,6 +209,10 @@ export default function Home() {
     setFileName(file.name);
     setFileSize(file.size);
     setErrorMsg("");
+    setCurrentFileObj(file);
+    setSavedFileId(null);
+    setShareLink(null);
+    setLinkCopied(false);
     setMeshData(null);
     setDxfFileUrl(null);
     setDwgFileBuffer(null);
@@ -1139,6 +1161,152 @@ export default function Home() {
                   )}
                 </CardContent>
               </Card>
+            )}
+
+            {/* Quota Progress Bar (logged-in approved users) */}
+            {isLoggedIn && isApproved && quota && (
+              <Card>
+                <CardContent className="pt-4 pb-3 space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <HardDrive className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">存储配额</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>文件数量</span>
+                      <span>{quota.fileCount} / {quota.maxFiles}</span>
+                    </div>
+                    <Progress value={quota.maxFiles > 0 ? (quota.fileCount / quota.maxFiles) * 100 : 0} className="h-2" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>已用空间</span>
+                      <span>{(quota.totalSize / 1024 / 1024).toFixed(1)} MB / {(quota.maxTotalSize / 1024 / 1024).toFixed(0)} MB</span>
+                    </div>
+                    <Progress value={quota.maxTotalSize > 0 ? (quota.totalSize / quota.maxTotalSize) * 100 : 0} className="h-2" />
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    单文件限制: {(quota.maxSingleFile / 1024 / 1024).toFixed(0)} MB
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Save & Share Actions (logged-in approved users) */}
+            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && (
+              <Button
+                className="w-full gap-2"
+                onClick={async () => {
+                  if (!currentFileObj) return;
+                  if (currentFileObj.size > 100 * 1024 * 1024) {
+                    toast.error("文件大小超过 100MB 限制");
+                    return;
+                  }
+                  setIsSaving(true);
+                  try {
+                    const reader = new FileReader();
+                    const base64 = await new Promise<string>((resolve, reject) => {
+                      reader.onload = () => {
+                        const result = reader.result as string;
+                        resolve(result.split(",")[1]);
+                      };
+                      reader.onerror = reject;
+                      reader.readAsDataURL(currentFileObj);
+                    });
+                    const ext = currentFileObj.name.split(".").pop()?.toLowerCase() || "";
+                    const getCategory = (e: string) => {
+                      if (["stp","step","stl"].includes(e)) return "3d";
+                      if (["dxf","dwg"].includes(e)) return "cad";
+                      if (["jpg","jpeg","png","gif"].includes(e)) return "image";
+                      if (["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(e)) return "video";
+                      return "document";
+                    };
+                    const result = await uploadMut.mutateAsync({
+                      fileName: currentFileObj.name,
+                      fileExt: ext,
+                      fileSize: currentFileObj.size,
+                      mimeType: currentFileObj.type || "application/octet-stream",
+                      category: getCategory(ext),
+                      fileBase64: base64,
+                    });
+                    setSavedFileId(result.file.id);
+                    refetchQuota();
+                    toast.success("文件已保存到您的账户");
+                  } catch (err: any) {
+                    toast.error(err.message || "保存失败");
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                disabled={isSaving}
+              >
+                <Save className="w-4 h-4" />
+                {isSaving ? "正在保存..." : "保存到我的文件"}
+              </Button>
+            )}
+
+            {/* Share button (after save) */}
+            {savedFileId && !shareLink && (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={async () => {
+                  try {
+                    const result = await toggleShareMut.mutateAsync({ fileId: savedFileId, enabled: true });
+                    const link = `${window.location.origin}/share/${result.file.shareToken}`;
+                    setShareLink(link);
+                    toast.success("分享链接已生成");
+                  } catch (err: any) {
+                    toast.error(err.message || "生成分享链接失败");
+                  }
+                }}
+              >
+                <Share2 className="w-4 h-4" />
+                生成分享链接
+              </Button>
+            )}
+
+            {/* Share link display */}
+            {shareLink && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="pt-3 pb-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                    <Share2 className="w-4 h-4" />
+                    分享链接
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={shareLink}
+                      className="flex-1 text-xs bg-background border rounded px-2 py-1.5 truncate"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 gap-1"
+                      onClick={() => {
+                        navigator.clipboard.writeText(shareLink);
+                        setLinkCopied(true);
+                        toast.success("链接已复制");
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                    >
+                      {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {linkCopied ? "已复制" : "复制"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* My files link */}
+            {isLoggedIn && isApproved && (
+              <Link href="/profile">
+                <Button variant="outline" className="w-full gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  我的文件
+                </Button>
+              </Link>
             )}
 
             {/* Upload another file */}

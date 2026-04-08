@@ -11,6 +11,13 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminFiles = lazy(() => import("./pages/AdminFiles"));
+const Profile = lazy(() => import("./pages/Profile"));
+const ShareView = lazy(() => import("./pages/ShareView"));
+
+const LazyFallback = (
+  <div className="min-h-screen flex items-center justify-center text-slate-400">加载中...</div>
+);
 
 function Router() {
   return (
@@ -18,11 +25,18 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
+      <Route path={"/profile"}>
+        <Suspense fallback={LazyFallback}><Profile /></Suspense>
+      </Route>
+      <Route path={"/share/:token"}>
+        <Suspense fallback={LazyFallback}><ShareView /></Suspense>
+      </Route>
       <Route path={"/admin/stats"} component={AdminStats} />
       <Route path={"/admin/users"}>
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400">加载中...</div>}>
-          <AdminUsers />
-        </Suspense>
+        <Suspense fallback={LazyFallback}><AdminUsers /></Suspense>
+      </Route>
+      <Route path={"/admin/files"}>
+        <Suspense fallback={LazyFallback}><AdminFiles /></Suspense>
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

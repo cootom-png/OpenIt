@@ -9,7 +9,31 @@ import {
   getEmailUserById,
 } from "./db";
 import { registerEmailUser, loginEmailUser, createEmailSessionToken, EMAIL_COOKIE_NAME } from "./emailAuth";
+import {
+  getUserQuota, checkQuota, uploadUserFile, listUserFiles, deleteUserFile,
+  toggleFileShare, getFileByShareToken,
+  adminListFiles, adminDeleteFile, adminGetFileStats,
+  updateEmailUserNickname,
+} from "./fileManager";
 import { TRPCError } from "@trpc/server";
+import { initTRPC } from "@trpc/server";
+import type { TrpcContext } from "./_core/context";
+
+// ─── Email user middleware (approved users only) ───
+const t = initTRPC.context<TrpcContext>().create();
+
+const requireApprovedEmailUser = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.emailUser) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+  }
+  if (ctx.emailUser.status !== "approved") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
+  }
+  return next({ ctx: { ...ctx, emailUser: ctx.emailUser } });
+});
+
+// We can't use the t.procedure from the local initTRPC since routers use the one from _core/trpc.
+// Instead, we'll inline the check in each procedure.
 
 export const appRouter = router({
   system: systemRouter,
@@ -26,7 +50,6 @@ export const appRouter = router({
 
   // ─── Email Auth ───
   emailAuth: router({
-    /** Register a new email user */
     register: publicProcedure
       .input(z.object({
         email: z.string().email("请输入有效的邮箱地址"),
@@ -38,14 +61,10 @@ export const appRouter = router({
           const userId = await registerEmailUser(input);
           return { success: true, message: "注册成功，请等待管理员审核", userId };
         } catch (error: any) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error.message || "注册失败",
-          });
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message || "注册失败" });
         }
       }),
 
-    /** Login with email and password */
     login: publicProcedure
       .input(z.object({
         email: z.string().email("请输入有效的邮箱地址"),
@@ -55,33 +74,20 @@ export const appRouter = router({
         try {
           const user = await loginEmailUser(input.email, input.password);
           const token = await createEmailSessionToken(user);
-
-          // Set cookie
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(EMAIL_COOKIE_NAME, token, {
             ...cookieOptions,
-            maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+            maxAge: 1000 * 60 * 60 * 24 * 365,
           });
-
           return {
             success: true,
-            user: {
-              id: user.id,
-              email: user.email,
-              nickname: user.nickname,
-              status: user.status,
-              role: user.role,
-            },
+            user: { id: user.id, email: user.email, nickname: user.nickname, status: user.status, role: user.role },
           };
         } catch (error: any) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: error.message || "登录失败",
-          });
+          throw new TRPCError({ code: "UNAUTHORIZED", message: error.message || "登录失败" });
         }
       }),
 
-    /** Get current email user info */
     me: publicProcedure.query(({ ctx }) => {
       if (!ctx.emailUser) return null;
       return {
@@ -97,17 +103,114 @@ export const appRouter = router({
       };
     }),
 
-    /** Logout email user */
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(EMAIL_COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true };
     }),
+
+    /** Update nickname */
+    updateNickname: publicProcedure
+      .input(z.object({ nickname: z.string().min(1).max(50) }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        await updateEmailUserNickname(ctx.emailUser.id, input.nickname);
+        return { success: true };
+      }),
+  }),
+
+  // ─── User Files (requires approved email user) ───
+  userFiles: router({
+    /** Get current user's quota */
+    quota: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.emailUser) return null;
+      return getUserQuota(ctx.emailUser.id);
+    }),
+
+    /** Upload a file (approved users only) */
+    upload: publicProcedure
+      .input(z.object({
+        fileName: z.string(),
+        fileExt: z.string(),
+        fileSize: z.number(),
+        mimeType: z.string().optional(),
+        category: z.string(),
+        fileBase64: z.string(), // base64 encoded file content
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        if (ctx.emailUser.status !== "approved") throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核，无法保存文件" });
+
+        // Check quota
+        const quota = await getUserQuota(ctx.emailUser.id);
+        const check = checkQuota(quota, input.fileSize);
+        if (!check.ok) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: check.reason! });
+        }
+
+        // Decode base64
+        const fileBuffer = Buffer.from(input.fileBase64, "base64");
+
+        const file = await uploadUserFile({
+          userId: ctx.emailUser.id,
+          fileName: input.fileName,
+          fileExt: input.fileExt,
+          fileSize: input.fileSize,
+          mimeType: input.mimeType || "application/octet-stream",
+          category: input.category,
+          fileBuffer,
+        });
+
+        return { success: true, file };
+      }),
+
+    /** List current user's files */
+    list: publicProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      }))
+      .query(async ({ input, ctx }) => {
+        if (!ctx.emailUser) return { records: [], total: 0 };
+        return listUserFiles(ctx.emailUser.id, input);
+      }),
+
+    /** Delete a file */
+    delete: publicProcedure
+      .input(z.object({ fileId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        const ok = await deleteUserFile(input.fileId, ctx.emailUser.id);
+        if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权删除" });
+        return { success: true };
+      }),
+
+    /** Toggle file sharing */
+    toggleShare: publicProcedure
+      .input(z.object({ fileId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        if (ctx.emailUser.status !== "approved") throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
+        const file = await toggleFileShare(input.fileId, ctx.emailUser.id, input.enabled);
+        if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权操作" });
+        return { success: true, file };
+      }),
+  }),
+
+  // ─── Share (public access) ───
+  share: router({
+    /** Get shared file by token */
+    getByToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const file = await getFileByShareToken(input.token);
+        if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "分享链接无效或已关闭" });
+        return file;
+      }),
   }),
 
   // ─── Admin: User Management ───
   adminUsers: router({
-    /** List all email users (admin only) */
     list: adminProcedure
       .input(z.object({
         page: z.number().min(1).default(1),
@@ -119,12 +222,10 @@ export const appRouter = router({
         return listEmailUsers(input);
       }),
 
-    /** Get user stats (admin only) */
     stats: adminProcedure.query(async () => {
       return getEmailUserStats();
     }),
 
-    /** Approve a user (admin only) */
     approve: adminProcedure
       .input(z.object({ userId: z.number() }))
       .mutation(async ({ input }) => {
@@ -132,7 +233,6 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Reject a user (admin only) */
     reject: adminProcedure
       .input(z.object({ userId: z.number() }))
       .mutation(async ({ input }) => {
@@ -140,7 +240,6 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Update user role (admin only) */
     updateRole: adminProcedure
       .input(z.object({
         userId: z.number(),
@@ -151,7 +250,6 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Delete a user (admin only) */
     delete: adminProcedure
       .input(z.object({ userId: z.number() }))
       .mutation(async ({ input }) => {
@@ -159,7 +257,6 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Get single user detail (admin only) */
     getById: adminProcedure
       .input(z.object({ userId: z.number() }))
       .query(async ({ input }) => {
@@ -170,9 +267,35 @@ export const appRouter = router({
       }),
   }),
 
+  // ─── Admin: File Management ───
+  adminFiles: router({
+    list: adminProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(20),
+        search: z.string().optional(),
+        userId: z.number().optional(),
+        category: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        return adminListFiles(input);
+      }),
+
+    stats: adminProcedure.query(async () => {
+      return adminGetFileStats();
+    }),
+
+    delete: adminProcedure
+      .input(z.object({ fileId: z.number() }))
+      .mutation(async ({ input }) => {
+        const ok = await adminDeleteFile(input.fileId);
+        if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在" });
+        return { success: true };
+      }),
+  }),
+
   // ─── File Upload Tracking ───
   fileUpload: router({
-    /** Record a file upload event (public - no login required) */
     record: publicProcedure
       .input(z.object({
         fileName: z.string(),
@@ -195,7 +318,6 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Update preview result for a recorded upload */
     updatePreview: publicProcedure
       .input(z.object({
         fileName: z.string(),
@@ -207,7 +329,6 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Get upload records (admin only) */
     list: adminProcedure
       .input(z.object({
         page: z.number().min(1).default(1),
@@ -219,7 +340,6 @@ export const appRouter = router({
         return getFileUploads(input);
       }),
 
-    /** Get upload statistics (admin only) */
     stats: adminProcedure
       .query(async () => {
         return getFileUploadStats();
