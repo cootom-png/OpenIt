@@ -424,11 +424,59 @@ export default function Home() {
       setPendingThumbFileId(null);
       (async () => {
         try {
-          // Wait for rendering to fully complete
-          // DWG CAD viewer needs extra time to render + zoomToFit
-          const waitTime = viewerMode === "2d-dwg" ? 5000 : 2000;
-          await new Promise(r => setTimeout(r, waitTime));
-          const thumbBase64 = await captureThumbFromViewer();
+          // For video files, use the video thumbnail capture method
+          const ext = (fileName || "").split(".").pop()?.toLowerCase() || "";
+          const isVideo = ["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(ext);
+
+          let thumbBase64: string | null = null;
+
+          if (isVideo) {
+            // Video: try capturing from the <video> element in the viewer
+            // First try from the local File object if available
+            if (currentFileObj) {
+              thumbBase64 = await captureVideoThumbnail(currentFileObj);
+            }
+            // If no local file, try from the video element in the DOM
+            if (!thumbBase64) {
+              const container = viewerContainerRef.current;
+              const videoEl = container?.querySelector("video") as HTMLVideoElement | null;
+              if (videoEl && videoEl.readyState >= 2) {
+                // Video is loaded enough, capture directly from the element
+                try {
+                  const canvas = document.createElement("canvas");
+                  const scale = Math.min(1, 400 / videoEl.videoWidth);
+                  canvas.width = Math.round(videoEl.videoWidth * scale);
+                  canvas.height = Math.round(videoEl.videoHeight * scale);
+                  const ctx = canvas.getContext("2d");
+                  if (ctx) {
+                    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+                    thumbBase64 = dataUrl.split(",")[1] || null;
+                    if (thumbBase64 && thumbBase64.length < 100) thumbBase64 = null;
+                  }
+                } catch (canvasErr) {
+                  console.warn("Video canvas capture failed (likely CORS):", canvasErr);
+                }
+              }
+            }
+            // Last resort: fetch video as blob and use captureVideoThumbnail
+            if (!thumbBase64 && videoUrl) {
+              try {
+                const resp = await fetch(videoUrl);
+                const blob = await resp.blob();
+                const tempFile = new File([blob], fileName || "video.mp4", { type: blob.type });
+                thumbBase64 = await captureVideoThumbnail(tempFile);
+              } catch (fetchErr) {
+                console.warn("Video fetch for thumbnail failed:", fetchErr);
+              }
+            }
+          } else {
+            // Non-video: use the standard viewer capture
+            const waitTime = viewerMode === "2d-dwg" ? 5000 : 2000;
+            await new Promise(r => setTimeout(r, waitTime));
+            thumbBase64 = await captureThumbFromViewer();
+          }
+
           if (thumbBase64) {
             await uploadThumbnailMut.mutateAsync({
               fileId,
