@@ -44,6 +44,7 @@ import { parseFile, getFileExtension } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
 import { chunkedUpload, type UploadProgress } from "@/lib/chunkedUpload";
+import { captureVideoThumbnail } from "@/lib/videoThumbnail";
 
 /**
  * Load a remote file from S3 URL into the viewer.
@@ -1513,7 +1514,23 @@ export default function Home() {
 
                       // Auto-capture thumbnail from preview area
                       const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
-                      if (!isImageFile) {
+                      const isVideoFile = ["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(ext);
+                      if (isVideoFile) {
+                        // Video: capture thumbnail directly from the file
+                        try {
+                          const thumbBase64 = await captureVideoThumbnail(currentFileObj);
+                          if (thumbBase64) {
+                            await uploadThumbnailMut.mutateAsync({
+                              fileId: result.file.id,
+                              thumbnailBase64: thumbBase64,
+                            });
+                            toast.success("视频缩略图已生成");
+                          }
+                        } catch (thumbErr) {
+                          console.warn("Video thumbnail generation failed:", thumbErr);
+                        }
+                      } else if (!isImageFile) {
+                        // Other non-image files: capture from viewer
                         try {
                           const waitMs = viewerMode === "2d-dwg" ? 5000 : 2000;
                           await new Promise(r => setTimeout(r, waitMs));
