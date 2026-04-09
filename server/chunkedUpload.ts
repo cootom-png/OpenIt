@@ -235,5 +235,77 @@ export function createChunkedUploadRouter(): Router {
     });
   });
 
+  // ─── 5. Proxy video for thumbnail generation (avoid CORS) ───
+  r.get("/api/proxy-video", async (req, res) => {
+    const videoUrl = req.query.url as string;
+    if (!videoUrl) {
+      return res.status(400).json({ error: "Missing url parameter" });
+    }
+
+    try {
+      // Only allow proxying S3/storage URLs for security
+      const parsed = new URL(videoUrl);
+      // Allow common S3/storage domains
+      const allowedPatterns = [
+        "s3.amazonaws.com",
+        "s3.",
+        "storage.googleapis.com",
+        "googleapis.com",
+        "blob.core.windows.net",
+        "cloudfront.net",
+        "forge",
+        "manus",
+      ];
+      const isAllowed = allowedPatterns.some(p => parsed.hostname.includes(p));
+      if (!isAllowed) {
+        return res.status(403).json({ error: "URL not allowed for proxying" });
+      }
+
+      // Forward Range header from browser if present, otherwise fetch full file
+      const headers: Record<string, string> = {};
+      if (req.headers.range) {
+        headers["Range"] = req.headers.range;
+      }
+
+      const upstream = await fetch(videoUrl, { headers: Object.keys(headers).length > 0 ? headers : undefined });
+
+      // Forward response headers
+      const contentType = upstream.headers.get("content-type") || "video/mp4";
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      if (upstream.headers.get("content-length")) {
+        res.setHeader("Content-Length", upstream.headers.get("content-length")!);
+      }
+      if (upstream.headers.get("content-range")) {
+        res.setHeader("Content-Range", upstream.headers.get("content-range")!);
+      }
+      if (upstream.headers.get("accept-ranges")) {
+        res.setHeader("Accept-Ranges", upstream.headers.get("accept-ranges")!);
+      }
+      res.status(upstream.status);
+
+      // Stream the response
+      if (upstream.body) {
+        const reader = (upstream.body as any).getReader();
+        const pump = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(Buffer.from(value));
+          }
+          res.end();
+        };
+        pump().catch(() => res.end());
+      } else {
+        const buffer = await upstream.arrayBuffer();
+        res.send(Buffer.from(buffer));
+      }
+    } catch (err: any) {
+      console.error("[ProxyVideo] Error:", err.message);
+      res.status(500).json({ error: "Failed to proxy video" });
+    }
+  });
+
   return r;
 }

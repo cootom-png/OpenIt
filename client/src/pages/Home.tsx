@@ -36,7 +36,7 @@ import ThreeViewer, { type ParsedMeshData, type ThreeViewerHandle } from "@/comp
 import DxfViewerComponent from "@/components/DxfViewerComponent";
 import DwgViewerComponent, { type DwgViewerHandle } from "@/components/DwgViewerComponent";
 import ImageViewer from "@/components/ImageViewer";
-import VideoViewer from "@/components/VideoViewer";
+import VideoViewer, { type VideoViewerHandle } from "@/components/VideoViewer";
 import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
@@ -44,7 +44,7 @@ import { parseFile, getFileExtension } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
 import { chunkedUpload, type UploadProgress } from "@/lib/chunkedUpload";
-import { captureVideoThumbnail } from "@/lib/videoThumbnail";
+import { captureVideoThumbnail, captureVideoThumbnailFromUrl } from "@/lib/videoThumbnail";
 
 /**
  * Load a remote file from S3 URL into the viewer.
@@ -318,6 +318,7 @@ export default function Home() {
   const [linkCopied, setLinkCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const videoViewerRef = useRef<VideoViewerHandle>(null);
   const threeViewerRef = useRef<ThreeViewerHandle>(null);
   const dwgViewerRef = useRef<DwgViewerHandle>(null);
 
@@ -431,44 +432,21 @@ export default function Home() {
           let thumbBase64: string | null = null;
 
           if (isVideo) {
-            // Video: try capturing from the <video> element in the viewer
-            // First try from the local File object if available
-            if (currentFileObj) {
+            // Video thumbnail: try multiple strategies
+            // Strategy 1: Capture directly from the VideoViewer's loaded video element
+            // This is the most reliable since the video is already loaded and playing
+            // Wait a moment for the video to be fully rendered
+            await new Promise(r => setTimeout(r, 1500));
+            if (videoViewerRef.current) {
+              thumbBase64 = await videoViewerRef.current.captureFrame();
+            }
+            // Strategy 2: From local File object (if available, e.g. just uploaded)
+            if (!thumbBase64 && currentFileObj) {
               thumbBase64 = await captureVideoThumbnail(currentFileObj);
             }
-            // If no local file, try from the video element in the DOM
-            if (!thumbBase64) {
-              const container = viewerContainerRef.current;
-              const videoEl = container?.querySelector("video") as HTMLVideoElement | null;
-              if (videoEl && videoEl.readyState >= 2) {
-                // Video is loaded enough, capture directly from the element
-                try {
-                  const canvas = document.createElement("canvas");
-                  const scale = Math.min(1, 400 / videoEl.videoWidth);
-                  canvas.width = Math.round(videoEl.videoWidth * scale);
-                  canvas.height = Math.round(videoEl.videoHeight * scale);
-                  const ctx = canvas.getContext("2d");
-                  if (ctx) {
-                    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-                    thumbBase64 = dataUrl.split(",")[1] || null;
-                    if (thumbBase64 && thumbBase64.length < 100) thumbBase64 = null;
-                  }
-                } catch (canvasErr) {
-                  console.warn("Video canvas capture failed (likely CORS):", canvasErr);
-                }
-              }
-            }
-            // Last resort: fetch video as blob and use captureVideoThumbnail
+            // Strategy 3: Via backend proxy (avoids CORS for S3 URLs)
             if (!thumbBase64 && videoUrl) {
-              try {
-                const resp = await fetch(videoUrl);
-                const blob = await resp.blob();
-                const tempFile = new File([blob], fileName || "video.mp4", { type: blob.type });
-                thumbBase64 = await captureVideoThumbnail(tempFile);
-              } catch (fetchErr) {
-                console.warn("Video fetch for thumbnail failed:", fetchErr);
-              }
+              thumbBase64 = await captureVideoThumbnailFromUrl(videoUrl);
             }
           } else {
             // Non-video: use the standard viewer capture
@@ -959,6 +937,7 @@ export default function Home() {
                   />
                 ) : viewerMode === "video" ? (
                   <VideoViewer
+                    ref={videoViewerRef}
                     videoUrl={videoUrl}
                     fileName={fileName}
                     onVideoLoaded={handleVideoLoaded}
@@ -1564,9 +1543,17 @@ export default function Home() {
                       const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
                       const isVideoFile = ["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(ext);
                       if (isVideoFile) {
-                        // Video: capture thumbnail directly from the file
+                        // Video: capture thumbnail using multiple strategies
                         try {
-                          const thumbBase64 = await captureVideoThumbnail(currentFileObj);
+                          let thumbBase64: string | null = null;
+                          // Strategy 1: Capture from VideoViewer's loaded video element
+                          if (videoViewerRef.current) {
+                            thumbBase64 = await videoViewerRef.current.captureFrame();
+                          }
+                          // Strategy 2: From local File object
+                          if (!thumbBase64 && currentFileObj) {
+                            thumbBase64 = await captureVideoThumbnail(currentFileObj);
+                          }
                           if (thumbBase64) {
                             await uploadThumbnailMut.mutateAsync({
                               fileId: result.file.id,

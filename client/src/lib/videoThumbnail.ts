@@ -11,8 +11,38 @@
  */
 
 const MAX_THUMB_WIDTH = 400;
-const CAPTURE_TIMEOUT_MS = 10000; // 10 seconds max
+const CAPTURE_TIMEOUT_MS = 15000; // 15 seconds max
 
+/**
+ * Core capture logic: given a video element that is already seeked,
+ * draw the current frame to canvas and return base64.
+ */
+function drawVideoToBase64(video: HTMLVideoElement): string | null {
+  try {
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, MAX_THUMB_WIDTH / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const base64 = dataUrl.split(",")[1];
+    return base64 && base64.length > 100 ? base64 : null;
+  } catch (err) {
+    console.warn("[VideoThumb] Canvas draw failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Generate thumbnail from a local File object (blob URL, no CORS issues).
+ */
 export function captureVideoThumbnail(file: File): Promise<string | null> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
@@ -29,7 +59,6 @@ export function captureVideoThumbnail(file: File): Promise<string | null> {
       URL.revokeObjectURL(url);
     };
 
-    // Timeout safety net
     const timer = setTimeout(() => {
       console.warn("[VideoThumb] Capture timed out");
       cleanup();
@@ -38,53 +67,20 @@ export function captureVideoThumbnail(file: File): Promise<string | null> {
     video.preload = "auto";
     video.muted = true;
     video.playsInline = true;
-    // Required for cross-origin videos (S3 URLs)
-    video.crossOrigin = "anonymous";
 
     video.onloadedmetadata = () => {
-      // Seek to 1s or half the duration if video is very short
       const seekTime = video.duration > 2 ? 1 : video.duration * 0.5;
       video.currentTime = seekTime;
     };
 
     video.onseeked = () => {
-      try {
-        const canvas = document.createElement("canvas");
-
-        // Scale down to thumbnail size
-        const scale = Math.min(1, MAX_THUMB_WIDTH / video.videoWidth);
-        canvas.width = Math.round(video.videoWidth * scale);
-        canvas.height = Math.round(video.videoHeight * scale);
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          clearTimeout(timer);
-          cleanup();
-          return;
-        }
-
-        // Draw black background first
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Draw the video frame
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        const base64 = dataUrl.split(",")[1];
-
-        clearTimeout(timer);
-        resolved = true;
-        resolve(base64 && base64.length > 100 ? base64 : null);
-
-        // Cleanup
-        video.removeAttribute("src");
-        video.load();
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        console.warn("[VideoThumb] Canvas draw failed:", err);
-        clearTimeout(timer);
-        cleanup();
-      }
+      const base64 = drawVideoToBase64(video);
+      clearTimeout(timer);
+      resolved = true;
+      resolve(base64);
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(url);
     };
 
     video.onerror = () => {
@@ -98,8 +94,9 @@ export function captureVideoThumbnail(file: File): Promise<string | null> {
 }
 
 /**
- * Generate a thumbnail from a video URL (e.g. S3 URL).
- * Used for generating thumbnails from already-uploaded videos.
+ * Generate thumbnail from a video URL using the backend proxy to avoid CORS.
+ * The proxy at /api/proxy-video fetches the video from S3 and streams it back
+ * through the same origin, so canvas is not tainted.
  */
 export function captureVideoThumbnailFromUrl(videoUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -123,7 +120,7 @@ export function captureVideoThumbnailFromUrl(videoUrl: string): Promise<string |
     video.preload = "auto";
     video.muted = true;
     video.playsInline = true;
-    video.crossOrigin = "anonymous";
+    // No crossOrigin needed since we're using same-origin proxy
 
     video.onloadedmetadata = () => {
       const seekTime = video.duration > 2 ? 1 : video.duration * 0.5;
@@ -131,45 +128,22 @@ export function captureVideoThumbnailFromUrl(videoUrl: string): Promise<string |
     };
 
     video.onseeked = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        const scale = Math.min(1, MAX_THUMB_WIDTH / video.videoWidth);
-        canvas.width = Math.round(video.videoWidth * scale);
-        canvas.height = Math.round(video.videoHeight * scale);
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          clearTimeout(timer);
-          cleanup();
-          return;
-        }
-
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        const base64 = dataUrl.split(",")[1];
-
-        clearTimeout(timer);
-        resolved = true;
-        resolve(base64 && base64.length > 100 ? base64 : null);
-
-        video.removeAttribute("src");
-        video.load();
-      } catch (err) {
-        console.warn("[VideoThumb] URL canvas draw failed:", err);
-        clearTimeout(timer);
-        cleanup();
-      }
+      const base64 = drawVideoToBase64(video);
+      clearTimeout(timer);
+      resolved = true;
+      resolve(base64);
+      video.removeAttribute("src");
+      video.load();
     };
 
-    video.onerror = () => {
-      console.warn("[VideoThumb] URL video load error");
+    video.onerror = (e) => {
+      console.warn("[VideoThumb] URL video load error:", e);
       clearTimeout(timer);
       cleanup();
     };
 
-    video.src = videoUrl;
+    // Use backend proxy to avoid CORS issues
+    const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(videoUrl)}`;
+    video.src = proxyUrl;
   });
 }

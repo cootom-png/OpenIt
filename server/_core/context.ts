@@ -24,13 +24,11 @@ export async function createContext(
     user = null;
   }
 
-  // Try email auth if no OAuth user
-  if (!user) {
-    try {
-      emailUser = await verifyEmailSession(opts.req);
-    } catch (error) {
-      emailUser = null;
-    }
+  // Always try email auth (user may have both OAuth and email sessions)
+  try {
+    emailUser = await verifyEmailSession(opts.req);
+  } catch (error) {
+    emailUser = null;
   }
 
   return {

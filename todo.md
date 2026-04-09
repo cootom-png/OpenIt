@@ -165,3 +165,5 @@
 - [x] 前端：视频上传保存时自动截取视频画面作为缩略图
 - [x] 集成到分片上传完成后的流程中
 - [x] BUG修复：视频缩略图生成失败（跨域/canvas taint问题）
+- [x] BUG修复：视频缩略图生成失败 — context.ts 始终解析 email session（不再仅在 OAuth 缺失时检查）
+- [x] BUG修复：captureViaProxy 增加调试日志和超时时间（20s→45s），增加 crossOrigin 属性
