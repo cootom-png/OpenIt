@@ -43,6 +43,7 @@ import ExcelViewer from "@/components/ExcelViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
+import { chunkedUpload, type UploadProgress } from "@/lib/chunkedUpload";
 
 /**
  * Load a remote file from S3 URL into the viewer.
@@ -310,6 +311,7 @@ export default function Home() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [currentFileObj, setCurrentFileObj] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [savedFileId, setSavedFileId] = useState<number | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -1475,75 +1477,87 @@ export default function Home() {
 
             {/* Save & Share Actions (logged-in approved users) */}
             {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && (
-              <Button
-                className="w-full gap-2"
-                onClick={async () => {
-                  if (!currentFileObj) return;
-                  if (currentFileObj.size > 100 * 1024 * 1024) {
-                    toast.error("文件大小超过 100MB 限制");
-                    return;
-                  }
-                  setIsSaving(true);
-                  try {
-                    const reader = new FileReader();
-                    const base64 = await new Promise<string>((resolve, reject) => {
-                      reader.onload = () => {
-                        const result = reader.result as string;
-                        resolve(result.split(",")[1]);
-                      };
-                      reader.onerror = reject;
-                      reader.readAsDataURL(currentFileObj);
-                    });
-                    const ext = currentFileObj.name.split(".").pop()?.toLowerCase() || "";
-                    const getCategory = (e: string) => {
-                      if (["stp","step","stl"].includes(e)) return "3d";
-                      if (["dxf","dwg"].includes(e)) return "cad";
-                      if (["jpg","jpeg","png","gif"].includes(e)) return "image";
-                      if (["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(e)) return "video";
-                      return "document";
-                    };
-                    const result = await uploadMut.mutateAsync({
-                      fileName: currentFileObj.name,
-                      fileExt: ext,
-                      fileSize: currentFileObj.size,
-                      mimeType: currentFileObj.type || "application/octet-stream",
-                      category: getCategory(ext),
-                      fileBase64: base64,
-                    });
-                    setSavedFileId(result.file.id);
-                    refetchQuota();
-                    toast.success("文件已保存到您的账户");
-
-                    // Auto-capture thumbnail from preview area
-                    // Skip for image files — backend already uses S3 URL as thumbnail
-                    const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
-                    if (!isImageFile) {
-                      try {
-                        // Wait for rendering (DWG needs extra time for zoomToFit)
-                        const waitMs = viewerMode === "2d-dwg" ? 5000 : 2000;
-                        await new Promise(r => setTimeout(r, waitMs));
-                        const thumbBase64 = await captureThumbFromViewer();
-                        if (thumbBase64) {
-                          await uploadThumbnailMut.mutateAsync({
-                            fileId: result.file.id,
-                            thumbnailBase64: thumbBase64,
-                          });
-                        }
-                      } catch (thumbErr) {
-                        console.warn("Thumbnail generation failed:", thumbErr);
-                      }
+              <div className="space-y-2">
+                <Button
+                  className="w-full gap-2"
+                  onClick={async () => {
+                    if (!currentFileObj || !emailUser) return;
+                    if (currentFileObj.size > 100 * 1024 * 1024) {
+                      toast.error("文件大小超过 100MB 限制");
+                      return;
                     }
-                  } catch (err: any) {
-                    toast.error(err.message || "保存失败");
-                  } finally {
-                    setIsSaving(false);
-                  }
-                }}
-                disabled={isSaving}
-              >
-                <Save className="w-4 h-4" />
-                {isSaving ? "正在保存..." : "保存到我的文件"}
-              </Button>
+                    setIsSaving(true);
+                    setUploadProgress(null);
+                    try {
+                      const ext = currentFileObj.name.split(".").pop()?.toLowerCase() || "";
+                      const getCategory = (e: string) => {
+                        if (["stp","step","stl"].includes(e)) return "3d";
+                        if (["dxf","dwg"].includes(e)) return "cad";
+                        if (["jpg","jpeg","png","gif"].includes(e)) return "image";
+                        if (["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(e)) return "video";
+                        return "document";
+                      };
+                      const result = await chunkedUpload(
+                        currentFileObj,
+                        emailUser.id,
+                        getCategory(ext),
+                        (progress) => setUploadProgress(progress)
+                      );
+                      if (!result.success) {
+                        throw new Error(result.error || "上传失败");
+                      }
+                      setSavedFileId(result.file.id);
+                      refetchQuota();
+                      setUploadProgress(null);
+                      toast.success("文件已保存到您的账户");
+
+                      // Auto-capture thumbnail from preview area
+                      const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
+                      if (!isImageFile) {
+                        try {
+                          const waitMs = viewerMode === "2d-dwg" ? 5000 : 2000;
+                          await new Promise(r => setTimeout(r, waitMs));
+                          const thumbBase64 = await captureThumbFromViewer();
+                          if (thumbBase64) {
+                            await uploadThumbnailMut.mutateAsync({
+                              fileId: result.file.id,
+                              thumbnailBase64: thumbBase64,
+                            });
+                          }
+                        } catch (thumbErr) {
+                          console.warn("Thumbnail generation failed:", thumbErr);
+                        }
+                      }
+                    } catch (err: any) {
+                      toast.error(err.message || "保存失败");
+                      setUploadProgress(null);
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  disabled={isSaving}
+                >
+                  <Save className="w-4 h-4" />
+                  {isSaving
+                    ? uploadProgress
+                      ? uploadProgress.phase === "compressing"
+                        ? "正在压缩图片..."
+                        : uploadProgress.phase === "completing"
+                          ? "正在合并文件..."
+                          : `上传中 ${uploadProgress.percent}%`
+                      : "正在保存..."
+                    : "保存到我的文件"}
+                </Button>
+                {isSaving && uploadProgress && uploadProgress.phase === "uploading" && (
+                  <div className="space-y-1">
+                    <Progress value={uploadProgress.percent} className="h-2" />
+                    <div className="flex justify-between text-[11px] text-muted-foreground">
+                      <span>{uploadProgress.uploadedChunks}/{uploadProgress.totalChunks} 分片</span>
+                      <span>{uploadProgress.speed || ""}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Share button (after save) */}
