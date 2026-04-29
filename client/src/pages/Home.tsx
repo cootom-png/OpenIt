@@ -1703,7 +1703,7 @@ export default function Home() {
       <footer className="border-t mt-12 py-6 bg-muted/30">
         <div className="container flex items-center justify-center">
           <a
-            href={`${import.meta.env.VITE_OAUTH_PORTAL_URL || 'https://manus.im'}/login?appId=${import.meta.env.VITE_APP_ID}&state=${encodeURIComponent(JSON.stringify({ origin: window.location.origin }))}&redirect=${encodeURIComponent(window.location.origin + '/api/oauth/callback')}`}
+            href={`${import.meta.env.VITE_OAUTH_PORTAL_URL || 'https://manus.im'}/login?appId=${import.meta.env.VITE_APP_ID}&state=${btoa(window.location.origin + '/api/oauth/callback')}&redirect=${encodeURIComponent(window.location.origin + '/api/oauth/callback')}`}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             管理员登录
