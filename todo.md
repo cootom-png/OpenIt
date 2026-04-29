@@ -167,3 +167,4 @@
 - [x] BUG修复：视频缩略图生成失败（跨域/canvas taint问题）
 - [x] BUG修复：视频缩略图生成失败 — context.ts 始终解析 email session（不再仅在 OAuth 缺失时检查）
 - [x] BUG修复：captureViaProxy 增加调试日志和超时时间（20s→45s），增加 crossOrigin 属性
+- [x] 首页底部添加管理员（Manus OAuth）登录入口
