@@ -18,6 +18,7 @@ const ShareView = lazy(() => import("./pages/ShareView"));
 const PartsGallery = lazy(() => import("./pages/PartsGallery"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const HelpGuide = lazy(() => import("./pages/HelpGuide"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 
 const LazyFallback = (
   <div className="min-h-screen flex items-center justify-center text-slate-400">加载中...</div>
@@ -44,6 +45,9 @@ function Router() {
       </Route>
       <Route path={"/share/:token"}>
         <Suspense fallback={LazyFallback}><ShareView /></Suspense>
+      </Route>
+      <Route path={"/admin-login"}>
+        <Suspense fallback={LazyFallback}><AdminLogin /></Suspense>
       </Route>
       <Route path={"/admin/stats"} component={AdminStats} />
       <Route path={"/admin/users"}>

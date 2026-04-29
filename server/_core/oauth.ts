@@ -10,6 +10,17 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  // Admin login: redirect to Manus OAuth login page with correct params
+  app.get("/api/admin-login", (req: Request, res: Response) => {
+    const origin = req.query.origin as string || `${req.protocol}://${req.get('host')}`;
+    const callbackUrl = `${origin}/api/oauth/callback`;
+    const state = Buffer.from(callbackUrl).toString('base64');
+    const portalUrl = process.env.VITE_OAUTH_PORTAL_URL || 'https://manus.im';
+    const appId = process.env.VITE_APP_ID || '';
+    const loginUrl = `${portalUrl}/login?appId=${appId}&state=${state}&redirect=${encodeURIComponent(callbackUrl)}`;
+    res.redirect(302, loginUrl);
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

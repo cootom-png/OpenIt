@@ -169,3 +169,5 @@
 - [x] BUG修复：captureViaProxy 增加调试日志和超时时间（20s→45s），增加 crossOrigin 属性
 - [x] 首页底部添加管理员（Manus OAuth）登录入口
 - [x] BUG修复：管理员登录链接 OAuth URL 构建不正确，点击后跳转到 manus.im 首页而非授权页
+- [x] BUG修复：管理员 OAuth 授权后不能自动返回首页（Manus OAuth 平台限制，改用管理员密码登录方案）
+- [x] 管理员独立密码登录入口（替代 Manus OAuth）
