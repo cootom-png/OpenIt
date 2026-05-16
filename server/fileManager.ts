@@ -254,6 +254,30 @@ export async function getFileByShareToken(token: string): Promise<(UserFile & { 
   return { ...file, ownerNickname: result[0].ownerNickname, expired };
 }
 
+/**
+ * Update allowDownload setting for a user's file.
+ */
+export async function updateAllowDownload(fileId: number, userId: number, allowDownload: boolean): Promise<UserFile | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const file = await db
+    .select()
+    .from(userFiles)
+    .where(and(eq(userFiles.id, fileId), eq(userFiles.userId, userId)))
+    .limit(1);
+
+  if (!file.length) return null;
+
+  await db
+    .update(userFiles)
+    .set({ allowDownload })
+    .where(eq(userFiles.id, fileId));
+
+  const updated = await db.select().from(userFiles).where(eq(userFiles.id, fileId)).limit(1);
+  return updated[0] || null;
+}
+
 // ─── Admin File Operations ───
 
 export async function adminListFiles(opts: {

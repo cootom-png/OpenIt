@@ -1,0 +1,1 @@
+ALTER TABLE `user_files` ADD `allowDownload` boolean DEFAULT false NOT NULL;

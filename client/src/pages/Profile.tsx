@@ -127,6 +127,7 @@ export default function Profile() {
   const deleteFile = trpc.userFiles.delete.useMutation();
   const toggleShare = trpc.userFiles.toggleShare.useMutation();
   const renewShare = trpc.userFiles.renewShare.useMutation();
+  const toggleAllowDownload = trpc.userFiles.toggleAllowDownload.useMutation();
 
   // Copy share link
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -188,6 +189,16 @@ export default function Profile() {
       toast.success("链接已复制");
       setTimeout(() => setCopiedId(null), 2000);
     });
+  };
+
+  const handleToggleAllowDownload = async (fileId: number, allowDownload: boolean) => {
+    try {
+      await toggleAllowDownload.mutateAsync({ fileId, allowDownload });
+      toast.success(allowDownload ? "已允许下载" : "已禁止下载");
+      refetchFiles();
+    } catch (e: any) {
+      toast.error(e.message || "操作失败");
+    }
   };
 
   const handleRenewShare = async (fileId: number) => {
@@ -617,6 +628,19 @@ export default function Profile() {
                                   <Copy className="w-3.5 h-3.5" />
                                 )}
                                 {copiedId === file.id ? "已复制" : "链接"}
+                              </Button>
+                            )}
+
+                            {/* Allow download toggle */}
+                            {file.shareEnabled && (
+                              <Button
+                                variant={file.allowDownload ? "default" : "outline"}
+                                size="sm"
+                                className={`h-8 text-xs gap-1 px-2.5 ${file.allowDownload ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                onClick={() => handleToggleAllowDownload(file.id, !file.allowDownload)}
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                {file.allowDownload ? "可下载" : "禁下载"}
                               </Button>
                             )}
 

@@ -15,6 +15,7 @@ import {
   Maximize2,
   Move,
   Share2,
+  Download,
 } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -437,6 +438,23 @@ export default function ShareView() {
               </Card>
             )}
 
+
+            {/* Download button (only if allowDownload is true) */}
+            {sharedFile.allowDownload && sharedFile.s3Url && (
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="pt-4">
+                  <a href={sharedFile.s3Url} target="_blank" rel="noopener noreferrer" download={sharedFile.fileName}>
+                    <Button className="w-full gap-2 bg-green-600 hover:bg-green-700">
+                      <Download className="w-4 h-4" />
+                      下载文件
+                    </Button>
+                  </a>
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    文件所有者已允许下载此文件
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Branding */}
             <Card className="bg-muted/30">

@@ -14,7 +14,7 @@ import {
   toggleFileShare, renewFileShare, getFileByShareToken,
   adminListFiles, adminDeleteFile, adminGetFileStats,
   updateEmailUserNickname, updateFileThumbnail,
-  listPublic3DParts,
+  listPublic3DParts, updateAllowDownload,
 } from "./fileManager";
 import { createPasswordResetToken, getPendingResetRequests } from "./db";
 import { notifyOwner } from "./_core/notification";
@@ -288,6 +288,17 @@ export const appRouter = router({
         if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
         if (ctx.emailUser.status !== "approved") throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
         const file = await renewFileShare(input.fileId, ctx.emailUser.id);
+        if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权操作" });
+        return { success: true, file };
+      }),
+
+    /** Toggle allow download on shared link */
+    toggleAllowDownload: publicProcedure
+      .input(z.object({ fileId: z.number(), allowDownload: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        if (ctx.emailUser.status !== "approved") throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
+        const file = await updateAllowDownload(input.fileId, ctx.emailUser.id, input.allowDownload);
         if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在或无权操作" });
         return { success: true, file };
       }),

@@ -82,6 +82,8 @@ export const userFiles = mysqlTable("user_files", {
   shareEnabled: boolean("shareEnabled").default(false).notNull(),
   /** Share expiry time — defaults to 7 days after sharing is enabled */
   shareExpiresAt: timestamp("shareExpiresAt"),
+  /** Whether to allow download on shared link (default: false) */
+  allowDownload: boolean("allowDownload").default(false).notNull(),
   /** Thumbnail image URL (stored in S3) */
   thumbnailUrl: text("thumbnailUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
