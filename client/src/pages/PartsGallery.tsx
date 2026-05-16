@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   ArrowLeft,
@@ -24,9 +25,18 @@ import {
   FileText,
   Search,
   X,
+  Download,
+  Mail,
+  Phone,
+  Building2,
+  UserCircle,
+  MessageSquare,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 const StepPreview = lazy(() => import("@/components/StepPreview"));
 
@@ -67,11 +77,28 @@ export default function PartsGallery() {
   const [previewFileId, setPreviewFileId] = useState<number | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
+  // Download request dialog state
+  const [downloadRequestFileId, setDownloadRequestFileId] = useState<number | null>(null);
+  const [downloadRequestFileName, setDownloadRequestFileName] = useState("");
+  const [drForm, setDrForm] = useState({ email: "", phone: "", company: "", realName: "", message: "" });
+  const [drSubmitting, setDrSubmitting] = useState(false);
+
   // Fetch file URL when preview is requested
   const { data: fileUrlData, isLoading: fileUrlLoading, error: fileUrlError } = trpc.partsGallery.getFileUrl.useQuery(
     { fileId: previewFileId! },
     { enabled: previewFileId !== null && isApproved }
   );
+
+  // Record view when preview opens
+  const recordView = trpc.partsGallery.recordView.useMutation();
+  useEffect(() => {
+    if (previewFileId !== null && isApproved) {
+      recordView.mutate({ fileId: previewFileId });
+    }
+  }, [previewFileId]);
+
+  // Submit download request mutation
+  const submitRequest = trpc.partsGallery.requestDownload.useMutation();
 
   const totalPages = Math.ceil((data?.total || 0) / pageSize);
 
@@ -81,6 +108,48 @@ export default function PartsGallery() {
       return;
     }
     setPreviewFileId(fileId);
+  };
+
+  const handleRequestDownload = (fileId: number, fileName: string) => {
+    setDownloadRequestFileId(fileId);
+    setDownloadRequestFileName(fileName);
+    // Pre-fill if logged in
+    if (emailUser) {
+      setDrForm({
+        email: emailUser.email || "",
+        phone: emailUser.phone || "",
+        company: emailUser.company || "",
+        realName: emailUser.realName || emailUser.nickname || "",
+        message: "",
+      });
+    } else {
+      setDrForm({ email: "", phone: "", company: "", realName: "", message: "" });
+    }
+  };
+
+  const handleSubmitDownloadRequest = async () => {
+    if (!downloadRequestFileId) return;
+    if (!drForm.email || !drForm.phone || !drForm.company || !drForm.realName) {
+      toast.error("请填写所有必填信息");
+      return;
+    }
+    setDrSubmitting(true);
+    try {
+      await submitRequest.mutateAsync({
+        fileId: downloadRequestFileId,
+        email: drForm.email,
+        phone: drForm.phone,
+        company: drForm.company,
+        realName: drForm.realName,
+        message: drForm.message || undefined,
+      });
+      toast.success("下载申请已提交，文件上传者将审核您的请求");
+      setDownloadRequestFileId(null);
+    } catch (e: any) {
+      toast.error(e.message || "提交失败，请稍后重试");
+    } finally {
+      setDrSubmitting(false);
+    }
   };
 
   const placeholderThumb = (
@@ -207,10 +276,12 @@ export default function PartsGallery() {
               <Card
                 key={part.id}
                 className="group cursor-pointer hover:shadow-lg hover:border-blue-300 transition-all duration-200 overflow-hidden"
-                onClick={() => handleCardClick(part.id)}
               >
                 {/* Thumbnail */}
-                <div className="aspect-square relative overflow-hidden bg-slate-50">
+                <div
+                  className="aspect-square relative overflow-hidden bg-slate-50"
+                  onClick={() => handleCardClick(part.id)}
+                >
                   {part.thumbnailUrl ? (
                     <img
                       src={part.thumbnailUrl}
@@ -241,10 +312,19 @@ export default function PartsGallery() {
                       {part.fileExt.toUpperCase()}
                     </Badge>
                   </div>
+                  {/* View count badge */}
+                  {part.viewCount > 0 && (
+                    <div className="absolute top-2 left-2">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-white/80 backdrop-blur-sm gap-0.5">
+                        <Eye className="w-3 h-3" />
+                        {part.viewCount}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
                 {/* Info */}
-                <CardContent className="p-3 space-y-1">
+                <CardContent className="p-3 space-y-1.5">
                   <p className="text-sm font-medium truncate" title={part.fileName}>
                     {part.fileName}
                   </p>
@@ -252,6 +332,23 @@ export default function PartsGallery() {
                     <span>{formatFileSize(part.fileSize)}</span>
                     <span>{formatDate(part.createdAt)}</span>
                   </div>
+                  <div className="flex items-center text-xs text-muted-foreground">
+                    <User className="w-3 h-3 mr-1 flex-shrink-0" />
+                    <span className="truncate">{part.ownerNickname}</span>
+                  </div>
+                  {/* Request Download Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-7 text-xs gap-1 mt-1 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRequestDownload(part.id, part.fileName);
+                    }}
+                  >
+                    <Download className="w-3 h-3" />
+                    申请下载
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -355,6 +452,142 @@ export default function PartsGallery() {
               </Suspense>
             )}
           </div>
+          {/* Request download from preview */}
+          {fileUrlData && (
+            <div className="px-6 pb-4 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50"
+                onClick={() => {
+                  setPreviewFileId(null);
+                  handleRequestDownload(previewFileId!, fileUrlData.fileName);
+                }}
+              >
+                <Download className="w-4 h-4" />
+                申请下载此零件
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Download Request Dialog */}
+      <Dialog open={downloadRequestFileId !== null} onOpenChange={(open) => { if (!open) setDownloadRequestFileId(null); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="w-5 h-5 text-blue-600" />
+              申请下载
+            </DialogTitle>
+            <DialogDescription>
+              请填写您的联系信息，文件上传者将审核您的下载请求。
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* File name display */}
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-sm">
+            <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+            <span className="font-medium truncate">{downloadRequestFileName}</span>
+          </div>
+
+          <div className="space-y-4 pt-2">
+            {/* Real Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dr-name" className="text-sm font-medium flex items-center gap-1.5">
+                <UserCircle className="w-3.5 h-3.5" />
+                姓名 <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="dr-name"
+                placeholder="请输入您的姓名"
+                value={drForm.realName}
+                onChange={(e) => setDrForm(f => ({ ...f, realName: e.target.value }))}
+              />
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dr-email" className="text-sm font-medium flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" />
+                邮箱 <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="dr-email"
+                type="email"
+                placeholder="请输入您的邮箱地址"
+                value={drForm.email}
+                onChange={(e) => setDrForm(f => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+
+            {/* Phone */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dr-phone" className="text-sm font-medium flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" />
+                电话 <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="dr-phone"
+                placeholder="请输入您的电话号码"
+                value={drForm.phone}
+                onChange={(e) => setDrForm(f => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+
+            {/* Company */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dr-company" className="text-sm font-medium flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5" />
+                公司名称 <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="dr-company"
+                placeholder="请输入您的公司名称"
+                value={drForm.company}
+                onChange={(e) => setDrForm(f => ({ ...f, company: e.target.value }))}
+              />
+            </div>
+
+            {/* Message (optional) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dr-message" className="text-sm font-medium flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" />
+                留言 <span className="text-muted-foreground text-xs">（选填）</span>
+              </Label>
+              <Textarea
+                id="dr-message"
+                placeholder="请简要说明下载用途..."
+                value={drForm.message}
+                onChange={(e) => setDrForm(f => ({ ...f, message: e.target.value }))}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setDownloadRequestFileId(null)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleSubmitDownloadRequest}
+              disabled={drSubmitting}
+              className="gap-1.5"
+            >
+              {drSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  提交中...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  提交申请
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

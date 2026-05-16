@@ -42,6 +42,15 @@ import {
   ChevronRight,
   RefreshCw,
   LogOut,
+  Eye,
+  Download,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Mail,
+  Phone,
+  Building2,
+  UserCircle,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
@@ -78,11 +87,18 @@ export default function AdminFiles() {
   const isOAuthAdmin = oauthUser?.role === "admin";
   const isAdmin = isOAuthAdmin || isEmailAdmin;
 
+  const [activeTab, setActiveTab] = useState<"files" | "requests">("files");
   const [page, setPage] = useState(1);
   const pageSize = 15;
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Download requests state
+  const [drPage, setDrPage] = useState(1);
+  const [drStatusFilter, setDrStatusFilter] = useState("all");
+  const [drSearchInput, setDrSearchInput] = useState("");
+  const [drSearchQuery, setDrSearchQuery] = useState("");
 
   const queryInput = useMemo(
     () => ({
@@ -99,6 +115,23 @@ export default function AdminFiles() {
 
   const deleteMut = trpc.adminFiles.delete.useMutation({
     onSuccess: () => { toast.success("文件已删除"); refetch(); },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Download requests queries
+  const drQueryInput = useMemo(
+    () => ({
+      page: drPage,
+      pageSize,
+      status: drStatusFilter === "all" ? undefined : drStatusFilter,
+      search: drSearchQuery || undefined,
+    }),
+    [drPage, pageSize, drStatusFilter, drSearchQuery]
+  );
+  const { data: drData, refetch: drRefetch } = trpc.adminDownloadRequests.list.useQuery(drQueryInput, { enabled: isAdmin && activeTab === "requests" });
+  const { data: drStats } = trpc.adminDownloadRequests.stats.useQuery(undefined, { enabled: isAdmin });
+  const updateDrStatus = trpc.adminDownloadRequests.updateStatus.useMutation({
+    onSuccess: () => { toast.success("状态已更新"); drRefetch(); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -164,8 +197,33 @@ export default function AdminFiles() {
       <main className="container py-6 max-w-6xl mx-auto space-y-6">
         <h2 className="text-xl font-bold">文件管理</h2>
 
-        {/* Stats Cards */}
-        {stats && (
+        {/* Tab Switcher */}
+        <div className="flex gap-1 border-b">
+          <button
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "files" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => { setActiveTab("files"); }}
+          >
+            <FileBox className="w-4 h-4 inline mr-1.5" />
+            文件列表
+          </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "requests" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => { setActiveTab("requests"); }}
+          >
+            <Download className="w-4 h-4 inline mr-1.5" />
+            下载申请
+            {drStats && drStats.pending > 0 && (
+              <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0">{drStats.pending}</Badge>
+            )}
+          </button>
+        </div>
+
+        {/* Stats Cards - Files Tab */}
+        {activeTab === "files" && stats && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="pt-4 pb-3">
@@ -194,12 +252,53 @@ export default function AdminFiles() {
                 <p className="text-2xl font-bold">{stats.totalShared}</p>
               </CardContent>
             </Card>
-
           </div>
         )}
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        {/* Stats Cards - Requests Tab */}
+        {activeTab === "requests" && drStats && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Download className="w-4 h-4 text-primary" />
+                  <span className="text-xs text-muted-foreground">总申请</span>
+                </div>
+                <p className="text-2xl font-bold">{drStats.total}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs text-muted-foreground">待处理</span>
+                </div>
+                <p className="text-2xl font-bold text-amber-600">{drStats.pending}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <span className="text-xs text-muted-foreground">已通过</span>
+                </div>
+                <p className="text-2xl font-bold text-green-600">{drStats.approved}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <XCircle className="w-4 h-4 text-red-500" />
+                  <span className="text-xs text-muted-foreground">已拒绝</span>
+                </div>
+                <p className="text-2xl font-bold text-red-600">{drStats.rejected}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Filters - Files Tab */}
+        {activeTab === "files" && <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex gap-2 flex-1">
             <Input
               placeholder="搜索文件名或用户..."
@@ -225,10 +324,39 @@ export default function AdminFiles() {
               <SelectItem value="document">文档</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </div>}
+
+        {/* Filters - Requests Tab */}
+        {activeTab === "requests" && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex gap-2 flex-1">
+              <Input
+                placeholder="搜索申请人姓名/邮箱/公司..."
+                value={drSearchInput}
+                onChange={(e) => setDrSearchInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (() => { setDrSearchQuery(drSearchInput.trim()); setDrPage(1); })()}
+                className="max-w-xs"
+              />
+              <Button variant="outline" size="sm" onClick={() => { setDrSearchQuery(drSearchInput.trim()); setDrPage(1); }}>
+                <Search className="w-4 h-4" />
+              </Button>
+            </div>
+            <Select value={drStatusFilter} onValueChange={(v) => { setDrStatusFilter(v); setDrPage(1); }}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="pending">待处理</SelectItem>
+                <SelectItem value="approved">已通过</SelectItem>
+                <SelectItem value="rejected">已拒绝</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Files Table */}
-        <Card>
+        {activeTab === "files" && <Card>
           <CardContent className="pt-4">
             {filesData && filesData.records.length > 0 ? (
               <>
@@ -243,6 +371,8 @@ export default function AdminFiles() {
                         <TableHead className="w-[80px]">类别</TableHead>
                         <TableHead className="w-[120px]">上传者</TableHead>
                         <TableHead className="w-[60px]">分享</TableHead>
+                        <TableHead className="w-[60px]">浏览</TableHead>
+                        <TableHead className="w-[60px]">申请</TableHead>
                         <TableHead className="w-[130px]">上传时间</TableHead>
                         <TableHead className="w-[80px] text-right">操作</TableHead>
                       </TableRow>
@@ -278,6 +408,18 @@ export default function AdminFiles() {
                             ) : (
                               <Badge variant="outline" className="text-[10px] py-0">关</Badge>
                             )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            <span className="flex items-center gap-0.5">
+                              <Eye className="w-3 h-3" />
+                              {file.viewCount ?? 0}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            <span className="flex items-center gap-0.5">
+                              <Download className="w-3 h-3" />
+                              {file.downloadRequestCount ?? 0}
+                            </span>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {formatDate(file.createdAt)}
@@ -343,7 +485,114 @@ export default function AdminFiles() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card>}
+
+        {/* Download Requests Table */}
+        {activeTab === "requests" && (
+          <Card>
+            <CardContent className="pt-4">
+              {drData && drData.records.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[50px]">ID</TableHead>
+                          <TableHead className="min-w-[120px]">申请人</TableHead>
+                          <TableHead className="w-[160px]">邮箱</TableHead>
+                          <TableHead className="w-[120px]">电话</TableHead>
+                          <TableHead className="w-[120px]">公司</TableHead>
+                          <TableHead className="min-w-[120px]">申请文件</TableHead>
+                          <TableHead className="w-[80px]">状态</TableHead>
+                          <TableHead className="w-[130px]">申请时间</TableHead>
+                          <TableHead className="w-[100px] text-right">操作</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {drData.records.map((req) => (
+                          <TableRow key={req.id}>
+                            <TableCell className="text-xs text-muted-foreground">{req.id}</TableCell>
+                            <TableCell>
+                              <div className="text-sm font-medium">{req.realName}</div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs text-muted-foreground">{req.email}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs text-muted-foreground">{req.phone}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs truncate block max-w-[120px]" title={req.company}>{req.company}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs truncate block max-w-[120px]" title={req.fileName}>
+                                {req.fileName}.{req.fileExt}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">上传者: {req.ownerNickname}</span>
+                            </TableCell>
+                            <TableCell>
+                              {req.status === "pending" && <Badge variant="outline" className="text-[10px] py-0 text-amber-600 border-amber-300">待处理</Badge>}
+                              {req.status === "approved" && <Badge variant="default" className="text-[10px] py-0 bg-green-600">已通过</Badge>}
+                              {req.status === "rejected" && <Badge variant="destructive" className="text-[10px] py-0">已拒绝</Badge>}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {formatDate(req.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {req.status === "pending" && (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    title="通过"
+                                    onClick={() => updateDrStatus.mutate({ requestId: req.id, status: "approved" })}
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    title="拒绝"
+                                    onClick={() => updateDrStatus.mutate({ requestId: req.id, status: "rejected" })}
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  {Math.ceil((drData.total || 0) / pageSize) > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t">
+                      <span className="text-xs text-muted-foreground">共 {drData.total} 条申请</span>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="h-7" onClick={() => setDrPage((p) => Math.max(1, p - 1))} disabled={drPage <= 1}>
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground">{drPage} / {Math.ceil((drData.total || 0) / pageSize)}</span>
+                        <Button variant="outline" size="sm" className="h-7" onClick={() => setDrPage((p) => p + 1)} disabled={drPage >= Math.ceil((drData.total || 0) / pageSize)}>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Download className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">暂无下载申请</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

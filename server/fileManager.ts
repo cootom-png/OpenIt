@@ -2,7 +2,7 @@
  * File manager — handles user file CRUD, quota checks, and share tokens.
  */
 import { eq, desc, and, count, sql, like, or, sum } from "drizzle-orm";
-import { userFiles, emailUsers, type UserFile, type InsertUserFile } from "../drizzle/schema";
+import { userFiles, emailUsers, downloadRequests, type UserFile, type InsertUserFile, type DownloadRequest } from "../drizzle/schema";
 import { getDb } from "./db";
 import { storagePut } from "./storage";
 import crypto from "crypto";
@@ -415,6 +415,8 @@ export async function listPublic3DParts(opts: { page: number; pageSize: number; 
         fileSize: userFiles.fileSize,
         thumbnailUrl: userFiles.thumbnailUrl,
         s3Url: userFiles.s3Url,
+        viewCount: userFiles.viewCount,
+        downloadRequestCount: userFiles.downloadRequestCount,
         createdAt: userFiles.createdAt,
         ownerNickname: emailUsers.nickname,
       })
@@ -459,4 +461,194 @@ export async function updateEmailUserNickname(userId: number, nickname: string):
   if (!db) throw new Error("Database not available");
 
   await db.update(emailUsers).set({ nickname }).where(eq(emailUsers.id, userId));
+}
+
+// ─── Download Requests & View Tracking ───
+
+/**
+ * Increment view count for a file (called when someone previews a 3D part).
+ */
+export async function incrementViewCount(fileId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db
+    .update(userFiles)
+    .set({ viewCount: sql`${userFiles.viewCount} + 1` })
+    .where(eq(userFiles.id, fileId));
+}
+
+/**
+ * Submit a download request for a file.
+ * Returns the created request.
+ */
+export async function submitDownloadRequest(data: {
+  fileId: number;
+  email: string;
+  phone: string;
+  company: string;
+  realName: string;
+  message?: string;
+}): Promise<DownloadRequest> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Verify file exists
+  const file = await db.select().from(userFiles).where(eq(userFiles.id, data.fileId)).limit(1);
+  if (!file.length) throw new Error("文件不存在");
+
+  // Insert request
+  const result = await db.insert(downloadRequests).values({
+    fileId: data.fileId,
+    email: data.email,
+    phone: data.phone,
+    company: data.company,
+    realName: data.realName,
+    message: data.message || null,
+  });
+
+  // Increment download request count on the file
+  await db
+    .update(userFiles)
+    .set({ downloadRequestCount: sql`${userFiles.downloadRequestCount} + 1` })
+    .where(eq(userFiles.id, data.fileId));
+
+  // Return the created request
+  const created = await db.select().from(downloadRequests).where(eq(downloadRequests.id, Number(result[0].insertId))).limit(1);
+  return created[0];
+}
+
+/**
+ * List download requests for a specific file (for file owner).
+ */
+export async function listDownloadRequestsByFile(fileId: number, opts: { page: number; pageSize: number }) {
+  const db = await getDb();
+  if (!db) return { records: [], total: 0 };
+
+  const whereClause = eq(downloadRequests.fileId, fileId);
+
+  const [records, totalResult] = await Promise.all([
+    db
+      .select()
+      .from(downloadRequests)
+      .where(whereClause)
+      .orderBy(desc(downloadRequests.createdAt))
+      .limit(opts.pageSize)
+      .offset((opts.page - 1) * opts.pageSize),
+    db.select({ count: count() }).from(downloadRequests).where(whereClause),
+  ]);
+
+  return { records, total: totalResult[0]?.count || 0 };
+}
+
+/**
+ * List all download requests (for admin).
+ */
+export async function adminListDownloadRequests(opts: {
+  page: number;
+  pageSize: number;
+  status?: string;
+  search?: string;
+}) {
+  const db = await getDb();
+  if (!db) return { records: [], total: 0 };
+
+  const conditions: any[] = [];
+  if (opts.status) {
+    conditions.push(eq(downloadRequests.status, opts.status as "pending" | "approved" | "rejected"));
+  }
+  if (opts.search && opts.search.trim()) {
+    const s = `%${opts.search.trim()}%`;
+    conditions.push(
+      or(
+        like(downloadRequests.email, s),
+        like(downloadRequests.company, s),
+        like(downloadRequests.realName, s),
+      )
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [records, totalResult] = await Promise.all([
+    whereClause
+      ? db
+          .select({
+            request: downloadRequests,
+            fileName: userFiles.fileName,
+            fileExt: userFiles.fileExt,
+            ownerNickname: emailUsers.nickname,
+          })
+          .from(downloadRequests)
+          .innerJoin(userFiles, eq(downloadRequests.fileId, userFiles.id))
+          .innerJoin(emailUsers, eq(userFiles.userId, emailUsers.id))
+          .where(whereClause)
+          .orderBy(desc(downloadRequests.createdAt))
+          .limit(opts.pageSize)
+          .offset((opts.page - 1) * opts.pageSize)
+      : db
+          .select({
+            request: downloadRequests,
+            fileName: userFiles.fileName,
+            fileExt: userFiles.fileExt,
+            ownerNickname: emailUsers.nickname,
+          })
+          .from(downloadRequests)
+          .innerJoin(userFiles, eq(downloadRequests.fileId, userFiles.id))
+          .innerJoin(emailUsers, eq(userFiles.userId, emailUsers.id))
+          .orderBy(desc(downloadRequests.createdAt))
+          .limit(opts.pageSize)
+          .offset((opts.page - 1) * opts.pageSize),
+    whereClause
+      ? db.select({ count: count() }).from(downloadRequests).where(whereClause)
+      : db.select({ count: count() }).from(downloadRequests),
+  ]);
+
+  return {
+    records: records.map((r) => ({
+      ...r.request,
+      fileName: r.fileName,
+      fileExt: r.fileExt,
+      ownerNickname: r.ownerNickname,
+    })),
+    total: totalResult[0]?.count || 0,
+  };
+}
+
+/**
+ * Get download request statistics.
+ */
+export async function getDownloadRequestStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, pending: 0, approved: 0, rejected: 0 };
+
+  const results = await db
+    .select({
+      status: downloadRequests.status,
+      count: count(),
+    })
+    .from(downloadRequests)
+    .groupBy(downloadRequests.status);
+
+  const stats = { total: 0, pending: 0, approved: 0, rejected: 0 };
+  for (const r of results) {
+    stats[r.status as keyof typeof stats] += r.count;
+    stats.total += r.count;
+  }
+  return stats;
+}
+
+/**
+ * Update download request status (admin).
+ */
+export async function updateDownloadRequestStatus(requestId: number, status: "approved" | "rejected"): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .update(downloadRequests)
+    .set({ status })
+    .where(eq(downloadRequests.id, requestId));
+
+  return true;
 }

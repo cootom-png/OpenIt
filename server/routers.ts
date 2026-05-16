@@ -15,6 +15,8 @@ import {
   adminListFiles, adminDeleteFile, adminGetFileStats,
   updateEmailUserNickname, updateFileThumbnail,
   listPublic3DParts, updateAllowDownload,
+  incrementViewCount, submitDownloadRequest, listDownloadRequestsByFile,
+  adminListDownloadRequests, getDownloadRequestStats, updateDownloadRequestStatus,
 } from "./fileManager";
 import { createPasswordResetToken, getPendingResetRequests } from "./db";
 import { notifyOwner } from "./_core/notification";
@@ -329,6 +331,52 @@ export const appRouter = router({
         return listPublic3DParts(input);
       }),
 
+    /** Increment view count for a 3D part (public, called on preview) */
+    recordView: publicProcedure
+      .input(z.object({ fileId: z.number() }))
+      .mutation(async ({ input }) => {
+        await incrementViewCount(input.fileId);
+        return { success: true };
+      }),
+
+    /** Submit a download request (public, no login required) */
+    requestDownload: publicProcedure
+      .input(z.object({
+        fileId: z.number(),
+        email: z.string().email("请输入有效的邮箱地址"),
+        phone: z.string().min(1, "请输入电话号码").max(32),
+        company: z.string().min(1, "请输入公司名称").max(256),
+        realName: z.string().min(1, "请输入姓名").max(128),
+        message: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const request = await submitDownloadRequest(input);
+        return { success: true, request };
+      }),
+
+    /** List download requests for a specific file (file owner or admin) */
+    downloadRequests: publicProcedure
+      .input(z.object({
+        fileId: z.number(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      }))
+      .query(async ({ input, ctx }) => {
+        // Require login
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        // Verify ownership or admin
+        if (ctx.emailUser.role !== "admin") {
+          const db = (await import("./db")).getDb;
+          const dbInstance = await db();
+          if (!dbInstance) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          const { userFiles } = await import("../drizzle/schema");
+          const { eq, and } = await import("drizzle-orm");
+          const file = await dbInstance.select().from(userFiles).where(and(eq(userFiles.id, input.fileId), eq(userFiles.userId, ctx.emailUser.id))).limit(1);
+          if (!file.length) throw new TRPCError({ code: "FORBIDDEN", message: "无权查看" });
+        }
+        return listDownloadRequestsByFile(input.fileId, { page: input.page, pageSize: input.pageSize });
+      }),
+
     /** Get 3D file URL for preview (requires approved email user) */
     getFileUrl: publicProcedure
       .input(z.object({ fileId: z.number() }))
@@ -525,6 +573,34 @@ export const appRouter = router({
     stats: adminProcedure
       .query(async () => {
         return getFileUploadStats();
+      }),
+  }),
+
+  // ─── Admin: Download Requests ───
+  adminDownloadRequests: router({
+    list: adminProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(20),
+        status: z.string().optional(),
+        search: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        return adminListDownloadRequests(input);
+      }),
+
+    stats: adminProcedure.query(async () => {
+      return getDownloadRequestStats();
+    }),
+
+    updateStatus: adminProcedure
+      .input(z.object({
+        requestId: z.number(),
+        status: z.enum(["approved", "rejected"]),
+      }))
+      .mutation(async ({ input }) => {
+        await updateDownloadRequestStatus(input.requestId, input.status);
+        return { success: true };
       }),
   }),
 

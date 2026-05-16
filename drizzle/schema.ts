@@ -86,6 +86,10 @@ export const userFiles = mysqlTable("user_files", {
   allowDownload: boolean("allowDownload").default(false).notNull(),
   /** Thumbnail image URL (stored in S3) */
   thumbnailUrl: text("thumbnailUrl"),
+  /** View count — incremented each time the file is previewed in parts gallery */
+  viewCount: int("viewCount").default(0).notNull(),
+  /** Download request count — incremented each time someone submits a download request */
+  downloadRequestCount: int("downloadRequestCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -137,3 +141,29 @@ export const passwordResetTokens = mysqlTable("password_reset_tokens", {
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+/**
+ * Download requests — visitors can request to download a 3D part file
+ * by providing their contact information.
+ */
+export const downloadRequests = mysqlTable("download_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The file being requested */
+  fileId: int("fileId").notNull(),
+  /** Requester's email */
+  email: varchar("email", { length: 320 }).notNull(),
+  /** Requester's phone */
+  phone: varchar("phone", { length: 32 }).notNull(),
+  /** Requester's company name */
+  company: varchar("company", { length: 256 }).notNull(),
+  /** Requester's real name */
+  realName: varchar("realName", { length: 128 }).notNull(),
+  /** Optional message from requester */
+  message: text("message"),
+  /** Status: pending, approved, rejected */
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DownloadRequest = typeof downloadRequests.$inferSelect;
+export type InsertDownloadRequest = typeof downloadRequests.$inferInsert;
