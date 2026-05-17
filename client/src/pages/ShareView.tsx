@@ -27,6 +27,7 @@ import VideoViewer from "@/components/VideoViewer";
 import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
+import ArchiveViewer from "@/components/ArchiveViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 const SUPPORTED_3D = ["stp", "step", "stl"];
@@ -37,8 +38,9 @@ const SUPPORTED_VIDEO = ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"];
 const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
+const SUPPORTED_ARCHIVE = ["zip", "rar"];
 
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "archive" | null;
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
 
 const formatFileSize = (bytes: number) => {
@@ -121,6 +123,13 @@ export default function ShareView() {
           const resp = await fetch(sharedFile.s3Url);
           const blob = await resp.blob();
           const file = new File([blob], sharedFile.fileName);
+          setDocFile(file);
+          setStatus("ready");
+        } else if (SUPPORTED_ARCHIVE.includes(ext)) {
+          setViewerMode("archive");
+          const resp = await fetch(sharedFile.s3Url);
+          const blob = await resp.blob();
+          const file = new File([blob], sharedFile.fileName + "." + ext);
           setDocFile(file);
           setStatus("ready");
         } else if (SUPPORTED_2D_DXF.includes(ext)) {
@@ -222,6 +231,7 @@ export default function ShareView() {
   const isPdf = SUPPORTED_PDF.includes(fileExt);
   const isWord = SUPPORTED_WORD.includes(fileExt);
   const isExcel = SUPPORTED_EXCEL.includes(fileExt);
+  const isArchive = SUPPORTED_ARCHIVE.includes(fileExt);
 
   return (
     <div className="min-h-screen bg-background">
@@ -283,6 +293,8 @@ export default function ShareView() {
                       <WordViewer file={docFile} onInfo={(info) => setWordInfo(info)} />
                     ) : viewerMode === "excel" && docFile ? (
                       <ExcelViewer file={docFile} onInfo={(info) => setExcelInfo(info)} />
+                    ) : viewerMode === "archive" && docFile ? (
+                      <ArchiveViewer file={docFile} />
                     ) : viewerMode === "video" ? (
                       <VideoViewer videoUrl={videoUrl} fileName={sharedFile.fileName} onVideoLoaded={(info) => setVideoInfo(info)} />
                     ) : viewerMode === "image" ? (
