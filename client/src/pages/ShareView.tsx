@@ -30,7 +30,7 @@ import ExcelViewer from "@/components/ExcelViewer";
 import ArchiveViewer from "@/components/ArchiveViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
-const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf"];
+const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
 const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];

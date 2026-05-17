@@ -22,6 +22,7 @@ import {
   Shield, Loader2, ChevronLeft, ChevronRight, BarChart3, LogOut, KeyRound, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
+import AdminNav from "@/components/AdminNav";
 
 export default function AdminUsers() {
   const { user: oauthUser } = useAuth();
@@ -137,38 +138,7 @@ export default function AdminUsers() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                首页
-              </Button>
-            </Link>
-            <span className="text-slate-300">|</span>
-            <h1 className="text-lg font-semibold text-slate-800">用户管理</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/admin/stats">
-              <Button variant="outline" size="sm" className="gap-1">
-                <BarChart3 className="w-4 h-4" />
-                统计
-              </Button>
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
-              onClick={() => logout()}
-            >
-              <LogOut className="w-4 h-4" />
-              退出
-            </Button>
-          </div>
-        </div>
-      </div>
+      <AdminNav onLogout={logout} />
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Stats Cards */}

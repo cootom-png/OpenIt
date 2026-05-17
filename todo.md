@@ -210,3 +210,9 @@
 ## BUG修复
 
 - [x] BUG：/admin/stats 页面已登录用户被提示需要登录，点击登录后又弹回同一页面（登录循环）
+
+## 第九期：后台优化与 IGES 格式支持
+
+- [x] 统一 AdminFiles 页面认证逻辑（已确认存在双重认证，无需修改）
+- [x] 添加后台页面间导航菜单（AdminNav 组件，统计/用户管理/文件管理 Tab 切换）
+- [x] 添加 IGES/IGS 格式的3D预览支持（复用 occt-import-js 引擎 ReadIgesFile）

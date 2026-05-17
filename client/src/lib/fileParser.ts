@@ -203,6 +203,34 @@ export function parse3mfFile(buffer: ArrayBuffer): ParsedMeshData {
   return { meshes };
 }
 
+export async function parseIgesFile(fileBuffer: Uint8Array): Promise<ParsedMeshData> {
+  const occt = await getOcctInstance();
+  const result = occt.ReadIgesFile(fileBuffer, {
+    linearUnit: "millimeter",
+    linearDeflection: 0.5,
+    angularDeflection: 0.5,
+  });
+
+  if (!result.success) {
+    throw new Error("Failed to parse IGES file");
+  }
+
+  return {
+    meshes: result.meshes.map((mesh: any) => ({
+      name: mesh.name || "unnamed",
+      color: mesh.color || undefined,
+      attributes: {
+        position: { array: Array.from(mesh.attributes.position.array) },
+        normal: mesh.attributes.normal
+          ? { array: Array.from(mesh.attributes.normal.array) }
+          : undefined,
+      },
+      index: { array: Array.from(mesh.index.array) },
+    })),
+    root: result.root,
+  };
+}
+
 export async function parseFile(
   file: File
 ): Promise<{ data: ParsedMeshData; parseTime: number }> {
@@ -225,7 +253,11 @@ export async function parseFile(
     const buffer = await file.arrayBuffer();
     const data = parse3mfFile(buffer);
     return { data, parseTime: performance.now() - startTime };
+  } else if (ext === "igs" || ext === "iges") {
+    const buffer = await file.arrayBuffer();
+    const data = await parseIgesFile(new Uint8Array(buffer));
+    return { data, parseTime: performance.now() - startTime };
   } else {
-    throw new Error(`不支持的文件格式: .${ext}。请使用 .stp, .step, .stl, .obj 或 .3mf 文件。`);
+    throw new Error(`不支持的文件格式: .${ext}。请使用 .stp, .step, .stl, .obj, .3mf, .igs 或 .iges 文件。`);
   }
 }

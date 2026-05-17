@@ -5,21 +5,19 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   BarChart3,
   FileWarning,
   Files,
-  ArrowLeft,
   RefreshCw,
   Filter,
   ChevronLeft,
   ChevronRight,
   Shield,
-  LogOut,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
+import AdminNav from "@/components/AdminNav";
 
 const CATEGORY_LABELS: Record<string, string> = {
   "3d": "3D 模型",
@@ -113,44 +111,7 @@ export default function AdminStats() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                返回
-              </Button>
-            </Link>
-            <Separator orientation="vertical" className="h-6" />
-            <h1 className="text-lg font-semibold text-gray-900">
-              <BarChart3 className="w-5 h-5 inline-block mr-2 text-blue-600" />
-              文件上传统计
-            </h1>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              statsQuery.refetch();
-              listQuery.refetch();
-            }}
-          >
-            <RefreshCw className="w-4 h-4 mr-1" />
-            刷新
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
-            onClick={() => logout()}
-          >
-            <LogOut className="w-4 h-4" />
-            退出
-          </Button>
-        </div>
-      </header>
+      <AdminNav onLogout={logout} />
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Stats Overview Cards */}

@@ -57,6 +57,7 @@ import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import AdminNav from "@/components/AdminNav";
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -161,41 +162,21 @@ export default function AdminFiles() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
+      <AdminNav onLogout={logout} />
+      {/* Sub header with actions */}
+      <header className="border-b bg-white/80 backdrop-blur-sm">
+        <div className="container flex items-center justify-between h-12">
           <div className="flex items-center gap-3">
-            <Link href="/admin/users">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                用户管理
-              </Button>
-            </Link>
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="text-xs">首页</Button>
-            </Link>
-            <Link href="/admin/stats">
-              <Button variant="ghost" size="sm" className="text-xs">统计</Button>
-            </Link>
+            <h2 className="text-base font-semibold">文件管理</h2>
           </div>
           <Button variant="outline" size="sm" className="gap-1" onClick={() => refetch()}>
             <RefreshCw className="w-3.5 h-3.5" />
             刷新
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
-            onClick={() => logout()}
-          >
-            <LogOut className="w-4 h-4" />
-            退出
-          </Button>
         </div>
       </header>
 
       <main className="container py-6 max-w-6xl mx-auto space-y-6">
-        <h2 className="text-xl font-bold">文件管理</h2>
 
         {/* Tab Switcher */}
         <div className="flex gap-1 border-b">

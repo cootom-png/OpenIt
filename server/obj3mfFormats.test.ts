@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf"];
+const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
 const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];
@@ -58,14 +58,30 @@ describe("OBJ and 3MF format support", () => {
     expect(getCategory("3mf")).toBe("3d");
   });
 
-  it("SUPPORTED_3D now has 5 formats", () => {
-    expect(SUPPORTED_3D.length).toBe(5);
-    expect(SUPPORTED_3D).toEqual(["stp", "step", "stl", "obj", "3mf"]);
+  it("SUPPORTED_3D now has 7 formats", () => {
+    expect(SUPPORTED_3D.length).toBe(7);
+    expect(SUPPORTED_3D).toEqual(["stp", "step", "stl", "obj", "3mf", "igs", "iges"]);
+  });
+
+  it("IGES/IGS are in SUPPORTED_3D", () => {
+    expect(SUPPORTED_3D).toContain("igs");
+    expect(SUPPORTED_3D).toContain("iges");
+  });
+
+  it("getCategory returns '3d' for IGS and IGES", () => {
+    expect(getCategory("igs")).toBe("3d");
+    expect(getCategory("iges")).toBe("3d");
+  });
+
+  it("getFileExtension extracts IGS/IGES extensions correctly", () => {
+    expect(getFileExtension("model.igs")).toBe("igs");
+    expect(getFileExtension("part.iges")).toBe("iges");
+    expect(getFileExtension("my.model.IGS")).toBe("igs");
   });
 
   it("ALL_SUPPORTED total count is correct", () => {
-    // 3D: 5, DXF: 1, DWG: 1, Image: 4, Video: 7, PDF: 1, Word: 2, Excel: 2, Archive: 2 = 25
-    expect(ALL_SUPPORTED.length).toBe(25);
+    // 3D: 7, DXF: 1, DWG: 1, Image: 4, Video: 7, PDF: 1, Word: 2, Excel: 2, Archive: 2 = 27
+    expect(ALL_SUPPORTED.length).toBe(27);
   });
 });
 
