@@ -206,3 +206,7 @@
 - [x] 前端：fileParser.ts 中添加 3MF 解析（Three.js 3MFLoader）
 - [x] 前端：ShareView.tsx 中添加 OBJ/3MF 格式识别
 - [x] 测试验证 OBJ/3MF 上传和3D预览功能
+
+## BUG修复
+
+- [x] BUG：/admin/stats 页面已登录用户被提示需要登录，点击登录后又弹回同一页面（登录循环）

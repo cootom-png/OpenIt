@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
-  LogIn,
   LogOut,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -59,25 +58,27 @@ function formatDate(date: Date | string) {
 }
 
 export default function AdminStats() {
-  const { user, loading: authLoading } = useAuth();
-  const { logout } = useEmailAuth();
+  const { user: oauthUser, loading: authLoading } = useAuth();
+  const { emailUser, isAdmin: isEmailAdmin, isLoading: emailAuthLoading, logout } = useEmailAuth();
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
   const [filterSupported, setFilterSupported] = useState<boolean | undefined>(undefined);
   const pageSize = 15;
 
+  const isAdmin = oauthUser?.role === "admin" || isEmailAdmin;
+
   const statsQuery = trpc.fileUpload.stats.useQuery(undefined, {
-    enabled: !!user && user.role === "admin",
+    enabled: isAdmin,
   });
 
   const listQuery = trpc.fileUpload.list.useQuery(
     { page, pageSize, category: filterCategory, isSupported: filterSupported },
-    { enabled: !!user && user.role === "admin" }
+    { enabled: isAdmin }
   );
 
   // Auth loading state
-  if (authLoading) {
+  if (authLoading || emailAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -88,35 +89,17 @@ export default function AdminStats() {
     );
   }
 
-  // Not logged in
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-[400px]">
-          <CardContent className="pt-6 text-center">
-            <LogIn className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <h2 className="text-xl font-semibold mb-2">需要登录</h2>
-            <p className="text-gray-500 mb-4">请先登录以访问后台统计页面</p>
-            <a href={getLoginUrl()}>
-              <Button>登录</Button>
-            </a>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Not admin
-  if (user.role !== "admin") {
+  // Not admin (neither OAuth admin nor email admin)
+  if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-[400px]">
           <CardContent className="pt-6 text-center">
             <Shield className="w-12 h-12 mx-auto mb-4 text-red-400" />
             <h2 className="text-xl font-semibold mb-2">权限不足</h2>
-            <p className="text-gray-500 mb-4">此页面仅管理员可访问</p>
-            <Link href="/">
-              <Button variant="outline">返回首页</Button>
+            <p className="text-gray-500 mb-4">请先以管理员身份登录</p>
+            <Link href="/admin-login">
+              <Button>管理员登录</Button>
             </Link>
           </CardContent>
         </Card>
