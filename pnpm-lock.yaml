@@ -184,6 +184,9 @@ importers:
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      libarchive-wasm:
+        specifier: ^1.2.0
+        version: 1.2.0
       lucide-react:
         specifier: ^0.453.0
         version: 0.453.0(react@19.2.1)
@@ -202,9 +205,6 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
-      node-unrar-js:
-        specifier: ^2.0.2
-        version: 2.0.2
       occt-import-js:
         specifier: ^0.0.23
         version: 0.0.23
@@ -3520,6 +3520,9 @@ packages:
   layout-base@2.0.1:
     resolution: {integrity: sha512-dp3s92+uNI1hWIpPGH3jK2kxE2lMjdXdr+DH8ynZHpd6PUlH6x6cbuXnoMmiNumznqaNO31xu9e79F0uuZ0JFg==}
 
+  libarchive-wasm@1.2.0:
+    resolution: {integrity: sha512-aunFn8oL9VwGRj+brRvdOv8BRUD4Ea1WxJW45IdiuXE2Vp/m/X+M1UxSU+yPzXfc1mPPC8AARaflg/CtF11u8g==}
+
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -3906,10 +3909,6 @@ packages:
 
   node-releases@2.0.23:
     resolution: {integrity: sha512-cCmFDMSm26S6tQSDpBCg/NR8NENrVPhAJSf+XbxBG4rPFaaonlEoE9wHQmun+cls499TQGSb7ZyPBRlzgKfpeg==}
-
-  node-unrar-js@2.0.2:
-    resolution: {integrity: sha512-hLNmoJzqaKJnod8yiTVGe9hnlNRHotUi0CreSv/8HtfRi/3JnRC8DvsmKfeGGguRjTEulhZK6zXX5PXoVuDZ2w==}
-    engines: {node: '>=10.0.0'}
 
   normalize-range@0.1.2:
     resolution: {integrity: sha512-bdok/XvKII3nUpklnV6P2hxtMNrCboOjAcyBuQnWEhO665FwrSNRxU+AqpsyvO6LgGYPspN+lu5CLtw4jPRKNA==}
@@ -8328,6 +8327,8 @@ snapshots:
 
   layout-base@2.0.1: {}
 
+  libarchive-wasm@1.2.0: {}
+
   lie@3.3.0:
     dependencies:
       immediate: 3.0.6
@@ -8933,8 +8934,6 @@ snapshots:
     optional: true
 
   node-releases@2.0.23: {}
-
-  node-unrar-js@2.0.2: {}
 
   normalize-range@0.1.2: {}
 

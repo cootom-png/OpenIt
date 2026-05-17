@@ -195,27 +195,35 @@ async function parseZipFile(file: File): Promise<ArchiveEntry[]> {
 }
 
 async function parseRarFile(file: File): Promise<ArchiveEntry[]> {
-  const { createExtractorFromData } = await import("node-unrar-js");
-
   const arrayBuffer = await file.arrayBuffer();
-  const extractor = await createExtractorFromData({ data: arrayBuffer });
-  const list = extractor.getFileList();
-  const entries: ArchiveEntry[] = [];
+  // Convert to base64 for JSON transport to server
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
 
-  const fileHeaders = [...list.fileHeaders];
-  for (const header of fileHeaders) {
-    const pathStr = header.name;
-    const name = pathStr.split(/[/\\]/).filter(Boolean).pop() || pathStr;
-    entries.push({
-      path: pathStr,
-      name,
-      size: header.unpSize || 0,
-      isDir: header.flags?.directory || false,
-      compressedSize: header.packSize || 0,
-    });
+  const response = await fetch("/api/parse-archive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ buffer: base64, filename: file.name }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "解析失败" }));
+    throw new Error(err.error || "RAR 文件解析失败");
   }
 
-  return entries;
+  const { entries: serverEntries } = await response.json();
+  return serverEntries.map((e: any) => ({
+    path: e.path,
+    name: e.name,
+    size: e.size || 0,
+    isDir: e.isDir,
+    compressedSize: 0,
+  }));
 }
 
 export default function ArchiveViewer({ file, onInfo }: ArchiveViewerProps) {

@@ -120,10 +120,11 @@ describe("JSZip library availability", () => {
   });
 });
 
-describe("node-unrar-js library availability", () => {
-  it("can import node-unrar-js", async () => {
-    const unrar = await import("node-unrar-js");
-    expect(unrar.createExtractorFromData).toBeDefined();
-    expect(typeof unrar.createExtractorFromData).toBe("function");
+describe("libarchive-wasm library availability", () => {
+  it("can import libarchive-wasm", async () => {
+    const lib = await import("libarchive-wasm");
+    expect(lib.ArchiveReader).toBeDefined();
+    expect(lib.libarchiveWasm).toBeDefined();
+    expect(typeof lib.libarchiveWasm).toBe("function");
   });
 });

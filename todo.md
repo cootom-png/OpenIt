@@ -216,3 +216,5 @@
 - [x] 统一 AdminFiles 页面认证逻辑（已确认存在双重认证，无需修改）
 - [x] 添加后台页面间导航菜单（AdminNav 组件，统计/用户管理/文件管理 Tab 切换）
 - [x] 添加 IGES/IGS 格式的3D预览支持（复用 occt-import-js 引擎 ReadIgesFile）
+
+- [x] BUG：RAR 文件预览时 WASM 加载失败（已改用服务端 libarchive-wasm 解析）

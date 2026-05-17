@@ -39,6 +39,36 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Chunked file upload routes
   app.use(createChunkedUploadRouter());
+  // RAR file parsing API (server-side WASM)
+  app.post("/api/parse-archive", async (req, res) => {
+    try {
+      const { buffer, filename } = req.body;
+      if (!buffer || !filename) {
+        return res.status(400).json({ error: "Missing buffer or filename" });
+      }
+      const ext = filename.split(".").pop()?.toLowerCase() || "";
+      if (ext !== "rar" && ext !== "zip") {
+        return res.status(400).json({ error: "Unsupported format" });
+      }
+      const { ArchiveReader, libarchiveWasm } = await import("libarchive-wasm");
+      const data = Buffer.from(buffer, "base64");
+      const mod = await libarchiveWasm();
+      const reader = new ArchiveReader(mod, new Int8Array(data));
+      const entries: Array<{ path: string; name: string; size: number; isDir: boolean }> = [];
+      for (const entry of reader.entries()) {
+        const pathStr = entry.getPathname();
+        const size = entry.getSize();
+        const isDir = pathStr.endsWith("/");
+        const name = pathStr.replace(/\/$/, "").split(/[\/\\]/).filter(Boolean).pop() || pathStr;
+        entries.push({ path: pathStr, name, size: size || 0, isDir });
+      }
+      reader.free();
+      return res.json({ entries });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Failed to parse archive" });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
