@@ -189,7 +189,7 @@ async function loadRemoteFile(
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
 type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "archive" | null;
 
-const SUPPORTED_3D = ["stp", "step", "stl"];
+const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
 const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];
@@ -892,6 +892,8 @@ export default function Home() {
                         <Badge variant="outline">.STP</Badge>
                         <Badge variant="outline">.STEP</Badge>
                         <Badge variant="outline">.STL</Badge>
+                        <Badge variant="outline">.OBJ</Badge>
+                        <Badge variant="outline">.3MF</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
                         <span className="text-xs text-muted-foreground font-medium">

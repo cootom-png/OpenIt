@@ -198,3 +198,11 @@
 - [x] 安装 JSZip 和 node-unrar-js 解析库
 - [x] 后端：文件格式分类中增加"压缩包"类别
 - [x] 测试验证 ZIP/RAR 上传和预览功能
+
+## 第八期：OBJ 和 3MF 格式支持
+
+- [x] 前端：添加 OBJ/3MF 格式到允许上传的文件类型列表
+- [x] 前端：fileParser.ts 中添加 OBJ 解析（Three.js OBJLoader）
+- [x] 前端：fileParser.ts 中添加 3MF 解析（Three.js 3MFLoader）
+- [x] 前端：ShareView.tsx 中添加 OBJ/3MF 格式识别
+- [x] 测试验证 OBJ/3MF 上传和3D预览功能

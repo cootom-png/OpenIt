@@ -1,5 +1,7 @@
 import type { ParsedMeshData } from "@/components/ThreeViewer";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import * as THREE from "three";
 
 const WASM_CDN_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/occt-import-js_dde0c27b.wasm";
@@ -94,6 +96,113 @@ export function getFileExtension(filename: string): string {
   return filename.split(".").pop()?.toLowerCase() || "";
 }
 
+export function parseObjFile(text: string): ParsedMeshData {
+  const loader = new OBJLoader();
+  const group = loader.parse(text);
+  const meshes: ParsedMeshData["meshes"] = [];
+
+  group.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      const geometry = child.geometry as THREE.BufferGeometry;
+      // Ensure geometry has computed normals
+      if (!geometry.attributes.normal) {
+        geometry.computeVertexNormals();
+      }
+
+      const positions = Array.from(geometry.attributes.position.array);
+      const normals = geometry.attributes.normal
+        ? Array.from(geometry.attributes.normal.array)
+        : undefined;
+
+      let indexArray: number[];
+      if (geometry.index) {
+        indexArray = Array.from(geometry.index.array);
+      } else {
+        indexArray = [];
+        for (let i = 0; i < positions.length / 3; i++) {
+          indexArray.push(i);
+        }
+      }
+
+      // Try to get color from material
+      let color: [number, number, number] | undefined;
+      const mat = child.material as THREE.MeshPhongMaterial;
+      if (mat && mat.color) {
+        color = [mat.color.r, mat.color.g, mat.color.b];
+      }
+
+      meshes.push({
+        name: child.name || "OBJ Mesh",
+        color: color || [0.7, 0.7, 0.75],
+        attributes: {
+          position: { array: positions },
+          normal: normals ? { array: normals } : undefined,
+        },
+        index: { array: indexArray },
+      });
+    }
+  });
+
+  if (meshes.length === 0) {
+    throw new Error("OBJ 文件中未找到有效的网格数据");
+  }
+
+  return { meshes };
+}
+
+export function parse3mfFile(buffer: ArrayBuffer): ParsedMeshData {
+  const loader = new ThreeMFLoader();
+  const group = loader.parse(buffer);
+  const meshes: ParsedMeshData["meshes"] = [];
+
+  group.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      const geometry = child.geometry as THREE.BufferGeometry;
+      if (!geometry.attributes.normal) {
+        geometry.computeVertexNormals();
+      }
+
+      const positions = Array.from(geometry.attributes.position.array);
+      const normals = geometry.attributes.normal
+        ? Array.from(geometry.attributes.normal.array)
+        : undefined;
+
+      let indexArray: number[];
+      if (geometry.index) {
+        indexArray = Array.from(geometry.index.array);
+      } else {
+        indexArray = [];
+        for (let i = 0; i < positions.length / 3; i++) {
+          indexArray.push(i);
+        }
+      }
+
+      // Try to get color from material
+      let color: [number, number, number] | undefined;
+      const mat = child.material as THREE.MeshPhongMaterial;
+      if (mat && mat.color) {
+        color = [mat.color.r, mat.color.g, mat.color.b];
+      }
+
+      meshes.push({
+        name: child.name || "3MF Mesh",
+        color: color || [0.6, 0.75, 0.8],
+        attributes: {
+          position: { array: positions },
+          normal: normals ? { array: normals } : undefined,
+        },
+        index: { array: indexArray },
+      });
+    }
+  });
+
+  if (meshes.length === 0) {
+    throw new Error("3MF 文件中未找到有效的网格数据");
+  }
+
+  return { meshes };
+}
+
 export async function parseFile(
   file: File
 ): Promise<{ data: ParsedMeshData; parseTime: number }> {
@@ -108,7 +217,15 @@ export async function parseFile(
     const buffer = await file.arrayBuffer();
     const data = parseStlFile(buffer);
     return { data, parseTime: performance.now() - startTime };
+  } else if (ext === "obj") {
+    const text = await file.text();
+    const data = parseObjFile(text);
+    return { data, parseTime: performance.now() - startTime };
+  } else if (ext === "3mf") {
+    const buffer = await file.arrayBuffer();
+    const data = parse3mfFile(buffer);
+    return { data, parseTime: performance.now() - startTime };
   } else {
-    throw new Error(`Unsupported file format: .${ext}. Please use .stp, .step, or .stl files.`);
+    throw new Error(`不支持的文件格式: .${ext}。请使用 .stp, .step, .stl, .obj 或 .3mf 文件。`);
   }
 }
