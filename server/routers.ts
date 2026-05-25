@@ -326,6 +326,7 @@ export const appRouter = router({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(50).default(20),
         search: z.string().optional(),
+        fileExt: z.string().optional(),
       }))
       .query(async ({ input }) => {
         return listPublic3DParts(input);

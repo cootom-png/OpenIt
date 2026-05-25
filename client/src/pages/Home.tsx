@@ -188,12 +188,12 @@ async function loadRemoteFile(
 }
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "archive" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "archive" | "svg" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
-const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];
+const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif", "svg"];
 const SUPPORTED_VIDEO = ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"];
 const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];
@@ -949,6 +949,7 @@ export default function Home() {
                         <Badge variant="outline">.JPG</Badge>
                         <Badge variant="outline">.PNG</Badge>
                         <Badge variant="outline">.GIF</Badge>
+                        <Badge variant="outline">.SVG</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
                         <span className="text-xs text-muted-foreground font-medium">

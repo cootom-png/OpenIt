@@ -59,8 +59,9 @@ export default function PartsGallery() {
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterExt, setFilterExt] = useState("");
   const pageSize = 20;
-  const queryInput = useMemo(() => ({ page, pageSize, search: searchQuery || undefined }), [page, searchQuery]);
+  const queryInput = useMemo(() => ({ page, pageSize, search: searchQuery || undefined, fileExt: filterExt || undefined }), [page, searchQuery, filterExt]);
 
   const { data, isLoading } = trpc.partsGallery.list.useQuery(queryInput);
 
@@ -245,8 +246,8 @@ export default function PartsGallery() {
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex items-center gap-2 mb-6">
+        {/* Search Bar + Format Filter */}
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -265,6 +266,18 @@ export default function PartsGallery() {
               </button>
             )}
           </div>
+          <select
+            value={filterExt}
+            onChange={(e) => { setFilterExt(e.target.value); setPage(1); }}
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">全部格式</option>
+            <option value="stp">STP / STEP</option>
+            <option value="stl">STL</option>
+            <option value="obj">OBJ</option>
+            <option value="3mf">3MF</option>
+            <option value="igs">IGS / IGES</option>
+          </select>
           <Button onClick={handleSearch} size="sm" className="h-10 px-4">
             <Search className="w-4 h-4 mr-1.5" />
             搜索
@@ -273,15 +286,23 @@ export default function PartsGallery() {
 
         {/* Stats */}
         {data && (
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-4 mb-4 flex-wrap">
             <Badge variant="secondary" className="gap-1">
               <Box className="w-3.5 h-3.5" />
-              {searchQuery ? `找到 ${data.total} 个零件` : `共 ${data.total} 个零件`}
+              {(searchQuery || filterExt) ? `找到 ${data.total} 个零件` : `共 ${data.total} 个零件`}
             </Badge>
             {searchQuery && (
               <Badge variant="outline" className="gap-1 text-xs">
                 搜索：{searchQuery}
                 <button onClick={handleClearSearch} className="ml-1 hover:text-foreground">
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            )}
+            {filterExt && (
+              <Badge variant="outline" className="gap-1 text-xs">
+                格式：{filterExt.toUpperCase()}
+                <button onClick={() => { setFilterExt(""); setPage(1); }} className="ml-1 hover:text-foreground">
                   <X className="w-3 h-3" />
                 </button>
               </Badge>

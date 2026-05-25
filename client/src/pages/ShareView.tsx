@@ -34,7 +34,7 @@ import { parseFile, getFileExtension } from "@/lib/fileParser";
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
-const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif"];
+const SUPPORTED_IMAGE = ["jpg", "jpeg", "png", "gif", "svg"];
 const SUPPORTED_VIDEO = ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"];
 const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];

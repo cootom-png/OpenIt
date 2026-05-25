@@ -80,7 +80,7 @@ export async function uploadUserFile(params: {
   const shareToken = generateShareToken();
 
   // For image files, use the S3 URL directly as thumbnail
-  const isImage = ["jpg", "jpeg", "png", "gif", "webp", "bmp"].includes(fileExt.toLowerCase());
+  const isImage = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(fileExt.toLowerCase());
 
   // Insert record
   const result = await db.insert(userFiles).values({
@@ -390,7 +390,7 @@ export async function adminGetFileStats() {
 
 // ─── Public 3D Parts Gallery ───
 
-export async function listPublic3DParts(opts: { page: number; pageSize: number; search?: string }) {
+export async function listPublic3DParts(opts: { page: number; pageSize: number; search?: string; fileExt?: string }) {
   const db = await getDb();
   if (!db) return { records: [], total: 0 };
 
@@ -402,6 +402,11 @@ export async function listPublic3DParts(opts: { page: number; pageSize: number; 
   // Add search filter if provided
   if (opts.search && opts.search.trim()) {
     conditions.push(like(userFiles.fileName, `%${opts.search.trim()}%`));
+  }
+
+  // Add file extension filter if provided
+  if (opts.fileExt && opts.fileExt.trim()) {
+    conditions.push(eq(userFiles.fileExt, opts.fileExt.trim().toLowerCase()));
   }
 
   const whereClause = and(...conditions);
