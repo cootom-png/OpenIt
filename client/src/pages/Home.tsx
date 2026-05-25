@@ -8,6 +8,7 @@ import {
   Upload,
   RotateCcw,
   Maximize2,
+  Minimize2,
   Move,
   FileBox,
   Clock,
@@ -326,6 +327,7 @@ export default function Home() {
   const [savedFileId, setSavedFileId] = useState<number | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const videoViewerRef = useRef<VideoViewerHandle>(null);
@@ -333,6 +335,26 @@ export default function Home() {
   const dwgViewerRef = useRef<DwgViewerHandle>(null);
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
+
+  // Fullscreen toggle for viewer container
+  const toggleFullscreen = useCallback(() => {
+    const container = viewerContainerRef.current;
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  // Listen for fullscreen change (e.g. user presses Esc)
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
 
   // Pending thumbnail generation for a specific file ID
   const [pendingThumbFileId, setPendingThumbFileId] = useState<number | null>(null);
@@ -853,13 +875,15 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
           {/* Left: Viewer Area */}
           <div className="space-y-4">
-            <Card className="overflow-hidden">
+            <Card className={`overflow-hidden ${isFullscreen ? "!rounded-none" : ""}`}>
               <div
                 ref={viewerContainerRef}
-                className={`relative ${
-                  status === "ready"
-                    ? "h-[calc(100vh-220px)] min-h-[500px]"
-                    : ""
+                className={`relative bg-background ${
+                  isFullscreen
+                    ? "h-screen w-screen"
+                    : status === "ready"
+                      ? "h-[calc(100vh-220px)] min-h-[500px]"
+                      : ""
                 }`}
               >
                 {status === "idle" || status === "error" ? (
@@ -1007,6 +1031,20 @@ export default function Home() {
                   <DxfViewerComponent fileUrl={dxfFileUrl} />
                 ) : (
                   <ThreeViewer ref={threeViewerRef} meshData={meshData} />
+                )}
+                {/* Fullscreen toggle button */}
+                {status === "ready" && (
+                  <button
+                    onClick={toggleFullscreen}
+                    className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
+                    title={isFullscreen ? "退出全屏" : "全屏预览"}
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 className="w-5 h-5 text-foreground" />
+                    ) : (
+                      <Maximize2 className="w-5 h-5 text-foreground" />
+                    )}
+                  </button>
                 )}
               </div>
             </Card>

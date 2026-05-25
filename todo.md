@@ -218,3 +218,5 @@
 - [x] 添加 IGES/IGS 格式的3D预览支持（复用 occt-import-js 引擎 ReadIgesFile）
 
 - [x] BUG：RAR 文件预览时 WASM 加载失败（已改用服务端 libarchive-wasm 解析）
+
+- [x] 预览框添加全屏切换功能（全屏/退出全屏按钮）

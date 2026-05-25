@@ -13,6 +13,7 @@ import {
   FileType,
   RotateCcw,
   Maximize2,
+  Minimize2,
   Move,
   Share2,
   Download,
@@ -83,6 +84,25 @@ export default function ShareView() {
   const [wordInfo, setWordInfo] = useState<{ paragraphs: number; images: number; tables: number } | null>(null);
   const [excelInfo, setExcelInfo] = useState<{ sheets: number; sheetNames: string[]; rows: number; cols: number } | null>(null);
   const [dwgInfo, setDwgInfo] = useState<{ entityCount: number; layerCount: number } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Fullscreen toggle
+  const toggleFullscreen = useCallback(() => {
+    const container = viewerContainerRef.current;
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
 
   const fileExt = useMemo(() => sharedFile ? sharedFile.fileExt.toLowerCase() : "", [sharedFile]);
 
@@ -259,8 +279,8 @@ export default function ShareView() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
           {/* Left: Viewer */}
           <div className="space-y-4">
-            <Card className="overflow-hidden">
-              <div className={`relative ${status === "ready" ? "min-h-[400px] h-[60vh]" : "min-h-[300px]"} bg-muted/20`}>
+            <Card className={`overflow-hidden ${isFullscreen ? "!rounded-none" : ""}`}>
+              <div ref={viewerContainerRef} className={`relative bg-background ${isFullscreen ? "h-screen w-screen" : status === "ready" ? "min-h-[400px] h-[60vh]" : "min-h-[300px]"} bg-muted/20`}>
                 {status === "loading" && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
@@ -307,6 +327,20 @@ export default function ShareView() {
                       <ThreeViewer meshData={meshData} />
                     ) : null}
                   </>
+                )}
+                {/* Fullscreen toggle button */}
+                {status === "ready" && (
+                  <button
+                    onClick={toggleFullscreen}
+                    className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
+                    title={isFullscreen ? "退出全屏" : "全屏预览"}
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 className="w-5 h-5 text-foreground" />
+                    ) : (
+                      <Maximize2 className="w-5 h-5 text-foreground" />
+                    )}
+                  </button>
                 )}
               </div>
             </Card>
