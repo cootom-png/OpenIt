@@ -62,6 +62,7 @@ export default function AdminStats() {
   const [page, setPage] = useState(1);
   const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
   const [filterSupported, setFilterSupported] = useState<boolean | undefined>(undefined);
+  const [filterEncrypted, setFilterEncrypted] = useState<boolean | undefined>(undefined);
   const pageSize = 15;
 
   const isAdmin = oauthUser?.role === "admin" || isEmailAdmin;
@@ -71,7 +72,7 @@ export default function AdminStats() {
   });
 
   const listQuery = trpc.fileUpload.list.useQuery(
-    { page, pageSize, category: filterCategory, isSupported: filterSupported },
+    { page, pageSize, category: filterCategory, isSupported: filterSupported, isEncrypted: filterEncrypted },
     { enabled: isAdmin }
   );
 
@@ -311,6 +312,20 @@ export default function AdminStats() {
                   <option value="true">已支持</option>
                   <option value="false">不支持</option>
                 </select>
+                {/* Encrypted filter */}
+                <select
+                  className="text-sm border rounded px-2 py-1 bg-white"
+                  value={filterEncrypted === undefined ? "" : filterEncrypted ? "true" : "false"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFilterEncrypted(v === "" ? undefined : v === "true");
+                    setPage(1);
+                  }}
+                >
+                  <option value="">全部加密状态</option>
+                  <option value="true">加密拦截</option>
+                  <option value="false">正常文件</option>
+                </select>
               </div>
             </div>
           </CardHeader>
@@ -355,7 +370,11 @@ export default function AdminStats() {
                           </Badge>
                         </td>
                         <td className="py-2 px-3">
-                          {record.isSupported ? (
+                          {(record as any).isEncrypted ? (
+                            <Badge variant="destructive" className="text-xs bg-red-600">
+                              🔒 加密拦截
+                            </Badge>
+                          ) : record.isSupported ? (
                             <Badge variant="outline" className="text-green-600 border-green-300 text-xs">
                               已支持
                             </Badge>

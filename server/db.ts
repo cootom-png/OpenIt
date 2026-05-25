@@ -304,13 +304,14 @@ export async function updateFileUploadPreview(id: number, success: boolean, erro
   }
 }
 
-export async function getFileUploads(opts: { page: number; pageSize: number; category?: string; isSupported?: boolean }) {
+export async function getFileUploads(opts: { page: number; pageSize: number; category?: string; isSupported?: boolean; isEncrypted?: boolean }) {
   const db = await getDb();
   if (!db) return { records: [], total: 0 };
 
   const conditions: any[] = [];
   if (opts.category) conditions.push(eq(fileUploads.category, opts.category));
   if (opts.isSupported !== undefined) conditions.push(eq(fileUploads.isSupported, opts.isSupported));
+  if (opts.isEncrypted !== undefined) conditions.push(eq(fileUploads.isEncrypted, opts.isEncrypted));
 
   const whereClause = conditions.length > 0
     ? sql`${sql.join(conditions, sql` AND `)}`

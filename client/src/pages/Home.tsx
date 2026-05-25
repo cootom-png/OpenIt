@@ -329,6 +329,7 @@ export default function Home() {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isEncryptedFile, setIsEncryptedFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const videoViewerRef = useRef<VideoViewerHandle>(null);
@@ -558,9 +559,12 @@ export default function Home() {
     }
 
     // 加密文件检测（绿盾等透明加密软件）
+    let detectedEncrypted = false;
     if (needsEncryptionCheck(file.name)) {
       const detection = await detectEncryptedFile(file);
       if (detection.isEncrypted) {
+        detectedEncrypted = true;
+        setIsEncryptedFile(true);
         // 记录加密文件拦截事件到后台统计
         recordUpload.mutate({
           fileName: file.name,
@@ -571,22 +575,25 @@ export default function Home() {
           isSupported: false,
           isEncrypted: true,
         });
-        setStatus("error");
-        setErrorMsg(detection.message || "检测到文件可能已被加密，无法上传。请先解密后再上传。");
-        return;
+        // 不再 return，继续尝试预览文件（本地可能能打开）
       }
     }
 
-    // Record supported file upload
-    recordUpload.mutate({
-      fileName: file.name,
-      fileExt: ext,
-      fileSize: file.size,
-      mimeType: file.type || undefined,
-      category: getCategory(ext),
-      isSupported: true,
-    });
+    // Record supported file upload (only if not encrypted)
+    if (!detectedEncrypted) {
+      recordUpload.mutate({
+        fileName: file.name,
+        fileExt: ext,
+        fileSize: file.size,
+        mimeType: file.type || undefined,
+        category: getCategory(ext),
+        isSupported: true,
+      });
+    }
 
+    if (!detectedEncrypted) {
+      setIsEncryptedFile(false);
+    }
     setFileName(file.name);
     setFileSize(file.size);
     setErrorMsg("");
@@ -1317,6 +1324,28 @@ export default function Home() {
               </CardContent>
             </Card>
 
+            {/* Encrypted File Warning */}
+            {isEncryptedFile && status === "ready" && (
+              <Card className="border-red-300 bg-red-50">
+                <CardContent className="py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 9v4"/>
+                        <path d="M12 17h.01"/>
+                        <path d="M2.732 18A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.829-3l-7.439-13a2 2 0 0 0-3.658 0z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-red-700 font-bold text-sm">此文件为加密文件</p>
+                      <p className="text-red-600 font-semibold text-sm mt-1">不能外传和保存，只能预览</p>
+                      <p className="text-red-500 text-xs mt-2">检测到绿盾加密特征，上传功能已禁用</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Model Stats (3D only) */}
             {status === "ready" && viewerMode === "3d" && (
               <Card>
@@ -1665,7 +1694,7 @@ export default function Home() {
             )}
 
             {/* Save & Share Actions (logged-in approved users) */}
-            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && (
+            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && !isEncryptedFile && (
               <div className="space-y-2">
                 <Button
                   className="w-full gap-2"
@@ -1770,6 +1799,21 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Encrypted file: disabled save button */}
+            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && isEncryptedFile && (
+              <div className="space-y-2">
+                <Button
+                  className="w-full gap-2"
+                  disabled={true}
+                  variant="secondary"
+                >
+                  <Save className="w-4 h-4" />
+                  保存到我的文件（已禁用）
+                </Button>
+                <p className="text-xs text-red-500 text-center">加密文件不允许保存和外传</p>
               </div>
             )}
 

@@ -577,6 +577,7 @@ export const appRouter = router({
         pageSize: z.number().min(1).max(100).default(20),
         category: z.string().optional(),
         isSupported: z.boolean().optional(),
+        isEncrypted: z.boolean().optional(),
       }))
       .query(async ({ input }) => {
         return getFileUploads(input);
