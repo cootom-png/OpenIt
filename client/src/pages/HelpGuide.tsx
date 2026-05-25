@@ -56,7 +56,7 @@ export default function HelpGuide() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
               <p>
-                CORITON 康瑞通文件管理平台是一款面向工业/医疗设备领域的在线文件管理与分享工具。
+                零件云图是一款面向工业/医疗设备领域的在线文件管理与分享工具。
                 支持 3D 模型、CAD 图纸、图片、视频、文档等多种格式的上传、在线预览和分享。
               </p>
               <p>

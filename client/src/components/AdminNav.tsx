@@ -21,7 +21,7 @@ export default function AdminNav({ onLogout }: AdminNavProps) {
         <div className="flex items-center gap-1">
           <Link href="/">
             <span className="text-sm font-bold text-slate-700 mr-3 cursor-pointer hover:text-blue-600 transition-colors">
-              CORITON 后台
+              零件云图 后台
             </span>
           </Link>
           {navItems.map((item) => {

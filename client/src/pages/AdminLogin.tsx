@@ -45,7 +45,7 @@ export default function AdminLogin() {
               <Shield className="w-6 h-6 text-blue-600" />
             </div>
             <CardTitle className="text-xl">管理员登录</CardTitle>
-            <CardDescription>CORITON 康瑞通 后台管理</CardDescription>
+            <CardDescription>零件云图 后台管理</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

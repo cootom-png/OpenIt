@@ -239,7 +239,7 @@ export default function PartsGallery() {
         <div className="mb-6">
           <h2 className="text-2xl font-bold tracking-tight">3D 零件展示</h2>
           <p className="text-muted-foreground mt-1">
-            浏览康瑞通医疗推车的 3D 零件模型。
+            浏览医疗推车 3D 零件模型。
             {!isApproved && (
               <span className="text-amber-600"> 注册并通过审核后可查看 3D 预览。</span>
             )}

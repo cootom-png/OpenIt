@@ -558,7 +558,7 @@ export default function ShareView() {
             <Card className="bg-muted/30">
               <CardContent className="pt-4 text-center">
                 <p className="text-xs text-muted-foreground">
-                  由 <span className="font-medium text-foreground">CORITON 康瑞通</span> 提供文件预览服务
+                  由 <span className="font-medium text-foreground">零件云图</span> 提供文件预览服务
                 </p>
                 <Link href="/">
                   <Button variant="link" size="sm" className="text-xs mt-1">

@@ -894,7 +894,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground tracking-tight">
-                CORITON 康瑞通
+                零件云图
               </h1>
               <p className="text-xs text-muted-foreground -mt-0.5">
                 3D / CAD / 文档 文件预览
