@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { detectEncryptedFile, needsEncryptionCheck } from "@/lib/encryptionDetector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -554,6 +555,16 @@ export default function Home() {
         `不支持的文件格式: .${ext}，请上传 ${ALL_SUPPORTED.map((e) => `.${e}`).join("、")} 文件`
       );
       return;
+    }
+
+    // 加密文件检测（绿盾等透明加密软件）
+    if (needsEncryptionCheck(file.name)) {
+      const detection = await detectEncryptedFile(file);
+      if (detection.isEncrypted) {
+        setStatus("error");
+        setErrorMsg(detection.message || "检测到文件可能已被加密，无法上传。请先解密后再上传。");
+        return;
+      }
     }
 
     // Record supported file upload
