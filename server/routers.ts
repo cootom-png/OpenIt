@@ -225,6 +225,16 @@ export const appRouter = router({
         // Decode base64
         const fileBuffer = Buffer.from(input.fileBase64, "base64");
 
+        // 服务端二次验证：检查文件头是否被加密软件破坏
+        const { validateFileHeader } = await import("./encryptionValidator");
+        const validation = validateFileHeader(fileBuffer, input.fileExt);
+        if (!validation.isValid) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: validation.reason || "检测到文件可能已被加密软件加密，无法保存。请先解密后再上传。",
+          });
+        }
+
         const file = await uploadUserFile({
           userId: ctx.emailUser.id,
           fileName: input.fileName,
@@ -535,6 +545,7 @@ export const appRouter = router({
         mimeType: z.string().optional(),
         category: z.string(),
         isSupported: z.boolean(),
+        isEncrypted: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const userAgent = ctx.req.headers["user-agent"] || "";

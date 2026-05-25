@@ -108,6 +108,7 @@ export const fileUploads = mysqlTable("file_uploads", {
   mimeType: varchar("mimeType", { length: 128 }),
   category: varchar("category", { length: 32 }).notNull(),
   isSupported: boolean("isSupported").notNull().default(true),
+  isEncrypted: boolean("isEncrypted").default(false),
   previewSuccess: boolean("previewSuccess"),
   errorMessage: text("errorMessage"),
   userAgent: text("userAgent"),

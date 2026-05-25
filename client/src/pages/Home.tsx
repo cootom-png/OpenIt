@@ -561,6 +561,16 @@ export default function Home() {
     if (needsEncryptionCheck(file.name)) {
       const detection = await detectEncryptedFile(file);
       if (detection.isEncrypted) {
+        // 记录加密文件拦截事件到后台统计
+        recordUpload.mutate({
+          fileName: file.name,
+          fileExt: ext,
+          fileSize: file.size,
+          mimeType: file.type || undefined,
+          category: getCategory(ext),
+          isSupported: false,
+          isEncrypted: true,
+        });
         setStatus("error");
         setErrorMsg(detection.message || "检测到文件可能已被加密，无法上传。请先解密后再上传。");
         return;

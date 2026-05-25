@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `file_uploads` ADD `isEncrypted` boolean DEFAULT false;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user JW59rFo8u4CuLLx.ea2bdef2a3b8 --database 3j4sFbGUefQfhYED2wtVaa --execute ALTER TABLE `file_uploads` ADD `isEncrypted` boolean DEFAULT false;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1659
+}
