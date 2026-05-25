@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
@@ -31,6 +31,8 @@ import {
   Building2,
   UserCircle,
   MessageSquare,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -83,11 +85,45 @@ export default function PartsGallery() {
   const [drForm, setDrForm] = useState({ email: "", phone: "", company: "", realName: "", message: "" });
   const [drSubmitting, setDrSubmitting] = useState(false);
 
+  // Fullscreen state for 3D preview
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = useCallback(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
   // Fetch file URL when preview is requested
   const { data: fileUrlData, isLoading: fileUrlLoading, error: fileUrlError } = trpc.partsGallery.getFileUrl.useQuery(
     { fileId: previewFileId! },
     { enabled: previewFileId !== null && isApproved }
   );
+
+  // Keyboard shortcut: F to toggle fullscreen in preview
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "f" || e.key === "F") {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (previewFileId !== null && isApproved && fileUrlData) {
+          toggleFullscreen();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [previewFileId, isApproved, fileUrlData, toggleFullscreen]);
 
   // Record view when preview opens
   const recordView = trpc.partsGallery.recordView.useMutation();
@@ -427,7 +463,7 @@ export default function PartsGallery() {
               {fileUrlData?.fileName || "3D 预览"}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 min-h-0 px-2 pb-2">
+          <div ref={previewContainerRef} className={`flex-1 min-h-0 px-2 pb-2 relative bg-background ${isFullscreen ? "!p-0 h-screen w-screen" : ""}`}>
             {fileUrlLoading && (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -450,6 +486,34 @@ export default function PartsGallery() {
                   fileExt={fileUrlData.fileExt}
                 />
               </Suspense>
+            )}
+            {/* Fullscreen toggle button */}
+            {fileUrlData && !fileUrlLoading && (
+              <button
+                onClick={toggleFullscreen}
+                className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
+                title={isFullscreen ? "退出全屏 (Esc)" : "全屏预览 (F)"}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-5 h-5 text-foreground" />
+                ) : (
+                  <Maximize2 className="w-5 h-5 text-foreground" />
+                )}
+              </button>
+            )}
+            {/* Fullscreen overlay: filename + controls hint */}
+            {isFullscreen && fileUrlData && (
+              <div className="absolute bottom-0 left-0 right-0 z-40 pointer-events-none">
+                <div className="bg-gradient-to-t from-black/60 to-transparent px-6 py-4">
+                  <p className="text-white text-sm font-medium truncate mb-1">{fileUrlData.fileName}</p>
+                  <div className="flex items-center gap-4 text-white/70 text-xs">
+                    <span>左键拖拽旋转</span>
+                    <span>滚轮缩放</span>
+                    <span>右键拖拽平移</span>
+                    <span className="ml-auto text-white/50">按 Esc 退出全屏</span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
           {/* Request download from preview */}

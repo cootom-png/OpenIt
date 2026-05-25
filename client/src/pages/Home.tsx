@@ -356,6 +356,21 @@ export default function Home() {
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
+  // Keyboard shortcut: F to toggle fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "f" || e.key === "F") {
+        // Don't trigger if user is typing in an input
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (status === "ready") {
+          toggleFullscreen();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [status, toggleFullscreen]);
+
   // Pending thumbnail generation for a specific file ID
   const [pendingThumbFileId, setPendingThumbFileId] = useState<number | null>(null);
 
@@ -1037,7 +1052,7 @@ export default function Home() {
                   <button
                     onClick={toggleFullscreen}
                     className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
-                    title={isFullscreen ? "退出全屏" : "全屏预览"}
+                    title={isFullscreen ? "退出全屏 (Esc)" : "全屏预览 (F)"}
                   >
                     {isFullscreen ? (
                       <Minimize2 className="w-5 h-5 text-foreground" />
@@ -1045,6 +1060,44 @@ export default function Home() {
                       <Maximize2 className="w-5 h-5 text-foreground" />
                     )}
                   </button>
+                )}
+                {/* Fullscreen overlay: filename + controls hint */}
+                {isFullscreen && status === "ready" && (
+                  <div className="absolute bottom-0 left-0 right-0 z-40 pointer-events-none">
+                    <div className="bg-gradient-to-t from-black/60 to-transparent px-6 py-4">
+                      <p className="text-white text-sm font-medium truncate mb-1">{fileName}</p>
+                      <div className="flex items-center gap-4 text-white/70 text-xs">
+                        {viewerMode === "3d" ? (
+                          <>
+                            <span>左键拖拽旋转</span>
+                            <span>滚轮缩放</span>
+                            <span>右键拖拽平移</span>
+                          </>
+                        ) : viewerMode === "image" ? (
+                          <>
+                            <span>滚轮缩放</span>
+                            <span>拖拽平移</span>
+                          </>
+                        ) : viewerMode === "2d-dxf" || viewerMode === "2d-dwg" ? (
+                          <>
+                            <span>滚轮缩放</span>
+                            <span>拖拽平移</span>
+                          </>
+                        ) : viewerMode === "video" ? (
+                          <>
+                            <span>点击播放/暂停</span>
+                            <span>拖动进度条</span>
+                          </>
+                        ) : viewerMode === "pdf" ? (
+                          <>
+                            <span>翻页浏览</span>
+                            <span>缩放查看</span>
+                          </>
+                        ) : null}
+                        <span className="ml-auto text-white/50">按 Esc 退出全屏</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </Card>
