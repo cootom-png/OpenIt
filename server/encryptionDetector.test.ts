@@ -31,7 +31,39 @@ function containsText(header: Uint8Array, text: string, maxOffset: number = 0): 
   return false;
 }
 
+// 中锐绿盾加密签名
+const ZHONGRUI_GREENSHIELD_MAGIC = [0x87, 0x7D, 0x1C, 0xB7];
+
 describe("Encryption Detection - Magic Bytes Checks", () => {
+  describe("中锐绿盾加密签名检测", () => {
+    it("detects Zhongrui GreenShield encrypted file (0x877d1cb7)", () => {
+      // 模拟中锐绿盾加密文件头
+      const zhongruiHeader = new Uint8Array([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00, 0x48, 0x7B, 0x00, 0x00]);
+      expect(startsWith(zhongruiHeader, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(true);
+    });
+
+    it("does not false-positive on normal files", () => {
+      // 正常 DOCX (PK header)
+      const normalDocx = new Uint8Array([0x50, 0x4B, 0x03, 0x04, 0x0A, 0x00]);
+      expect(startsWith(normalDocx, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(false);
+
+      // 正常 PDF
+      const normalPdf = new TextEncoder().encode("%PDF-1.4\n");
+      expect(startsWith(normalPdf, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(false);
+
+      // 正常 PNG
+      const normalPng = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      expect(startsWith(normalPng, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(false);
+    });
+
+    it("Zhongrui magic takes priority over format-specific checks", () => {
+      // 中锐绿盾加密文件不会以 PK 开头
+      const zhongruiHeader = new Uint8Array([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00]);
+      expect(startsWith(zhongruiHeader, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(true);
+      expect(startsWith(zhongruiHeader, [0x50, 0x4B, 0x03, 0x04])).toBe(false);
+    });
+  });
+
   describe("ZIP-based formats (XLSX, DOCX, 3MF)", () => {
     it("detects valid ZIP header (PK signature)", () => {
       const validZip = new Uint8Array([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00]);
@@ -39,7 +71,6 @@ describe("Encryption Detection - Magic Bytes Checks", () => {
     });
 
     it("detects invalid/encrypted ZIP header", () => {
-      // Encrypted file - random bytes instead of PK header
       const encrypted = new Uint8Array([0xA3, 0x7F, 0x2D, 0x91, 0xC4, 0x55]);
       expect(startsWith(encrypted, [0x50, 0x4B, 0x03, 0x04])).toBe(false);
     });
@@ -69,7 +100,6 @@ describe("Encryption Detection - Magic Bytes Checks", () => {
     });
 
     it("detects encrypted STEP file (no ISO header)", () => {
-      // Encrypted - random binary data
       const encrypted = new Uint8Array([0xA3, 0x7F, 0x2D, 0x91, 0xC4, 0x55, 0x88, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22, 0x33, 0x44, 0x55]);
       expect(containsText(encrypted, "ISO-10303-21", 20)).toBe(false);
     });
@@ -136,7 +166,6 @@ describe("Encryption Detection - Magic Bytes Checks", () => {
     });
 
     it("detects encrypted text file (low printable ratio)", () => {
-      // Encrypted - mostly high-byte binary data
       const encrypted = new Uint8Array(40);
       for (let i = 0; i < 40; i++) encrypted[i] = 0x80 + (i % 128);
       let printableCount = 0;
@@ -153,19 +182,22 @@ describe("Encryption Detection - Magic Bytes Checks", () => {
     const ENCRYPTED_CHECK_EXTENSIONS = [
       "xlsx", "xls", "docx", "doc", "pptx", "ppt",
       "stp", "step", "stl", "obj", "3mf", "igs", "iges",
-      "pdf", "dxf", "dwg", "svg", "zip",
+      "pdf", "dxf", "dwg", "svg", "zip", "rar",
+      "mp4", "mov", "webm",
+      "jpg", "jpeg", "png", "gif",
     ];
 
     it("returns true for supported extensions", () => {
       expect(ENCRYPTED_CHECK_EXTENSIONS.includes("xlsx")).toBe(true);
       expect(ENCRYPTED_CHECK_EXTENSIONS.includes("stp")).toBe(true);
       expect(ENCRYPTED_CHECK_EXTENSIONS.includes("docx")).toBe(true);
+      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("mp4")).toBe(true);
+      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("rar")).toBe(true);
     });
 
     it("returns false for non-checked extensions", () => {
-      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("mp4")).toBe(false);
-      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("rar")).toBe(false);
-      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("webm")).toBe(false);
+      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("txt")).toBe(false);
+      expect(ENCRYPTED_CHECK_EXTENSIONS.includes("csv")).toBe(false);
     });
   });
 });

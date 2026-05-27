@@ -1,6 +1,10 @@
 /**
  * 服务端文件头验证器
  * 在文件保存到 S3 前进行二次验证，防止绕过前端检测。
+ * 
+ * 支持检测：
+ * 1. 中锐绿盾加密 — 文件前4字节为固定签名 0x87 0x7D 0x1C 0xB7
+ * 2. 其他透明加密软件 — 通过检查文件头是否符合原始格式的 magic bytes 来判断
  */
 
 interface ValidationResult {
@@ -45,6 +49,20 @@ function printableRatio(buffer: Buffer, checkBytes: number = 40): number {
     }
   }
   return count / len;
+}
+
+/**
+ * 中锐绿盾加密文件签名
+ * 加密文件前4字节固定为 0x87 0x7D 0x1C 0xB7
+ * 文件结构: 512字节头部（元数据+零填充）+ 加密后的原始文件内容
+ */
+const ZHONGRUI_GREENSHIELD_MAGIC = [0x87, 0x7D, 0x1C, 0xB7];
+
+/**
+ * 检测是否为中锐绿盾加密文件
+ */
+function isZhongruiEncrypted(buffer: Buffer): boolean {
+  return startsWith(buffer, ZHONGRUI_GREENSHIELD_MAGIC);
 }
 
 /**
@@ -118,9 +136,7 @@ const VALIDATORS: Record<string, (buffer: Buffer) => ValidationResult> = {
   }),
   // STL: text or binary
   stl: (buf) => {
-    // Text STL starts with "solid"
     if (containsText(buf.subarray(0, 10), "solid", 0)) return { isValid: true };
-    // Binary STL: check that header is not mostly high bytes (encryption signature)
     let highByteCount = 0;
     const checkLen = Math.min(buf.length, 20);
     for (let i = 0; i < checkLen; i++) {
@@ -161,6 +177,24 @@ const VALIDATORS: Record<string, (buffer: Buffer) => ValidationResult> = {
     isValid: containsText(buf.subarray(0, 10), "GIF87a", 0) || containsText(buf.subarray(0, 10), "GIF89a", 0),
     reason: "GIF 文件头异常，可能已被加密",
   }),
+  // RAR
+  rar: (buf) => ({
+    isValid: startsWith(buf, [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07]),
+    reason: "RAR 文件头异常，可能已被加密",
+  }),
+  // Video
+  mp4: (buf) => ({
+    isValid: buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70,
+    reason: "MP4 文件头异常，可能已被加密",
+  }),
+  mov: (buf) => ({
+    isValid: buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70,
+    reason: "MOV 文件头异常，可能已被加密",
+  }),
+  webm: (buf) => ({
+    isValid: startsWith(buf, [0x1A, 0x45, 0xDF, 0xA3]),
+    reason: "WebM 文件头异常，可能已被加密",
+  }),
 };
 
 /**
@@ -171,15 +205,23 @@ const VALIDATORS: Record<string, (buffer: Buffer) => ValidationResult> = {
  */
 export function validateFileHeader(fileBuffer: Buffer, fileExt: string): ValidationResult {
   const ext = fileExt.toLowerCase();
-  const validator = VALIDATORS[ext];
-
-  // 没有对应验证规则的格式，放行
-  if (!validator) {
-    return { isValid: true };
-  }
 
   // 文件太小无法判断，放行
   if (fileBuffer.length < 4) {
+    return { isValid: true };
+  }
+
+  // 优先检测：中锐绿盾加密签名（适用于所有文件格式）
+  if (isZhongruiEncrypted(fileBuffer)) {
+    return {
+      isValid: false,
+      reason: "检测到中锐绿盾加密签名，该文件已被加密",
+    };
+  }
+
+  // 其次检测：文件头不符合原始格式签名
+  const validator = VALIDATORS[ext];
+  if (!validator) {
     return { isValid: true };
   }
 

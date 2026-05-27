@@ -2,6 +2,48 @@ import { describe, it, expect } from "vitest";
 import { validateFileHeader } from "./encryptionValidator";
 
 describe("Server-side Encryption Validator", () => {
+  describe("中锐绿盾加密签名检测", () => {
+    it("rejects file with Zhongrui GreenShield magic signature (0x877d1cb7)", () => {
+      // 模拟中锐绿盾加密文件头：前4字节为 0x87 0x7D 0x1C 0xB7
+      const zhongruiHeader = Buffer.alloc(32);
+      zhongruiHeader[0] = 0x87;
+      zhongruiHeader[1] = 0x7D;
+      zhongruiHeader[2] = 0x1C;
+      zhongruiHeader[3] = 0xB7;
+      zhongruiHeader[4] = 0x19;
+      zhongruiHeader[5] = 0x00;
+      zhongruiHeader[6] = 0x02;
+      zhongruiHeader[7] = 0x00;
+
+      // 应该对所有格式都检测出加密
+      expect(validateFileHeader(zhongruiHeader, "docx").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "xlsx").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "pdf").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "stp").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "dwg").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "png").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "jpg").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "stl").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "obj").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "svg").isValid).toBe(false);
+    });
+
+    it("rejects Zhongrui encrypted file even for unknown extensions", () => {
+      const zhongruiHeader = Buffer.from([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00]);
+      // 即使是没有专门验证规则的格式，也应该检测出中锐绿盾加密
+      expect(validateFileHeader(zhongruiHeader, "mp4").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "rar").isValid).toBe(false);
+      expect(validateFileHeader(zhongruiHeader, "txt").isValid).toBe(false);
+    });
+
+    it("includes Zhongrui in the rejection reason", () => {
+      const zhongruiHeader = Buffer.from([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00]);
+      const result = validateFileHeader(zhongruiHeader, "docx");
+      expect(result.isValid).toBe(false);
+      expect(result.reason).toContain("中锐绿盾");
+    });
+  });
+
   describe("ZIP-based formats (xlsx, docx, 3mf, zip)", () => {
     it("accepts valid ZIP file (PK header)", () => {
       const validZip = Buffer.from([0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00]);
@@ -143,12 +185,33 @@ describe("Server-side Encryption Validator", () => {
     });
   });
 
+  describe("Video and archive formats", () => {
+    it("accepts valid MP4 (ftyp header)", () => {
+      const validMp4 = Buffer.from([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D]);
+      expect(validateFileHeader(validMp4, "mp4").isValid).toBe(true);
+    });
+
+    it("rejects encrypted MP4", () => {
+      const encrypted = Buffer.from([0xA3, 0x7F, 0x2D, 0x91, 0xC4, 0x55, 0x88, 0x12]);
+      expect(validateFileHeader(encrypted, "mp4").isValid).toBe(false);
+    });
+
+    it("accepts valid RAR", () => {
+      const validRar = Buffer.from([0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00]);
+      expect(validateFileHeader(validRar, "rar").isValid).toBe(true);
+    });
+
+    it("rejects encrypted RAR", () => {
+      const encrypted = Buffer.from([0xA3, 0x7F, 0x2D, 0x91, 0xC4, 0x55, 0x88, 0x12]);
+      expect(validateFileHeader(encrypted, "rar").isValid).toBe(false);
+    });
+  });
+
   describe("Unknown/unsupported formats", () => {
-    it("passes through unknown extensions", () => {
+    it("passes through unknown extensions (without Zhongrui signature)", () => {
       const anyBuffer = Buffer.from([0xA3, 0x7F, 0x2D, 0x91]);
-      expect(validateFileHeader(anyBuffer, "mp4").isValid).toBe(true);
-      expect(validateFileHeader(anyBuffer, "rar").isValid).toBe(true);
-      expect(validateFileHeader(anyBuffer, "webm").isValid).toBe(true);
+      expect(validateFileHeader(anyBuffer, "txt").isValid).toBe(true);
+      expect(validateFileHeader(anyBuffer, "csv").isValid).toBe(true);
     });
 
     it("passes through files that are too small", () => {

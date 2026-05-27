@@ -254,6 +254,20 @@
 - [x] 加密文件预览时显示红色醒目提示"此文件为加密文件，不能外传和保存，只能预览"
 - [x] 加密文件预览时上传按钮置灰不可点击
 
-## 品牌更名
+## 品�- [x] 全站品牌名称从"CORITON 康瑞通"更新为"零件云图"
 
-- [x] 全站品牌名称从“CORITON 康瑞通”更新为“零件云图”
+## 加密检测升级
+
+- [x] 分析中锐绿盾加密文件二进制特征（magic: 0x877d1cb7, 512字节头部）
+- [x] 前端加密检测器加入中锐绿盾签名优先检测
+- [x] 服务端加密验证器加入中锐绿盾签名优先检测
+- [x] 新增 MP4/MOV/WebM/RAR 格式的加密检测支持
+- [x] 更新测试用例覆盖中锐绿盾检测场景（175项全部通过）�零件云图”
+
+## Encryption Detection Upgrade
+
+- [x] Analyzed Zhongrui GreenShield encrypted file binary signature (magic: 0x877d1cb7, 512-byte header)
+- [x] Frontend encryption detector: added Zhongrui GreenShield signature priority detection
+- [x] Server encryption validator: added Zhongrui GreenShield signature priority detection
+- [x] Added MP4/MOV/WebM/RAR format encryption detection support
+- [x] Updated test cases covering Zhongrui detection scenarios (175 tests all passed)
