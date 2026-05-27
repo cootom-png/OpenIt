@@ -3,7 +3,7 @@
  * 通过检查文件头（Magic Bytes）判断文件是否被透明加密软件加密。
  * 
  * 支持检测：
- * 1. 中锐绿盾加密 — 文件前4字节为固定签名 0x87 0x7D 0x1C 0xB7，
+ * 1. 天锐绿盾加密 — 文件前4字节为固定签名 0x87 0x7D 0x1C 0xB7，
  *    后跟512字节头部（含元数据+零填充），原始文件内容从偏移0x200开始被加密。
  * 2. 其他透明加密软件 — 通过检查文件头是否符合原始格式的 magic bytes 来判断。
  */
@@ -53,13 +53,13 @@ function containsText(header: Uint8Array, text: string, maxOffset: number = 0): 
 }
 
 /**
- * 中锐绿盾加密文件签名
+ * 天锐绿盾加密文件签名
  * 加密文件前4字节固定为 0x87 0x7D 0x1C 0xB7
  */
 const ZHONGRUI_GREENSHIELD_MAGIC = [0x87, 0x7D, 0x1C, 0xB7];
 
 /**
- * 检测是否为中锐绿盾加密文件
+ * 检测是否为天锐绿盾加密文件
  * 特征：前4字节为 0x877d1cb7，偏移0x1A到0x1FF全为零，文件体从0x200开始
  */
 function isZhongruiEncrypted(header: Uint8Array): boolean {
@@ -258,12 +258,12 @@ export async function detectEncryptedFile(file: File): Promise<DetectionResult> 
       return { isEncrypted: false };
     }
 
-    // 优先检测：中锐绿盾加密签名（适用于所有文件格式）
+    // 优先检测：天锐绿盾加密签名（适用于所有文件格式）
     if (isZhongruiEncrypted(header)) {
       const formatLabel = FORMAT_SIGNATURES[ext]?.label || `${ext.toUpperCase()} 文件`;
       return {
         isEncrypted: true,
-        message: `检测到该${formatLabel}已被中锐绿盾加密软件加密。加密文件上传后他人无法正常打开，请先解密后再上传。`,
+        message: `检测到该${formatLabel}已被天锐绿盾加密软件加密。加密文件上传后他人无法正常打开，请先解密后再上传。`,
       };
     }
 

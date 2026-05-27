@@ -31,13 +31,13 @@ function containsText(header: Uint8Array, text: string, maxOffset: number = 0): 
   return false;
 }
 
-// 中锐绿盾加密签名
+// 天锐绿盾加密签名
 const ZHONGRUI_GREENSHIELD_MAGIC = [0x87, 0x7D, 0x1C, 0xB7];
 
 describe("Encryption Detection - Magic Bytes Checks", () => {
-  describe("中锐绿盾加密签名检测", () => {
+  describe("天锐绿盾加密签名检测", () => {
     it("detects Zhongrui GreenShield encrypted file (0x877d1cb7)", () => {
-      // 模拟中锐绿盾加密文件头
+      // 模拟天锐绿盾加密文件头
       const zhongruiHeader = new Uint8Array([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00, 0x48, 0x7B, 0x00, 0x00]);
       expect(startsWith(zhongruiHeader, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(true);
     });
@@ -57,7 +57,7 @@ describe("Encryption Detection - Magic Bytes Checks", () => {
     });
 
     it("Zhongrui magic takes priority over format-specific checks", () => {
-      // 中锐绿盾加密文件不会以 PK 开头
+      // 天锐绿盾加密文件不会以 PK 开头
       const zhongruiHeader = new Uint8Array([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00]);
       expect(startsWith(zhongruiHeader, ZHONGRUI_GREENSHIELD_MAGIC)).toBe(true);
       expect(startsWith(zhongruiHeader, [0x50, 0x4B, 0x03, 0x04])).toBe(false);

@@ -258,11 +258,11 @@
 
 ## 加密检测升级
 
-- [x] 分析中锐绿盾加密文件二进制特征（magic: 0x877d1cb7, 512字节头部）
-- [x] 前端加密检测器加入中锐绿盾签名优先检测
-- [x] 服务端加密验证器加入中锐绿盾签名优先检测
+- [x] 分析天锐绿盾加密文件二进制特征（magic: 0x877d1cb7, 512字节头部）
+- [x] 前端加密检测器加入天锐绿盾签名优先检测
+- [x] 服务端加密验证器加入天锐绿盾签名优先检测
 - [x] 新增 MP4/MOV/WebM/RAR 格式的加密检测支持
-- [x] 更新测试用例覆盖中锐绿盾检测场景（175项全部通过）�零件云图”
+- [x] 更新测试用例覆盖天锐绿盾检测场景（175项全部通过）�零件云图”
 
 ## Encryption Detection Upgrade
 
@@ -271,3 +271,12 @@
 - [x] Server encryption validator: added Zhongrui GreenShield signature priority detection
 - [x] Added MP4/MOV/WebM/RAR format encryption detection support
 - [x] Updated test cases covering Zhongrui detection scenarios (175 tests all passed)
+
+## Encryption Detection Flow Fix
+
+- [x] Fix: encrypted files now intercepted before reaching Word/PDF/Excel parsers (no more JSZip error)
+- [x] New "encrypted" viewer mode shows full-page red warning with lock icon, file info, and guidance
+- [x] Sidebar encrypted warning card updated to match new viewerMode-based detection
+- [x] Save button correctly disabled for encrypted files using viewerMode check
+- [x] Corrected encryption software name from "中锐绿盾" to "天锐绿盾" across all files
+- [x] All 175 tests pass

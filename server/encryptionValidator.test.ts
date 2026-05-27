@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { validateFileHeader } from "./encryptionValidator";
 
 describe("Server-side Encryption Validator", () => {
-  describe("中锐绿盾加密签名检测", () => {
+  describe("天锐绿盾加密签名检测", () => {
     it("rejects file with Zhongrui GreenShield magic signature (0x877d1cb7)", () => {
-      // 模拟中锐绿盾加密文件头：前4字节为 0x87 0x7D 0x1C 0xB7
+      // 模拟天锐绿盾加密文件头：前4字节为 0x87 0x7D 0x1C 0xB7
       const zhongruiHeader = Buffer.alloc(32);
       zhongruiHeader[0] = 0x87;
       zhongruiHeader[1] = 0x7D;
@@ -30,7 +30,7 @@ describe("Server-side Encryption Validator", () => {
 
     it("rejects Zhongrui encrypted file even for unknown extensions", () => {
       const zhongruiHeader = Buffer.from([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00]);
-      // 即使是没有专门验证规则的格式，也应该检测出中锐绿盾加密
+      // 即使是没有专门验证规则的格式，也应该检测出天锐绿盾加密
       expect(validateFileHeader(zhongruiHeader, "mp4").isValid).toBe(false);
       expect(validateFileHeader(zhongruiHeader, "rar").isValid).toBe(false);
       expect(validateFileHeader(zhongruiHeader, "txt").isValid).toBe(false);
@@ -40,7 +40,7 @@ describe("Server-side Encryption Validator", () => {
       const zhongruiHeader = Buffer.from([0x87, 0x7D, 0x1C, 0xB7, 0x19, 0x00, 0x02, 0x00]);
       const result = validateFileHeader(zhongruiHeader, "docx");
       expect(result.isValid).toBe(false);
-      expect(result.reason).toContain("中锐绿盾");
+      expect(result.reason).toContain("天锐绿盾");
     });
   });
 

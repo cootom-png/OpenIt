@@ -3,7 +3,7 @@
  * 在文件保存到 S3 前进行二次验证，防止绕过前端检测。
  * 
  * 支持检测：
- * 1. 中锐绿盾加密 — 文件前4字节为固定签名 0x87 0x7D 0x1C 0xB7
+ * 1. 天锐绿盾加密 — 文件前4字节为固定签名 0x87 0x7D 0x1C 0xB7
  * 2. 其他透明加密软件 — 通过检查文件头是否符合原始格式的 magic bytes 来判断
  */
 
@@ -52,14 +52,14 @@ function printableRatio(buffer: Buffer, checkBytes: number = 40): number {
 }
 
 /**
- * 中锐绿盾加密文件签名
+ * 天锐绿盾加密文件签名
  * 加密文件前4字节固定为 0x87 0x7D 0x1C 0xB7
  * 文件结构: 512字节头部（元数据+零填充）+ 加密后的原始文件内容
  */
 const ZHONGRUI_GREENSHIELD_MAGIC = [0x87, 0x7D, 0x1C, 0xB7];
 
 /**
- * 检测是否为中锐绿盾加密文件
+ * 检测是否为天锐绿盾加密文件
  */
 function isZhongruiEncrypted(buffer: Buffer): boolean {
   return startsWith(buffer, ZHONGRUI_GREENSHIELD_MAGIC);
@@ -211,11 +211,11 @@ export function validateFileHeader(fileBuffer: Buffer, fileExt: string): Validat
     return { isValid: true };
   }
 
-  // 优先检测：中锐绿盾加密签名（适用于所有文件格式）
+  // 优先检测：天锐绿盾加密签名（适用于所有文件格式）
   if (isZhongruiEncrypted(fileBuffer)) {
     return {
       isValid: false,
-      reason: "检测到中锐绿盾加密签名，该文件已被加密",
+      reason: "检测到天锐绿盾加密签名，该文件已被加密",
     };
   }
 
