@@ -216,6 +216,25 @@ const FORMAT_SIGNATURES: Record<string, { check: (header: Uint8Array, file: File
     check: (header) => containsText(header, "GIF87a", 0) || containsText(header, "GIF89a", 0),
     label: "GIF 图片 (.gif)",
   },
+  // WebP
+  webp: {
+    check: (header) => containsText(header, "RIFF", 0) && containsText(header, "WEBP", 8),
+    label: "WebP 图片 (.webp)",
+  },
+  // BMP
+  bmp: {
+    check: (header) => startsWith(header, [0x42, 0x4D]),
+    label: "BMP 图片 (.bmp)",
+  },
+  // TIFF
+  tiff: {
+    check: (header) => startsWith(header, [0x49, 0x49, 0x2A, 0x00]) || startsWith(header, [0x4D, 0x4D, 0x00, 0x2A]),
+    label: "TIFF 图片 (.tiff)",
+  },
+  tif: {
+    check: (header) => startsWith(header, [0x49, 0x49, 0x2A, 0x00]) || startsWith(header, [0x4D, 0x4D, 0x00, 0x2A]),
+    label: "TIFF 图片 (.tif)",
+  },
   // RAR
   rar: {
     check: (header) => startsWith(header, [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07]),
@@ -301,7 +320,7 @@ export const ENCRYPTED_CHECK_EXTENSIONS = [
   "stp", "step", "stl", "obj", "3mf", "igs", "iges",
   "pdf", "dxf", "dwg", "svg", "zip", "rar",
   "mp4", "mov", "webm",
-  "jpg", "jpeg", "jfif", "png", "gif",
+  "jpg", "jpeg", "jfif", "png", "gif", "webp", "bmp", "tiff", "tif",
 ];
 
 /**

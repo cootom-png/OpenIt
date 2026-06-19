@@ -181,6 +181,22 @@ const VALIDATORS: Record<string, (buffer: Buffer) => ValidationResult> = {
     isValid: containsText(buf.subarray(0, 10), "GIF87a", 0) || containsText(buf.subarray(0, 10), "GIF89a", 0),
     reason: "GIF 文件头异常，可能已被加密",
   }),
+  webp: (buf) => ({
+    isValid: containsText(buf.subarray(0, 4), "RIFF", 0) && buf.length >= 12 && containsText(buf.subarray(8, 12), "WEBP", 0),
+    reason: "WebP 文件头异常，可能已被加密",
+  }),
+  bmp: (buf) => ({
+    isValid: startsWith(buf, [0x42, 0x4D]),
+    reason: "BMP 文件头异常，可能已被加密",
+  }),
+  tiff: (buf) => ({
+    isValid: startsWith(buf, [0x49, 0x49, 0x2A, 0x00]) || startsWith(buf, [0x4D, 0x4D, 0x00, 0x2A]),
+    reason: "TIFF 文件头异常，可能已被加密",
+  }),
+  tif: (buf) => ({
+    isValid: startsWith(buf, [0x49, 0x49, 0x2A, 0x00]) || startsWith(buf, [0x4D, 0x4D, 0x00, 0x2A]),
+    reason: "TIFF 文件头异常，可能已被加密",
+  }),
   // RAR
   rar: (buf) => ({
     isValid: startsWith(buf, [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07]),

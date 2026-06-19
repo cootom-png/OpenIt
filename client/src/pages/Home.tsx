@@ -194,7 +194,7 @@ type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
 const SUPPORTED_2D_DWG = ["dwg"];
-const SUPPORTED_IMAGE = ["jpg", "jpeg", "jfif", "png", "gif", "svg"];
+const SUPPORTED_IMAGE = ["jpg", "jpeg", "jfif", "png", "gif", "svg", "webp", "bmp", "tiff", "tif"];
 const SUPPORTED_VIDEO = ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"];
 const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];
@@ -997,9 +997,13 @@ export default function Home() {
                           图片:
                         </span>
                         <Badge variant="outline">.JPG</Badge>
+                        <Badge variant="outline">.JFIF</Badge>
                         <Badge variant="outline">.PNG</Badge>
                         <Badge variant="outline">.GIF</Badge>
                         <Badge variant="outline">.SVG</Badge>
+                        <Badge variant="outline">.WebP</Badge>
+                        <Badge variant="outline">.BMP</Badge>
+                        <Badge variant="outline">.TIFF</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
                         <span className="text-xs text-muted-foreground font-medium">
