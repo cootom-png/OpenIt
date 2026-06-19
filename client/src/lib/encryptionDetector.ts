@@ -206,6 +206,11 @@ const FORMAT_SIGNATURES: Record<string, { check: (header: Uint8Array, file: File
     check: (header) => startsWith(header, [0xFF, 0xD8, 0xFF]),
     label: "JPEG 图片 (.jpeg)",
   },
+  // JFIF (JPEG variant)
+  jfif: {
+    check: (header) => startsWith(header, [0xFF, 0xD8, 0xFF]),
+    label: "JFIF 图片 (.jfif)",
+  },
   // GIF
   gif: {
     check: (header) => containsText(header, "GIF87a", 0) || containsText(header, "GIF89a", 0),
@@ -296,7 +301,7 @@ export const ENCRYPTED_CHECK_EXTENSIONS = [
   "stp", "step", "stl", "obj", "3mf", "igs", "iges",
   "pdf", "dxf", "dwg", "svg", "zip", "rar",
   "mp4", "mov", "webm",
-  "jpg", "jpeg", "png", "gif",
+  "jpg", "jpeg", "jfif", "png", "gif",
 ];
 
 /**

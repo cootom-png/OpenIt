@@ -173,6 +173,10 @@ const VALIDATORS: Record<string, (buffer: Buffer) => ValidationResult> = {
     isValid: startsWith(buf, [0xFF, 0xD8, 0xFF]),
     reason: "JPEG 文件头异常，可能已被加密",
   }),
+  jfif: (buf) => ({
+    isValid: startsWith(buf, [0xFF, 0xD8, 0xFF]),
+    reason: "JFIF 文件头异常，可能已被加密",
+  }),
   gif: (buf) => ({
     isValid: containsText(buf.subarray(0, 10), "GIF87a", 0) || containsText(buf.subarray(0, 10), "GIF89a", 0),
     reason: "GIF 文件头异常，可能已被加密",

@@ -280,3 +280,8 @@
 - [x] Save button correctly disabled for encrypted files using viewerMode check
 - [x] Corrected encryption software name from "中锐绿盾" to "天锐绿盾" across all files
 - [x] All 175 tests pass
+
+## JFIF 图片格式支持
+
+- [x] 添加 .jfif 格式到支持的图片格式列表
+- [x] 添加 .jfif 到加密检测扩展名列表
