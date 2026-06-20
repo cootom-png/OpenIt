@@ -707,7 +707,7 @@ export default function PartsGallery() {
 
       <footer className="border-t mt-12 py-6 bg-muted/30">
         <div className="container flex items-center justify-center">
-          <span className="text-xs text-muted-foreground/60">v1.3.0</span>
+          <span className="text-xs text-muted-foreground/60">v1.4.0</span>
         </div>
       </footer>
     </div>

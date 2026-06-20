@@ -2031,7 +2031,7 @@ export default function Home() {
           >
             管理员登录
           </a>
-          <span className="text-xs text-muted-foreground/60">v1.3.0</span>
+          <span className="text-xs text-muted-foreground/60">v1.4.0</span>
         </div>
       </footer>
     </div>

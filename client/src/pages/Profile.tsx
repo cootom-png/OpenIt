@@ -64,6 +64,8 @@ import { Link, useLocation } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/useMobile";
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -328,6 +330,8 @@ function FavoritesSection() {
 export default function Profile() {
   const { emailUser, isLoggedIn, isLoading: authLoading, isApproved, isPending, isRejected } = useEmailAuth();
   const [, navigate] = useLocation();
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<"files" | "favorites" | "profile">("files");
 
   // Nickname editing
   const [editingNickname, setEditingNickname] = useState(false);
@@ -476,7 +480,50 @@ export default function Profile() {
         </div>
       </header>
 
-      <main className="container py-6 max-w-5xl mx-auto space-y-6 px-4">
+      <main className="container py-6 max-w-6xl mx-auto px-4">
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0 space-y-6">
+
+        {/* Mobile Tab Navigation */}
+        {isMobile && (
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+            <button
+              onClick={() => setActiveTab("files")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                activeTab === "files" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <FileBox className="w-4 h-4" />
+              我的文件
+            </button>
+            <button
+              onClick={() => setActiveTab("favorites")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                activeTab === "favorites" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Heart className="w-4 h-4" />
+              收藏零件
+            </button>
+            <button
+              onClick={() => setActiveTab("profile")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                activeTab === "profile" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <User className="w-4 h-4" />
+              个人信息
+            </button>
+          </div>
+        )}
+
+        {/* Tab: Profile Info */}
+        {activeTab === "profile" && (
+        <>
         {/* Profile Info */}
         <Card>
           <CardHeader className="pb-3">
@@ -666,7 +713,12 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+        </>
+        )}
 
+        {/* Tab: My Files */}
+        {activeTab === "files" && (
+        <>
         {/* Storage Quota */}
         {isApproved && quota && (
           <Card>
@@ -721,9 +773,6 @@ export default function Profile() {
             </CardContent>
           </Card>
         )}
-
-        {/* My Favorites */}
-        {isApproved && <FavoritesSection />}
 
         {/* My Files - Card Layout */}
         {isApproved && (
@@ -1083,11 +1132,69 @@ export default function Profile() {
             )}
           </div>
         )}
+        </>
+        )}
+
+        {/* Tab: Favorites */}
+        {activeTab === "favorites" && (
+          <>
+            {isApproved && <FavoritesSection />}
+          </>
+        )}
+
+          </div>
+
+          {/* Right Sidebar Navigation (Desktop only) */}
+          {!isMobile && (
+            <div className="w-48 shrink-0">
+              <div className="sticky top-20">
+                <nav className="space-y-1">
+                  <button
+                    onClick={() => setActiveTab("files")}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
+                      activeTab === "files"
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <FileBox className="w-4 h-4" />
+                    我的文件
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("favorites")}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
+                      activeTab === "favorites"
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <Heart className="w-4 h-4" />
+                    收藏零件
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("profile")}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
+                      activeTab === "profile"
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <User className="w-4 h-4" />
+                    个人信息
+                  </button>
+                </nav>
+              </div>
+            </div>
+          )}
+        </div>
       </main>
 
       <footer className="border-t mt-12 py-6 bg-muted/30">
         <div className="container flex items-center justify-center">
-          <span className="text-xs text-muted-foreground/60">v1.3.0</span>
+          <span className="text-xs text-muted-foreground/60">v1.4.0</span>
         </div>
       </footer>
     </div>
