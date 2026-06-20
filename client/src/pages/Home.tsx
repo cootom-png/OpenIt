@@ -1372,6 +1372,93 @@ export default function Home() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Image Info - shown below viewer on desktop */}
+            {status === "ready" && viewerMode === "image" && (
+              <Card>
+                <CardContent className="py-3">
+                  <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                    {imageInfo && (
+                      <>
+                        <span className="flex items-center gap-1.5">
+                          <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-muted-foreground">分辨率:</span>
+                          <span className="font-medium">{imageInfo.width} × {imageInfo.height}</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">像素:</span>
+                          <span className="font-medium">{(imageInfo.width * imageInfo.height).toLocaleString()}</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">宽高比:</span>
+                          <span className="font-medium">{(imageInfo.width / imageInfo.height).toFixed(2)}</span>
+                        </span>
+                      </>
+                    )}
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">透明通道:</span>
+                      <span className="font-medium">{fileExt === "png" || fileExt === "gif" ? "支持" : "不支持"}</span>
+                    </span>
+                    {fileExt === "gif" && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">动画:</span>
+                        <span className="font-medium">支持</span>
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* CAD DXF Info - shown below viewer on desktop */}
+            {status === "ready" && viewerMode === "2d-dxf" && (
+              <Card>
+                <CardContent className="py-3">
+                  <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <span className="flex items-center gap-1.5">
+                      <FileType className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">渲染引擎:</span>
+                      <span className="font-medium">DXF Viewer (WebGL)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">视图类型:</span>
+                      <span className="font-medium">2D 正交投影</span>
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* CAD DWG Info - shown below viewer on desktop */}
+            {status === "ready" && viewerMode === "2d-dwg" && (
+              <Card>
+                <CardContent className="py-3">
+                  <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <span className="flex items-center gap-1.5">
+                      <FileType className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">渲染引擎:</span>
+                      <span className="font-medium">CAD Viewer (WebGL)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">视图:</span>
+                      <span className="font-medium">2D WebGL</span>
+                    </span>
+                    {dwgInfo && (
+                      <>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">实体:</span>
+                          <span className="font-medium">{dwgInfo.entityCount.toLocaleString()}</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">图层:</span>
+                          <span className="font-medium">{dwgInfo.layerCount}</span>
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right: Info Panel */}
@@ -1490,11 +1577,10 @@ export default function Home() {
             {/* Action Buttons - prioritized position */}
             {status === "ready" && (
               <Button
-                variant="outline"
-                className="w-full"
+                className="w-full gap-2"
                 onClick={triggerFileInput}
               >
-                <Upload className="w-4 h-4 mr-2" />
+                <Upload className="w-4 h-4" />
                 上传其他文件
               </Button>
             )}
@@ -1631,121 +1717,7 @@ export default function Home() {
 
 
 
-            {/* DXF Info (2D DXF only) */}
-            {status === "ready" && viewerMode === "2d-dxf" && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <FileType className="w-4 h-4" />
-                    图纸信息
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">渲染引擎</span>
-                    <span className="font-medium">DXF Viewer (WebGL)</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">视图类型</span>
-                    <span className="font-medium">2D 正交投影</span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
-            {/* DWG Info (2D DWG only) */}
-            {status === "ready" && viewerMode === "2d-dwg" && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <FileType className="w-4 h-4" />
-                    图纸信息
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">渲染引擎</span>
-                    <span className="font-medium">CAD Viewer (WebGL)</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">视图类型</span>
-                    <span className="font-medium">2D WebGL 渲染</span>
-                  </div>
-                  {dwgInfo && (
-                    <>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">实体数量</span>
-                        <span className="font-medium">
-                          {dwgInfo.entityCount.toLocaleString()}
-                        </span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">图层数量</span>
-                        <span className="font-medium">{dwgInfo.layerCount}</span>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Image Info */}
-            {status === "ready" && viewerMode === "image" && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Info className="w-4 h-4" />
-                    图片信息
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {imageInfo && (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">分辨率</span>
-                        <span className="font-medium">
-                          {imageInfo.width} × {imageInfo.height}
-                        </span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">像素总数</span>
-                        <span className="font-medium">
-                          {(imageInfo.width * imageInfo.height).toLocaleString()}
-                        </span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">宽高比</span>
-                        <span className="font-medium">
-                          {(imageInfo.width / imageInfo.height).toFixed(2)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  <Separator />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">透明通道</span>
-                    <span className="font-medium">
-                      {fileExt === "png" || fileExt === "gif" ? "支持" : "不支持"}
-                    </span>
-                  </div>
-                  {fileExt === "gif" && (
-                    <>
-                      <Separator />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">动画</span>
-                        <span className="font-medium">支持</span>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {/* PDF Info */}
             {status === "ready" && viewerMode === "pdf" && (
