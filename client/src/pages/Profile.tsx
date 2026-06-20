@@ -46,6 +46,8 @@ import {
   Building2,
   Phone,
   KeyRound,
+  Heart,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -98,6 +100,155 @@ const categoryColors: Record<string, string> = {
   video: "from-orange-500/20 to-orange-600/10 text-orange-600",
   document: "from-gray-500/20 to-gray-600/10 text-gray-600",
 };
+
+// ─── Favorites Section Component ───
+function FavoritesSection() {
+  const [favPage, setFavPage] = useState(1);
+  const favPageSize = 12;
+  const favInput = useMemo(() => ({ page: favPage, pageSize: favPageSize }), [favPage]);
+  const { data: favData, isLoading: favLoading } = trpc.favorites.myList.useQuery(favInput);
+  const utils = trpc.useUtils();
+  const removeFav = trpc.favorites.toggle.useMutation({
+    onSuccess: () => {
+      utils.favorites.myList.invalidate();
+      utils.favorites.myIds.invalidate();
+    },
+  });
+
+  const favTotalPages = Math.ceil((favData?.total || 0) / favPageSize);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Heart className="w-4 h-4 text-red-500" />
+          收藏零件
+          {favData && (
+            <Badge variant="secondary" className="text-xs ml-1">
+              {favData.total} 个
+            </Badge>
+          )}
+        </h2>
+        <Link href="/parts">
+          <Button variant="ghost" size="sm" className="text-xs gap-1">
+            <Box className="w-3.5 h-3.5" />
+            浏览零件库
+          </Button>
+        </Link>
+      </div>
+
+      {favLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!favLoading && favData && favData.records.length > 0 ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {favData.records.map((fav) => {
+              const file = fav.file;
+              if (!file) return null;
+              return (
+                <Card key={fav.id} className="overflow-hidden hover:shadow-md transition-shadow group">
+                  <div className="relative h-36 bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center overflow-hidden">
+                    {file.thumbnailUrl ? (
+                      <img
+                        src={file.thumbnailUrl}
+                        alt={file.fileName}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 opacity-60">
+                        <Box className="w-5 h-5" />
+                        <span className="text-xs font-medium uppercase">{file.fileExt}</span>
+                      </div>
+                    )}
+                    <Badge
+                      variant="secondary"
+                      className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 bg-white/90 text-gray-700 shadow-sm"
+                    >
+                      {file.fileExt.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <CardContent className="p-3 space-y-2">
+                    <p className="text-sm font-medium truncate" title={file.fileName}>
+                      {file.fileName}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{formatFileSize(file.fileSize)}</span>
+                      <span>{formatDate(fav.createdAt)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Link href="/parts">
+                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                          <Eye className="w-3 h-3" />
+                          查看
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => removeFav.mutate({ fileId: fav.fileId })}
+                        disabled={removeFav.isPending}
+                      >
+                        <Heart className="w-3 h-3 fill-current" />
+                        取消收藏
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {favTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={favPage <= 1}
+                onClick={() => setFavPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground px-3">
+                {favPage} / {favTotalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={favPage >= favTotalPages}
+                onClick={() => setFavPage((p) => p + 1)}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+        </>
+      ) : !favLoading ? (
+        <Card>
+          <CardContent className="py-8">
+            <div className="text-center text-muted-foreground">
+              <Heart className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-medium">暂无收藏</p>
+              <p className="text-xs mt-1">在 3D 零件库中点击爱心图标即可收藏零件</p>
+              <Link href="/parts">
+                <Button variant="outline" size="sm" className="mt-4 gap-1">
+                  <Box className="w-3.5 h-3.5" />
+                  去零件库
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
 
 export default function Profile() {
   const { emailUser, isLoggedIn, isLoading: authLoading, isApproved, isPending, isRejected } = useEmailAuth();
@@ -488,6 +639,9 @@ export default function Profile() {
             </CardContent>
           </Card>
         )}
+
+        {/* My Favorites */}
+        {isApproved && <FavoritesSection />}
 
         {/* My Files - Card Layout */}
         {isApproved && (

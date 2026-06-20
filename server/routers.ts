@@ -7,6 +7,7 @@ import {
   recordFileUpload, updateFileUploadPreview, getFileUploads, getFileUploadStats,
   listEmailUsers, updateEmailUserStatus, updateEmailUserRole, deleteEmailUser, getEmailUserStats,
   getEmailUserById,
+  addFavorite, removeFavorite, getUserFavorites, getUserFavoriteFileIds,
 } from "./db";
 import { registerEmailUser, loginEmailUser, createEmailSessionToken, EMAIL_COOKIE_NAME, validatePasswordStrength, changePassword, resetPasswordWithCode } from "./emailAuth";
 import {
@@ -413,6 +414,46 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "文件不存在" });
         }
         return { s3Url: file[0].s3Url, fileName: file[0].fileName, fileExt: file[0].fileExt };
+      }),
+  }),
+
+  // ─── Favorites ───
+  favorites: router({
+    /** Toggle favorite on a 3D part (requires approved email user) */
+    toggle: publicProcedure
+      .input(z.object({ fileId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        if (ctx.emailUser.status !== "approved") throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
+        // Check if already favorited
+        const existingIds = await getUserFavoriteFileIds(ctx.emailUser.id);
+        const isFavorited = existingIds.includes(input.fileId);
+        if (isFavorited) {
+          await removeFavorite(ctx.emailUser.id, input.fileId);
+          return { favorited: false };
+        } else {
+          await addFavorite(ctx.emailUser.id, input.fileId);
+          return { favorited: true };
+        }
+      }),
+
+    /** Get user's favorite file IDs (for UI state) */
+    myIds: publicProcedure
+      .query(async ({ ctx }) => {
+        if (!ctx.emailUser) return { ids: [] };
+        const ids = await getUserFavoriteFileIds(ctx.emailUser.id);
+        return { ids };
+      }),
+
+    /** Get user's favorite parts list with file details */
+    myList: publicProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      }))
+      .query(async ({ input, ctx }) => {
+        if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
+        return getUserFavorites(ctx.emailUser.id, input);
       }),
   }),
 

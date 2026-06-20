@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Maximize2,
   Minimize2,
+  Heart,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -136,6 +137,16 @@ export default function PartsGallery() {
 
   // Submit download request mutation
   const submitRequest = trpc.partsGallery.requestDownload.useMutation();
+
+  // Favorites
+  const { data: favData } = trpc.favorites.myIds.useQuery(undefined, { enabled: isLoggedIn && isApproved });
+  const favIds = useMemo(() => new Set(favData?.ids || []), [favData?.ids]);
+  const utils = trpc.useUtils();
+  const toggleFavorite = trpc.favorites.toggle.useMutation({
+    onSuccess: () => {
+      utils.favorites.myIds.invalidate();
+    },
+  });
 
   const totalPages = Math.ceil((data?.total || 0) / pageSize);
 
@@ -393,19 +404,37 @@ export default function PartsGallery() {
                     <User className="w-3 h-3 mr-1 flex-shrink-0" />
                     <span className="truncate">{part.ownerNickname}</span>
                   </div>
-                  {/* Request Download Button */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-7 text-xs gap-1 mt-1 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRequestDownload(part.id, part.fileName);
-                    }}
-                  >
-                    <Download className="w-3 h-3" />
-                    申请下载
-                  </Button>
+                  {/* Action buttons row */}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {/* Favorite Button */}
+                    {isApproved && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-7 w-7 p-0 flex-shrink-0 ${favIds.has(part.id) ? "text-red-500 hover:text-red-600" : "text-muted-foreground hover:text-red-500"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite.mutate({ fileId: part.id });
+                        }}
+                        title={favIds.has(part.id) ? "取消收藏" : "收藏"}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${favIds.has(part.id) ? "fill-current" : ""}`} />
+                      </Button>
+                    )}
+                    {/* Request Download Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs gap-1 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRequestDownload(part.id, part.fileName);
+                      }}
+                    >
+                      <Download className="w-3 h-3" />
+                      申请下载
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

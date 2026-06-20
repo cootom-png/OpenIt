@@ -1,6 +1,6 @@
-import { eq, desc, sql, count, and, like, or } from "drizzle-orm";
+import { eq, desc, sql, count, and, like, or, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, InsertFileUpload, users, fileUploads, emailUsers, InsertEmailUser, EmailUser, passwordResetTokens } from "../drizzle/schema";
+import { InsertUser, InsertFileUpload, users, fileUploads, emailUsers, InsertEmailUser, EmailUser, passwordResetTokens, favorites, userFiles } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -327,6 +327,56 @@ export async function getFileUploads(opts: { page: number; pageSize: number; cat
   ]);
 
   return { records, total: totalResult[0]?.count || 0 };
+}
+
+// ─── Favorites ───
+
+export async function addFavorite(userId: number, fileId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Use INSERT IGNORE to avoid duplicate key error
+  await db.insert(favorites).values({ userId, fileId }).onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+}
+
+export async function removeFavorite(userId: number, fileId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(favorites).where(and(eq(favorites.userId, userId), eq(favorites.fileId, fileId)));
+}
+
+export async function getUserFavorites(userId: number, opts: { page: number; pageSize: number }) {
+  const db = await getDb();
+  if (!db) return { records: [], total: 0 };
+
+  const whereClause = eq(favorites.userId, userId);
+
+  const [favRecords, totalResult] = await Promise.all([
+    db.select().from(favorites).where(whereClause).orderBy(desc(favorites.createdAt)).limit(opts.pageSize).offset((opts.page - 1) * opts.pageSize),
+    db.select({ count: count() }).from(favorites).where(whereClause),
+  ]);
+
+  if (favRecords.length === 0) return { records: [], total: totalResult[0]?.count || 0 };
+
+  // Fetch the associated file details
+  const fileIds = favRecords.map(f => f.fileId);
+  const files = await db.select().from(userFiles).where(inArray(userFiles.id, fileIds));
+  const fileMap = new Map(files.map(f => [f.id, f]));
+
+  const records = favRecords.map(fav => ({
+    id: fav.id,
+    fileId: fav.fileId,
+    createdAt: fav.createdAt,
+    file: fileMap.get(fav.fileId) || null,
+  }));
+
+  return { records, total: totalResult[0]?.count || 0 };
+}
+
+export async function getUserFavoriteFileIds(userId: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({ fileId: favorites.fileId }).from(favorites).where(eq(favorites.userId, userId));
+  return result.map(r => r.fileId);
 }
 
 export async function getFileUploadStats() {

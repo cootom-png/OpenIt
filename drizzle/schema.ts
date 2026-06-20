@@ -168,3 +168,19 @@ export const downloadRequests = mysqlTable("download_requests", {
 
 export type DownloadRequest = typeof downloadRequests.$inferSelect;
 export type InsertDownloadRequest = typeof downloadRequests.$inferInsert;
+
+/**
+ * Favorites — registered users can bookmark/favorite 3D parts from the gallery.
+ * Each record represents one user favoriting one file.
+ */
+export const favorites = mysqlTable("favorites", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The user who favorited (references emailUsers.id) */
+  userId: int("userId").notNull(),
+  /** The file being favorited (references userFiles.id) */
+  fileId: int("fileId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Favorite = typeof favorites.$inferSelect;
+export type InsertFavorite = typeof favorites.$inferInsert;
