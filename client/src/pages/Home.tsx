@@ -1053,7 +1053,7 @@ export default function Home() {
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
                       <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-primary font-medium">
                           3D:
                         </span>
                         <Badge variant="outline">.STP</Badge>
@@ -1064,14 +1064,14 @@ export default function Home() {
                         <Badge variant="outline">.IGS</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-primary font-medium">
                           CAD:
                         </span>
                         <Badge variant="outline">.DXF</Badge>
                         <Badge variant="outline">.DWG</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-primary font-medium">
                           图片:
                         </span>
                         <Badge variant="outline">.JPG</Badge>
@@ -1084,7 +1084,7 @@ export default function Home() {
                         <Badge variant="outline">.TIFF</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-primary font-medium">
                           视频:
                         </span>
                         <Badge variant="outline">.MP4</Badge>
@@ -1092,7 +1092,7 @@ export default function Home() {
                         <Badge variant="outline">.WebM</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-primary font-medium">
                           文档:
                         </span>
                         <Badge variant="outline">.PDF</Badge>
@@ -1101,7 +1101,7 @@ export default function Home() {
                         <Badge variant="outline">.CSV</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-primary font-medium">
                           压缩包:
                         </span>
                         <Badge variant="outline">.ZIP</Badge>
