@@ -254,6 +254,8 @@ export const appRouter = router({
       .input(z.object({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(50).default(20),
+        search: z.string().optional(),
+        category: z.string().optional(),
       }))
       .query(async ({ input, ctx }) => {
         if (!ctx.emailUser) return { records: [], total: 0 };
@@ -450,6 +452,8 @@ export const appRouter = router({
       .input(z.object({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(50).default(20),
+        search: z.string().optional(),
+        category: z.string().optional(),
       }))
       .query(async ({ input, ctx }) => {
         if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });

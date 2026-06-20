@@ -48,6 +48,7 @@ import {
   KeyRound,
   Heart,
   Loader2,
+  Search,
 } from "lucide-react";
 import {
   Dialog,
@@ -105,7 +106,14 @@ const categoryColors: Record<string, string> = {
 function FavoritesSection() {
   const [favPage, setFavPage] = useState(1);
   const favPageSize = 12;
-  const favInput = useMemo(() => ({ page: favPage, pageSize: favPageSize }), [favPage]);
+  const [favSearch, setFavSearch] = useState("");
+  const [favSearchQuery, setFavSearchQuery] = useState("");
+  const [favCategory, setFavCategory] = useState<string>("");
+  const favInput = useMemo(() => ({
+    page: favPage, pageSize: favPageSize,
+    search: favSearchQuery || undefined,
+    category: favCategory || undefined,
+  }), [favPage, favSearchQuery, favCategory]);
   const { data: favData, isLoading: favLoading } = trpc.favorites.myList.useQuery(favInput);
   const utils = trpc.useUtils();
   const removeFav = trpc.favorites.toggle.useMutation({
@@ -135,6 +143,71 @@ function FavoritesSection() {
             浏览零件库
           </Button>
         </Link>
+      </div>
+
+      {/* Filter & Search */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <Input
+            placeholder="搜索收藏..."
+            value={favSearch}
+            onChange={(e) => setFavSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { setFavSearchQuery(favSearch); setFavPage(1); } }}
+            className="h-8 w-40 text-xs"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2"
+            onClick={() => { setFavSearchQuery(favSearch); setFavPage(1); }}
+          >
+            <Search className="w-3.5 h-3.5" />
+          </Button>
+          {favSearchQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs px-2"
+              onClick={() => { setFavSearch(""); setFavSearchQuery(""); setFavPage(1); }}
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={favCategory === "" ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs px-2.5"
+            onClick={() => { setFavCategory(""); setFavPage(1); }}
+          >
+            全部
+          </Button>
+          <Button
+            variant={favCategory === "image" ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs px-2.5"
+            onClick={() => { setFavCategory("image"); setFavPage(1); }}
+          >
+            图片
+          </Button>
+          <Button
+            variant={favCategory === "cad" ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs px-2.5"
+            onClick={() => { setFavCategory("cad"); setFavPage(1); }}
+          >
+            CAD
+          </Button>
+          <Button
+            variant={favCategory === "3d" ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs px-2.5"
+            onClick={() => { setFavCategory("3d"); setFavPage(1); }}
+          >
+            3D
+          </Button>
+        </div>
       </div>
 
       {favLoading && (
@@ -270,7 +343,14 @@ export default function Profile() {
   // File list
   const [page, setPage] = useState(1);
   const pageSize = 12;
-  const queryInput = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const [fileSearch, setFileSearch] = useState("");
+  const [fileSearchQuery, setFileSearchQuery] = useState("");
+  const [fileCategory, setFileCategory] = useState<string>("");
+  const queryInput = useMemo(() => ({
+    page, pageSize,
+    search: fileSearchQuery || undefined,
+    category: fileCategory || undefined,
+  }), [page, pageSize, fileSearchQuery, fileCategory]);
   const { data: filesData, refetch: refetchFiles } = trpc.userFiles.list.useQuery(queryInput, { enabled: isLoggedIn });
   const { data: quota, refetch: refetchQuota } = trpc.userFiles.quota.useQuery(undefined, { enabled: isLoggedIn });
 
@@ -658,6 +738,87 @@ export default function Profile() {
               </h2>
             </div>
 
+            {/* Filter & Search */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  placeholder="搜索文件名..."
+                  value={fileSearch}
+                  onChange={(e) => setFileSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { setFileSearchQuery(fileSearch); setPage(1); } }}
+                  className="h-8 w-40 text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs px-2"
+                  onClick={() => { setFileSearchQuery(fileSearch); setPage(1); }}
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </Button>
+                {fileSearchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs px-2"
+                    onClick={() => { setFileSearch(""); setFileSearchQuery(""); setPage(1); }}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={fileCategory === "" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => { setFileCategory(""); setPage(1); }}
+                >
+                  全部
+                </Button>
+                <Button
+                  variant={fileCategory === "image" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => { setFileCategory("image"); setPage(1); }}
+                >
+                  图片
+                </Button>
+                <Button
+                  variant={fileCategory === "cad" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => { setFileCategory("cad"); setPage(1); }}
+                >
+                  CAD
+                </Button>
+                <Button
+                  variant={fileCategory === "3d" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => { setFileCategory("3d"); setPage(1); }}
+                >
+                  3D
+                </Button>
+                <Button
+                  variant={fileCategory === "document" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => { setFileCategory("document"); setPage(1); }}
+                >
+                  文档
+                </Button>
+                <Button
+                  variant={fileCategory === "video" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => { setFileCategory("video"); setPage(1); }}
+                >
+                  视频
+                </Button>
+              </div>
+            </div>
+
             {filesData && filesData.records.length > 0 ? (
               <>
                 {/* Card Grid */}
@@ -921,6 +1082,12 @@ export default function Profile() {
           </div>
         )}
       </main>
+
+      <footer className="border-t mt-12 py-6 bg-muted/30">
+        <div className="container flex items-center justify-center">
+          <span className="text-xs text-muted-foreground/60">v1.2.0</span>
+        </div>
+      </footer>
     </div>
   );
 }

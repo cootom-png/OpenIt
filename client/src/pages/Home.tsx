@@ -1983,13 +1983,14 @@ export default function Home() {
 
       {/* Footer with admin login */}
       <footer className="border-t mt-12 py-6 bg-muted/30">
-        <div className="container flex items-center justify-center">
+        <div className="container flex items-center justify-center gap-4">
           <a
             href="/admin-login"
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             管理员登录
           </a>
+          <span className="text-xs text-muted-foreground/60">v1.2.0</span>
         </div>
       </footer>
     </div>

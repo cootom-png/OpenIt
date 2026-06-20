@@ -118,22 +118,32 @@ export async function uploadUserFile(params: {
 
 // ─── User File Operations ───
 
-export async function listUserFiles(userId: number, opts: { page: number; pageSize: number }) {
+export async function listUserFiles(userId: number, opts: { page: number; pageSize: number; search?: string; category?: string }) {
   const db = await getDb();
   if (!db) return { records: [], total: 0 };
+
+  const conditions: any[] = [eq(userFiles.userId, userId)];
+  if (opts.search) {
+    conditions.push(like(userFiles.fileName, `%${opts.search}%`));
+  }
+  if (opts.category) {
+    conditions.push(eq(userFiles.category, opts.category));
+  }
+
+  const whereClause = and(...conditions);
 
   const [records, totalResult] = await Promise.all([
     db
       .select()
       .from(userFiles)
-      .where(eq(userFiles.userId, userId))
+      .where(whereClause)
       .orderBy(desc(userFiles.createdAt))
       .limit(opts.pageSize)
       .offset((opts.page - 1) * opts.pageSize),
     db
       .select({ count: count() })
       .from(userFiles)
-      .where(eq(userFiles.userId, userId)),
+      .where(whereClause),
   ]);
 
   return { records, total: totalResult[0]?.count || 0 };

@@ -344,10 +344,55 @@ export async function removeFavorite(userId: number, fileId: number): Promise<vo
   await db.delete(favorites).where(and(eq(favorites.userId, userId), eq(favorites.fileId, fileId)));
 }
 
-export async function getUserFavorites(userId: number, opts: { page: number; pageSize: number }) {
+export async function getUserFavorites(userId: number, opts: { page: number; pageSize: number; search?: string; category?: string }) {
   const db = await getDb();
   if (!db) return { records: [], total: 0 };
 
+  // If search or category filter is provided, we need to join with userFiles
+  if (opts.search || opts.category) {
+    const conditions: any[] = [eq(favorites.userId, userId)];
+    if (opts.search) {
+      conditions.push(like(userFiles.fileName, `%${opts.search}%`));
+    }
+    if (opts.category) {
+      conditions.push(eq(userFiles.category, opts.category));
+    }
+    const joinWhere = and(...conditions);
+
+    const [joinRecords, totalResult] = await Promise.all([
+      db.select({
+        id: favorites.id,
+        fileId: favorites.fileId,
+        createdAt: favorites.createdAt,
+        userId: favorites.userId,
+      }).from(favorites)
+        .innerJoin(userFiles, eq(favorites.fileId, userFiles.id))
+        .where(joinWhere)
+        .orderBy(desc(favorites.createdAt))
+        .limit(opts.pageSize)
+        .offset((opts.page - 1) * opts.pageSize),
+      db.select({ count: count() }).from(favorites)
+        .innerJoin(userFiles, eq(favorites.fileId, userFiles.id))
+        .where(joinWhere),
+    ]);
+
+    if (joinRecords.length === 0) return { records: [], total: totalResult[0]?.count || 0 };
+
+    const fileIds = joinRecords.map(f => f.fileId);
+    const files = await db.select().from(userFiles).where(inArray(userFiles.id, fileIds));
+    const fileMap = new Map(files.map(f => [f.id, f]));
+
+    const records = joinRecords.map(fav => ({
+      id: fav.id,
+      fileId: fav.fileId,
+      createdAt: fav.createdAt,
+      file: fileMap.get(fav.fileId) || null,
+    }));
+
+    return { records, total: totalResult[0]?.count || 0 };
+  }
+
+  // No filter - simple query
   const whereClause = eq(favorites.userId, userId);
 
   const [favRecords, totalResult] = await Promise.all([
