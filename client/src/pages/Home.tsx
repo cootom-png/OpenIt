@@ -44,6 +44,7 @@ import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import ArchiveViewer from "@/components/ArchiveViewer";
+import CsvViewer from "@/components/CsvViewer";
 import { parseFile, getFileExtension, type MeshQuality, QUALITY_PRESETS } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
@@ -144,6 +145,14 @@ async function loadRemoteFile(
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
+    } else if (SUPPORTED_CSV.includes(ext)) {
+      s.setViewerMode("csv");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      s.setFileSize(blob.size);
+      s.setDocFile(new File([blob], name));
+      s.setStatus("ready");
     } else if (SUPPORTED_ARCHIVE.includes(ext)) {
       s.setViewerMode("archive");
       s.setStatus("parsing");
@@ -192,7 +201,7 @@ async function loadRemoteFile(
 }
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "archive" | "svg" | "encrypted" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "svg" | "encrypted" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
@@ -202,8 +211,9 @@ const SUPPORTED_VIDEO = ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"];
 const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
-const SUPPORTED_ARCHIVE = ["zip", "rar"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_ARCHIVE];
+const SUPPORTED_ARCHIVE = ["zip", "rar", "7z"];
+const SUPPORTED_CSV = ["csv"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE];
 // On iOS Safari, the accept attribute greys out files with unrecognized MIME types
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
 // the extension in handleFile() instead.
@@ -550,7 +560,7 @@ export default function Home() {
       if (SUPPORTED_2D_DXF.includes(ext) || SUPPORTED_2D_DWG.includes(ext)) return "cad";
       if (SUPPORTED_IMAGE.includes(ext)) return "image";
       if (SUPPORTED_VIDEO.includes(ext)) return "video";
-      if (SUPPORTED_PDF.includes(ext) || SUPPORTED_WORD.includes(ext) || SUPPORTED_EXCEL.includes(ext)) return "document";
+      if (SUPPORTED_PDF.includes(ext) || SUPPORTED_WORD.includes(ext) || SUPPORTED_EXCEL.includes(ext) || SUPPORTED_CSV.includes(ext)) return "document";
       if (SUPPORTED_ARCHIVE.includes(ext)) return "archive";
       return "unknown";
     };
@@ -691,6 +701,20 @@ export default function Home() {
       } catch (err: any) {
         setStatus("error");
         setErrorMsg(err.message || "加载 Excel 文件时发生错误");
+      }
+    } else if (SUPPORTED_CSV.includes(ext)) {
+      // CSV file - use CsvViewer
+      setViewerMode("csv");
+      setStatus("parsing");
+      try {
+        setDocFile(file);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载 CSV 文件时发生错误");
       }
     } else if (SUPPORTED_ARCHIVE.includes(ext)) {
       // Archive file - use ArchiveViewer
@@ -1069,6 +1093,7 @@ export default function Home() {
                         <Badge variant="outline">.PDF</Badge>
                         <Badge variant="outline">.DOCX</Badge>
                         <Badge variant="outline">.XLSX</Badge>
+                        <Badge variant="outline">.CSV</Badge>
                       </div>
                       <div className="flex gap-1.5 items-center">
                         <span className="text-xs text-muted-foreground font-medium">
@@ -1076,6 +1101,7 @@ export default function Home() {
                         </span>
                         <Badge variant="outline">.ZIP</Badge>
                         <Badge variant="outline">.RAR</Badge>
+                        <Badge variant="outline">.7Z</Badge>
                       </div>
                     </div>
                     {status === "error" && (
@@ -1116,6 +1142,15 @@ export default function Home() {
                   <ExcelViewer
                     file={docFile}
                     onInfo={handleExcelInfo}
+                  />
+                ) : viewerMode === "csv" && docFile ? (
+                  <CsvViewer
+                    file={docFile}
+                    onInfo={(info: { rows: number; cols: number; headers: string[] }) => {
+                      setMeshCount(info.rows);
+                      setVertexCount(info.cols);
+                      setParseTime(0);
+                    }}
                   />
                 ) : viewerMode === "archive" && docFile ? (
                   <ArchiveViewer

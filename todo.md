@@ -357,3 +357,8 @@
 ## BUG修复：PDF预览首页空白
 
 - [x] PDF文件预览时第一页显示空白（原因：加载完成后容器尚未布局，clientWidth/Height为0导致fitScale无效；修复：添加containerReady状态+ResizeObserver等待容器尺寸就绪后再渲染）
+
+## 新增格式支持：CSV 和 7z
+
+- [x] 添加 .csv 文件预览支持（BOM表格，表格形式展示，支持搜索/分页/缩放）
+- [x] 添加 .7z 压缩包支持（服务端 libarchive-wasm 解析，文件列表展示）

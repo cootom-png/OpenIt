@@ -47,7 +47,7 @@ async function startServer() {
         return res.status(400).json({ error: "Missing buffer or filename" });
       }
       const ext = filename.split(".").pop()?.toLowerCase() || "";
-      if (ext !== "rar" && ext !== "zip") {
+      if (ext !== "rar" && ext !== "zip" && ext !== "7z") {
         return res.status(400).json({ error: "Unsupported format" });
       }
       const { ArchiveReader, libarchiveWasm } = await import("libarchive-wasm");

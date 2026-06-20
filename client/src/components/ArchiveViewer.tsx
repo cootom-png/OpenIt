@@ -243,7 +243,7 @@ export default function ArchiveViewer({ file, onInfo }: ArchiveViewerProps) {
 
         if (ext === "zip") {
           result = await parseZipFile(file);
-        } else if (ext === "rar") {
+        } else if (ext === "rar" || ext === "7z") {
           result = await parseRarFile(file);
         } else {
           throw new Error(`不支持的压缩格式: .${ext}`);
