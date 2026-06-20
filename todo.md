@@ -353,3 +353,7 @@
 - [x] 更新所有网页 head 描述（title/meta description）为"零件云图-在线预览、分享CAD和3D文件"
 - [x] 更新CAD操作说明：按住滚轮拖动平移（DwgViewer提示、Home.tsx提示、HelpGuide操作说明）
 - [x] 更新版本号为 v1.3.0（首页、零件库、个人中心）
+
+## BUG修复：PDF预览首页空白
+
+- [x] PDF文件预览时第一页显示空白（原因：加载完成后容器尚未布局，clientWidth/Height为0导致fitScale无效；修复：添加containerReady状态+ResizeObserver等待容器尺寸就绪后再渲染）

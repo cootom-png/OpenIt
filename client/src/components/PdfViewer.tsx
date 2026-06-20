@@ -35,6 +35,7 @@ export default function PdfViewer({ file, onInfo }: PdfViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const renderTaskRef = useRef<any>(null);
+  const [containerReady, setContainerReady] = useState(false);
 
   // Load PDF document
   useEffect(() => {
@@ -86,9 +87,54 @@ export default function PdfViewer({ file, onInfo }: PdfViewerProps) {
     };
   }, [file]);
 
+  // Wait for container to have valid dimensions before rendering
+  useEffect(() => {
+    if (loading) {
+      setContainerReady(false);
+      return;
+    }
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Check if container already has dimensions
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      setContainerReady(true);
+      return;
+    }
+
+    // Use ResizeObserver to detect when container gets dimensions
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          setContainerReady(true);
+          ro.disconnect();
+          break;
+        }
+      }
+    });
+    ro.observe(container);
+
+    // Fallback: use requestAnimationFrame
+    let raf: number;
+    const checkDimensions = () => {
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        setContainerReady(true);
+        ro.disconnect();
+      } else {
+        raf = requestAnimationFrame(checkDimensions);
+      }
+    };
+    raf = requestAnimationFrame(checkDimensions);
+
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [loading]);
+
   // Render current page
   useEffect(() => {
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!pdfDoc || !canvasRef.current || !containerReady) return;
 
     let cancelled = false;
     const renderPage = async () => {
@@ -115,6 +161,8 @@ export default function PdfViewer({ file, onInfo }: PdfViewerProps) {
           const scaleX = containerWidth / viewport.width;
           const scaleY = containerHeight / viewport.height;
           fitScale = Math.min(scaleX, scaleY, 2);
+          // Safety check: if dimensions are still invalid, skip render
+          if (fitScale <= 0 || !isFinite(fitScale)) return;
         } else {
           fitScale = scale;
         }
@@ -148,7 +196,7 @@ export default function PdfViewer({ file, onInfo }: PdfViewerProps) {
     return () => {
       cancelled = true;
     };
-  }, [pdfDoc, currentPage, scale, rotation]);
+  }, [pdfDoc, currentPage, scale, rotation, containerReady]);
 
   const zoomIn = useCallback(() => setScale((s) => Math.min(s * 1.25, 5)), []);
   const zoomOut = useCallback(
