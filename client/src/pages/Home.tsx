@@ -1442,6 +1442,148 @@ export default function Home() {
               </Card>
             )}
 
+            {/* Action Buttons - prioritized position */}
+            {status === "ready" && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={triggerFileInput}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                上传其他文件
+              </Button>
+            )}
+
+            {/* Save & Share Actions (logged-in approved users) */}
+            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode !== "encrypted" && (
+              <div className="space-y-2">
+                <Button
+                  className="w-full gap-2"
+                  onClick={async () => {
+                    if (!currentFileObj || !emailUser) return;
+                    if (currentFileObj.size > 100 * 1024 * 1024) {
+                      toast.error("文件大小超过 100MB 限制");
+                      return;
+                    }
+                    setIsSaving(true);
+                    setUploadProgress(null);
+                    try {
+                      const ext = currentFileObj.name.split(".").pop()?.toLowerCase() || "";
+                      const getCategory = (e: string) => {
+                        if (["stp","step","stl"].includes(e)) return "3d";
+                        if (["dxf","dwg"].includes(e)) return "cad";
+                        if (["jpg","jpeg","png","gif"].includes(e)) return "image";
+                        if (["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(e)) return "video";
+                        return "document";
+                      };
+                      const result = await chunkedUpload(
+                        currentFileObj,
+                        emailUser.id,
+                        getCategory(ext),
+                        (progress) => setUploadProgress(progress)
+                      );
+                      if (!result.success) {
+                        throw new Error(result.error || "上传失败");
+                      }
+                      setSavedFileId(result.file.id);
+                      refetchQuota();
+                      setUploadProgress(null);
+                      toast.success("文件已保存到您的账户");
+
+                      // Auto-capture thumbnail from preview area
+                      const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
+                      const isVideoFile = ["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(ext);
+                      if (isVideoFile) {
+                        try {
+                          let thumbBase64: string | null = null;
+                          if (videoViewerRef.current) {
+                            thumbBase64 = await videoViewerRef.current.captureFrame();
+                          }
+                          if (!thumbBase64 && currentFileObj) {
+                            thumbBase64 = await captureVideoThumbnail(currentFileObj);
+                          }
+                          if (thumbBase64) {
+                            await uploadThumbnailMut.mutateAsync({
+                              fileId: result.file.id,
+                              thumbnailBase64: thumbBase64,
+                            });
+                            toast.success("视频缩略图已生成");
+                          }
+                        } catch (thumbErr) {
+                          console.warn("Video thumbnail generation failed:", thumbErr);
+                        }
+                      } else if (!isImageFile) {
+                        try {
+                          const waitMs = viewerMode === "2d-dwg" ? 5000 : 2000;
+                          await new Promise(r => setTimeout(r, waitMs));
+                          const thumbBase64 = await captureThumbFromViewer();
+                          if (thumbBase64) {
+                            await uploadThumbnailMut.mutateAsync({
+                              fileId: result.file.id,
+                              thumbnailBase64: thumbBase64,
+                            });
+                          }
+                        } catch (thumbErr) {
+                          console.warn("Thumbnail generation failed:", thumbErr);
+                        }
+                      }
+                    } catch (err: any) {
+                      toast.error(err.message || "保存失败");
+                      setUploadProgress(null);
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  disabled={isSaving}
+                >
+                  <Save className="w-4 h-4" />
+                  {isSaving
+                    ? uploadProgress
+                      ? uploadProgress.phase === "compressing"
+                        ? "正在压缩图片..."
+                        : uploadProgress.phase === "completing"
+                          ? "正在合并文件..."
+                          : `上传中 ${uploadProgress.percent}%`
+                      : "正在保存..."
+                    : "保存到我的文件"}
+                </Button>
+                {isSaving && uploadProgress && uploadProgress.phase === "uploading" && (
+                  <div className="space-y-1">
+                    <Progress value={uploadProgress.percent} className="h-2" />
+                    <div className="flex justify-between text-[11px] text-muted-foreground">
+                      <span>{uploadProgress.uploadedChunks}/{uploadProgress.totalChunks} 分片</span>
+                      <span>{uploadProgress.speed || ""}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Encrypted file: disabled save button */}
+            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode === "encrypted" && (
+              <div className="space-y-2">
+                <Button
+                  className="w-full gap-2"
+                  disabled={true}
+                  variant="secondary"
+                >
+                  <Save className="w-4 h-4" />
+                  保存到我的文件（已禁用）
+                </Button>
+                <p className="text-xs text-red-500 text-center">加密文件不允许保存和外传</p>
+              </div>
+            )}
+
+            {/* My files link */}
+            {isLoggedIn && isApproved && (
+              <Link href="/profile">
+                <Button variant="outline" className="w-full gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  我的文件
+                </Button>
+              </Link>
+            )}
+
             {/* Model Stats (3D only) */}
             {status === "ready" && viewerMode === "3d" && (
               <Card>
@@ -1828,130 +1970,6 @@ export default function Home() {
               </Card>
             )}
 
-            {/* Save & Share Actions (logged-in approved users) */}
-            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode !== "encrypted" && (
-              <div className="space-y-2">
-                <Button
-                  className="w-full gap-2"
-                  onClick={async () => {
-                    if (!currentFileObj || !emailUser) return;
-                    if (currentFileObj.size > 100 * 1024 * 1024) {
-                      toast.error("文件大小超过 100MB 限制");
-                      return;
-                    }
-                    setIsSaving(true);
-                    setUploadProgress(null);
-                    try {
-                      const ext = currentFileObj.name.split(".").pop()?.toLowerCase() || "";
-                      const getCategory = (e: string) => {
-                        if (["stp","step","stl"].includes(e)) return "3d";
-                        if (["dxf","dwg"].includes(e)) return "cad";
-                        if (["jpg","jpeg","png","gif"].includes(e)) return "image";
-                        if (["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(e)) return "video";
-                        return "document";
-                      };
-                      const result = await chunkedUpload(
-                        currentFileObj,
-                        emailUser.id,
-                        getCategory(ext),
-                        (progress) => setUploadProgress(progress)
-                      );
-                      if (!result.success) {
-                        throw new Error(result.error || "上传失败");
-                      }
-                      setSavedFileId(result.file.id);
-                      refetchQuota();
-                      setUploadProgress(null);
-                      toast.success("文件已保存到您的账户");
-
-                      // Auto-capture thumbnail from preview area
-                      const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
-                      const isVideoFile = ["mp4","mov","webm","avi","mkv","m4v","3gp"].includes(ext);
-                      if (isVideoFile) {
-                        // Video: capture thumbnail using multiple strategies
-                        try {
-                          let thumbBase64: string | null = null;
-                          // Strategy 1: Capture from VideoViewer's loaded video element
-                          if (videoViewerRef.current) {
-                            thumbBase64 = await videoViewerRef.current.captureFrame();
-                          }
-                          // Strategy 2: From local File object
-                          if (!thumbBase64 && currentFileObj) {
-                            thumbBase64 = await captureVideoThumbnail(currentFileObj);
-                          }
-                          if (thumbBase64) {
-                            await uploadThumbnailMut.mutateAsync({
-                              fileId: result.file.id,
-                              thumbnailBase64: thumbBase64,
-                            });
-                            toast.success("视频缩略图已生成");
-                          }
-                        } catch (thumbErr) {
-                          console.warn("Video thumbnail generation failed:", thumbErr);
-                        }
-                      } else if (!isImageFile) {
-                        // Other non-image files: capture from viewer
-                        try {
-                          const waitMs = viewerMode === "2d-dwg" ? 5000 : 2000;
-                          await new Promise(r => setTimeout(r, waitMs));
-                          const thumbBase64 = await captureThumbFromViewer();
-                          if (thumbBase64) {
-                            await uploadThumbnailMut.mutateAsync({
-                              fileId: result.file.id,
-                              thumbnailBase64: thumbBase64,
-                            });
-                          }
-                        } catch (thumbErr) {
-                          console.warn("Thumbnail generation failed:", thumbErr);
-                        }
-                      }
-                    } catch (err: any) {
-                      toast.error(err.message || "保存失败");
-                      setUploadProgress(null);
-                    } finally {
-                      setIsSaving(false);
-                    }
-                  }}
-                  disabled={isSaving}
-                >
-                  <Save className="w-4 h-4" />
-                  {isSaving
-                    ? uploadProgress
-                      ? uploadProgress.phase === "compressing"
-                        ? "正在压缩图片..."
-                        : uploadProgress.phase === "completing"
-                          ? "正在合并文件..."
-                          : `上传中 ${uploadProgress.percent}%`
-                      : "正在保存..."
-                    : "保存到我的文件"}
-                </Button>
-                {isSaving && uploadProgress && uploadProgress.phase === "uploading" && (
-                  <div className="space-y-1">
-                    <Progress value={uploadProgress.percent} className="h-2" />
-                    <div className="flex justify-between text-[11px] text-muted-foreground">
-                      <span>{uploadProgress.uploadedChunks}/{uploadProgress.totalChunks} 分片</span>
-                      <span>{uploadProgress.speed || ""}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Encrypted file: disabled save button */}
-            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode === "encrypted" && (
-              <div className="space-y-2">
-                <Button
-                  className="w-full gap-2"
-                  disabled={true}
-                  variant="secondary"
-                >
-                  <Save className="w-4 h-4" />
-                  保存到我的文件（已禁用）
-                </Button>
-                <p className="text-xs text-red-500 text-center">加密文件不允许保存和外传</p>
-              </div>
-            )}
-
             {/* Share button (after save) */}
             {savedFileId && !shareLink && (
               <Button
@@ -2004,28 +2022,6 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
-            )}
-
-            {/* My files link */}
-            {isLoggedIn && isApproved && (
-              <Link href="/profile">
-                <Button variant="outline" className="w-full gap-2">
-                  <FolderOpen className="w-4 h-4" />
-                  我的文件
-                </Button>
-              </Link>
-            )}
-
-            {/* Upload another file */}
-            {status === "ready" && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={triggerFileInput}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                上传其他文件
-              </Button>
             )}
 
             {/* Help Guide Link */}
