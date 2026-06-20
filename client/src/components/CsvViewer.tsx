@@ -1,9 +1,82 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Table, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import jschardet from "jschardet";
 
 interface CsvViewerProps {
   file: File;
   onInfo?: (info: { rows: number; cols: number; headers: string[] }) => void;
+}
+
+function detectAndDecode(buffer: ArrayBuffer): string {
+  const uint8 = new Uint8Array(buffer);
+
+  // Check for BOM markers first
+  // UTF-8 BOM: EF BB BF
+  if (uint8[0] === 0xEF && uint8[1] === 0xBB && uint8[2] === 0xBF) {
+    return new TextDecoder("utf-8").decode(uint8.slice(3));
+  }
+  // UTF-16 LE BOM: FF FE
+  if (uint8[0] === 0xFF && uint8[1] === 0xFE) {
+    return new TextDecoder("utf-16le").decode(uint8.slice(2));
+  }
+  // UTF-16 BE BOM: FE FF
+  if (uint8[0] === 0xFE && uint8[1] === 0xFF) {
+    return new TextDecoder("utf-16be").decode(uint8.slice(2));
+  }
+
+  // Use jschardet to detect encoding
+  // Convert Uint8Array to binary string for jschardet
+  let binaryStr = "";
+  const sampleSize = Math.min(uint8.length, 65536); // Sample first 64KB for detection
+  for (let i = 0; i < sampleSize; i++) {
+    binaryStr += String.fromCharCode(uint8[i]);
+  }
+
+  const detected = jschardet.detect(binaryStr);
+  let encoding = detected?.encoding || "utf-8";
+
+  // Map common encoding names to TextDecoder-compatible names
+  const encodingMap: Record<string, string> = {
+    "ascii": "utf-8",
+    "UTF-8": "utf-8",
+    "utf-8": "utf-8",
+    "GB2312": "gbk",
+    "gb2312": "gbk",
+    "GB18030": "gb18030",
+    "gb18030": "gb18030",
+    "GBK": "gbk",
+    "gbk": "gbk",
+    "Big5": "big5",
+    "big5": "big5",
+    "EUC-JP": "euc-jp",
+    "SHIFT_JIS": "shift_jis",
+    "Shift_JIS": "shift_jis",
+    "EUC-KR": "euc-kr",
+    "ISO-8859-1": "iso-8859-1",
+    "windows-1252": "windows-1252",
+    "ISO-8859-2": "iso-8859-2",
+    "TIS-620": "tis-620",
+  };
+
+  encoding = encodingMap[encoding] || encoding.toLowerCase();
+
+  try {
+    const decoder = new TextDecoder(encoding);
+    return decoder.decode(uint8);
+  } catch {
+    // Fallback: try GBK first (common for Chinese CSV files), then UTF-8
+    try {
+      const gbkDecoder = new TextDecoder("gbk");
+      const text = gbkDecoder.decode(uint8);
+      // Simple heuristic: if GBK decoded text contains common Chinese chars, use it
+      if (/[\u4e00-\u9fff]/.test(text)) {
+        return text;
+      }
+    } catch {
+      // ignore
+    }
+    return new TextDecoder("utf-8", { fatal: false }).decode(uint8);
+  }
 }
 
 function parseCSV(text: string): string[][] {
@@ -64,6 +137,7 @@ export default function CsvViewer({ file, onInfo }: CsvViewerProps) {
   const [scale, setScale] = useState(100);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [detectedEncoding, setDetectedEncoding] = useState<string>("");
   const rowsPerPage = 50;
 
   useEffect(() => {
@@ -73,8 +147,21 @@ export default function CsvViewer({ file, onInfo }: CsvViewerProps) {
         setLoading(true);
         setError(null);
 
-        const text = await file.text();
+        // Read as ArrayBuffer for encoding detection
+        const buffer = await file.arrayBuffer();
         if (cancelled) return;
+
+        const text = detectAndDecode(buffer);
+
+        // Detect encoding for display
+        const uint8 = new Uint8Array(buffer);
+        let binaryStr = "";
+        const sampleSize = Math.min(uint8.length, 65536);
+        for (let i = 0; i < sampleSize; i++) {
+          binaryStr += String.fromCharCode(uint8[i]);
+        }
+        const detected = jschardet.detect(binaryStr);
+        setDetectedEncoding(detected?.encoding || "UTF-8");
 
         const rows = parseCSV(text);
         if (rows.length === 0) {
@@ -167,6 +254,11 @@ export default function CsvViewer({ file, onInfo }: CsvViewerProps) {
           <span className="text-sm font-medium">
             CSV 表格 ({data.length} 行 × {headers.length} 列)
           </span>
+          {detectedEncoding && (
+            <span className="text-xs text-muted-foreground ml-1">
+              [{detectedEncoding}]
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1 ml-auto">
