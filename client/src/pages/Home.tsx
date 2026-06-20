@@ -1589,6 +1589,7 @@ export default function Home() {
             {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode !== "encrypted" && (
               <div className="space-y-2">
                 <Button
+                  variant="outline"
                   className="w-full gap-2"
                   onClick={async () => {
                     if (!currentFileObj || !emailUser) return;
