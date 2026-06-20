@@ -45,6 +45,7 @@ import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import ArchiveViewer from "@/components/ArchiveViewer";
 import CsvViewer from "@/components/CsvViewer";
+import EmailViewer from "@/components/EmailViewer";
 import { parseFile, getFileExtension, type MeshQuality, QUALITY_PRESETS } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
@@ -201,7 +202,7 @@ async function loadRemoteFile(
 }
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "svg" | "encrypted" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "svg" | "encrypted" | "email" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
@@ -213,7 +214,8 @@ const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
 const SUPPORTED_ARCHIVE = ["zip", "rar", "7z"];
 const SUPPORTED_CSV = ["csv"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE];
+const SUPPORTED_EMAIL = ["eml", "msg"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL];
 // On iOS Safari, the accept attribute greys out files with unrecognized MIME types
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
 // the extension in handleFile() instead.
@@ -567,6 +569,7 @@ export default function Home() {
       if (SUPPORTED_VIDEO.includes(ext)) return "video";
       if (SUPPORTED_PDF.includes(ext) || SUPPORTED_WORD.includes(ext) || SUPPORTED_EXCEL.includes(ext) || SUPPORTED_CSV.includes(ext)) return "document";
       if (SUPPORTED_ARCHIVE.includes(ext)) return "archive";
+      if (SUPPORTED_EMAIL.includes(ext)) return "email";
       return "unknown";
     };
 
@@ -734,6 +737,20 @@ export default function Home() {
       } catch (err: any) {
         setStatus("error");
         setErrorMsg(err.message || "加载压缩文件时发生错误");
+      }
+    } else if (SUPPORTED_EMAIL.includes(ext)) {
+      // Email file (.eml, .msg) - use EmailViewer (preview only, no save)
+      setViewerMode("email");
+      setStatus("parsing");
+      try {
+        setDocFile(file);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载邮件文件时发生错误");
       }
     } else if (SUPPORTED_VIDEO.includes(ext)) {
       // Video file - use VideoViewer
@@ -917,6 +934,10 @@ export default function Home() {
   );
   const isArchiveFile = useMemo(
     () => SUPPORTED_ARCHIVE.includes(fileExt),
+    [fileExt]
+  );
+  const isEmailFile = useMemo(
+    () => SUPPORTED_EMAIL.includes(fileExt),
     [fileExt]
   );
   const isDocFile = isPdfFile || isWordFile || isExcelFile;
@@ -1108,6 +1129,13 @@ export default function Home() {
                         <Badge variant="outline">.RAR</Badge>
                         <Badge variant="outline">.7Z</Badge>
                       </div>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium">
+                          邮件:
+                        </span>
+                        <Badge variant="outline">.EML</Badge>
+                        <Badge variant="outline">.MSG</Badge>
+                      </div>
                     </div>
                     {status === "error" && (
                       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-lg text-sm max-w-md text-center">
@@ -1162,6 +1190,15 @@ export default function Home() {
                     file={docFile}
                     onInfo={(info) => {
                       setMeshCount(info.totalFiles);
+                      setVertexCount(0);
+                      setParseTime(0);
+                    }}
+                  />
+                ) : viewerMode === "email" && docFile ? (
+                  <EmailViewer
+                    file={docFile}
+                    onInfo={(info) => {
+                      setMeshCount(info.attachmentCount);
                       setVertexCount(0);
                       setParseTime(0);
                     }}
@@ -1577,6 +1614,11 @@ export default function Home() {
                             <FileType className="w-3 h-3" />
                             2D CAD 图纸
                           </span>
+                        ) : isEmailFile ? (
+                          <span className="flex items-center gap-1">
+                            <FileType className="w-3 h-3" />
+                            邮件文件
+                          </span>
                         ) : (
                           <span className="flex items-center gap-1">
                             <Layers className="w-3 h-3" />
@@ -1588,7 +1630,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    请先上传文件（支持 3D、CAD、图片、视频、PDF、Word、Excel）
+                    请先上传文件（支持 3D、CAD、图片、视频、PDF、Word、Excel、邮件）
                   </p>
                 )}
               </CardContent>
@@ -1627,7 +1669,7 @@ export default function Home() {
             )}
 
             {/* Save & Share Actions (logged-in approved users) */}
-            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode !== "encrypted" && (
+            {status === "ready" && isLoggedIn && isApproved && !savedFileId && currentFileObj && viewerMode !== "encrypted" && viewerMode !== "email" && (
               <div className="space-y-2">
                 <Button
                   variant="outline"
