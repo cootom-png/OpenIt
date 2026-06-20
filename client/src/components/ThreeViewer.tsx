@@ -82,11 +82,21 @@ const ThreeViewer = forwardRef<ThreeViewerHandle, ThreeViewerProps>(
       camera.lookAt(0, 0, 0);
       cameraRef.current = camera;
 
-      // Renderer
-      const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      // Renderer with enhanced anti-aliasing
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        preserveDrawingBuffer: true,
+        powerPreference: "high-performance",
+      });
       renderer.setSize(rect.width, rect.height);
-      renderer.setPixelRatio(window.devicePixelRatio);
+      // Use higher pixel ratio for sharper rendering (up to 2x for retina-quality on standard displays)
+      const dpr = Math.min(window.devicePixelRatio, 2);
+      renderer.setPixelRatio(dpr > 1 ? dpr : 1.5);
       renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      // Enable tone mapping for better visual quality
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
       containerRef.current.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
@@ -101,9 +111,14 @@ const ThreeViewer = forwardRef<ThreeViewerHandle, ThreeViewerProps>(
       controls.maxDistance = 5000;
       controlsRef.current = controls;
 
-      // Lights
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      // Lights - improved lighting for smoother appearance
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
+
+      // Hemisphere light for natural ambient
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8d8d8d, 0.3);
+      hemiLight.position.set(0, 300, 0);
+      scene.add(hemiLight);
 
       const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
       dirLight1.position.set(200, 300, 200);
@@ -113,6 +128,10 @@ const ThreeViewer = forwardRef<ThreeViewerHandle, ThreeViewerProps>(
       const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
       dirLight2.position.set(-200, 100, -200);
       scene.add(dirLight2);
+
+      const dirLight3 = new THREE.DirectionalLight(0xffffff, 0.2);
+      dirLight3.position.set(0, -100, 200);
+      scene.add(dirLight3);
 
       // Animate
       const animate = () => {
@@ -192,17 +211,18 @@ const ThreeViewer = forwardRef<ThreeViewerHandle, ThreeViewerProps>(
           geometry.setIndex(new THREE.BufferAttribute(indices, 1));
         }
 
-        // Material
+        // Material - use MeshStandardMaterial for better quality with PBR
         let color = 0x6699cc;
         if (meshItem.color && meshItem.color.length === 3) {
           color = new THREE.Color(meshItem.color[0], meshItem.color[1], meshItem.color[2]).getHex();
         }
 
-        const material = new THREE.MeshPhongMaterial({
+        const material = new THREE.MeshStandardMaterial({
           color,
-          specular: 0x333333,
-          shininess: 30,
+          metalness: 0.1,
+          roughness: 0.6,
           side: THREE.DoubleSide,
+          flatShading: false,
         });
 
         const mesh = new THREE.Mesh(geometry, material);

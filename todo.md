@@ -292,3 +292,11 @@
 - [x] 添加 .webp 格式支持（上传、预览、加密检测）
 - [x] 添加 .bmp 格式支持（上传、预览、加密检测）
 - [x] 添加 .tiff/.tif 格式支持（上传、预览、加密检测）
+
+## STP 预览质量优化
+
+- [x] STP 文件 3D 渲染锯齿感优化（提高抗锯齿质量/添加清晰度设置）
+  - ThreeViewer: 启用 antialias + 高 pixelRatio + MeshStandardMaterial(PBR) + HemisphereLight + 3方向光
+  - fileParser: 默认 linearDeflection 从 0.5 降到 0.1，曲面网格更精细
+  - 添加渲染精度选择器（快速/标准/高精度），切换后自动重新解析
+- [x] Logo 和"零件云图"标题添加返回主页链接（Link href="/"）

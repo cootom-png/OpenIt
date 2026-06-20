@@ -12,8 +12,6 @@ async function getOcctInstance(): Promise<any> {
   if (occtInstance) return occtInstance;
 
   // Pre-fetch WASM as ArrayBuffer to avoid MIME type issues with instantiateStreaming
-  // CDN may not serve .wasm files with correct application/wasm MIME type,
-  // causing "falling back to ArrayBuffer instantiation" console errors
   const wasmResponse = await fetch(WASM_CDN_URL);
   const wasmBinary = await wasmResponse.arrayBuffer();
 
@@ -34,12 +32,22 @@ async function getOcctInstance(): Promise<any> {
   return occtInstance;
 }
 
-export async function parseStepFile(fileBuffer: Uint8Array): Promise<ParsedMeshData> {
+/** Quality presets for STEP/IGES tessellation */
+export type MeshQuality = "fast" | "standard" | "high";
+
+export const QUALITY_PRESETS: Record<MeshQuality, { linearDeflection: number; angularDeflection: number; label: string }> = {
+  fast: { linearDeflection: 0.5, angularDeflection: 0.5, label: "快速" },
+  standard: { linearDeflection: 0.1, angularDeflection: 0.3, label: "标准" },
+  high: { linearDeflection: 0.01, angularDeflection: 0.1, label: "高精度" },
+};
+
+export async function parseStepFile(fileBuffer: Uint8Array, quality: MeshQuality = "standard"): Promise<ParsedMeshData> {
   const occt = await getOcctInstance();
+  const preset = QUALITY_PRESETS[quality];
   const result = occt.ReadStepFile(fileBuffer, {
     linearUnit: "millimeter",
-    linearDeflection: 0.5,
-    angularDeflection: 0.5,
+    linearDeflection: preset.linearDeflection,
+    angularDeflection: preset.angularDeflection,
   });
 
   if (!result.success) {
@@ -203,12 +211,13 @@ export function parse3mfFile(buffer: ArrayBuffer): ParsedMeshData {
   return { meshes };
 }
 
-export async function parseIgesFile(fileBuffer: Uint8Array): Promise<ParsedMeshData> {
+export async function parseIgesFile(fileBuffer: Uint8Array, quality: MeshQuality = "standard"): Promise<ParsedMeshData> {
   const occt = await getOcctInstance();
+  const preset = QUALITY_PRESETS[quality];
   const result = occt.ReadIgesFile(fileBuffer, {
     linearUnit: "millimeter",
-    linearDeflection: 0.5,
-    angularDeflection: 0.5,
+    linearDeflection: preset.linearDeflection,
+    angularDeflection: preset.angularDeflection,
   });
 
   if (!result.success) {
@@ -232,14 +241,15 @@ export async function parseIgesFile(fileBuffer: Uint8Array): Promise<ParsedMeshD
 }
 
 export async function parseFile(
-  file: File
+  file: File,
+  quality: MeshQuality = "standard"
 ): Promise<{ data: ParsedMeshData; parseTime: number }> {
   const ext = getFileExtension(file.name);
   const startTime = performance.now();
 
   if (ext === "stp" || ext === "step") {
     const buffer = await file.arrayBuffer();
-    const data = await parseStepFile(new Uint8Array(buffer));
+    const data = await parseStepFile(new Uint8Array(buffer), quality);
     return { data, parseTime: performance.now() - startTime };
   } else if (ext === "stl") {
     const buffer = await file.arrayBuffer();
@@ -255,7 +265,7 @@ export async function parseFile(
     return { data, parseTime: performance.now() - startTime };
   } else if (ext === "igs" || ext === "iges") {
     const buffer = await file.arrayBuffer();
-    const data = await parseIgesFile(new Uint8Array(buffer));
+    const data = await parseIgesFile(new Uint8Array(buffer), quality);
     return { data, parseTime: performance.now() - startTime };
   } else {
     throw new Error(`不支持的文件格式: .${ext}。请使用 .stp, .step, .stl, .obj, .3mf, .igs 或 .iges 文件。`);

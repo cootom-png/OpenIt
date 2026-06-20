@@ -29,6 +29,7 @@ import {
   Save,
   Box,
   HelpCircle,
+  Zap,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -43,7 +44,7 @@ import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import ArchiveViewer from "@/components/ArchiveViewer";
-import { parseFile, getFileExtension } from "@/lib/fileParser";
+import { parseFile, getFileExtension, type MeshQuality, QUALITY_PRESETS } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
 import { chunkedUpload, type UploadProgress } from "@/lib/chunkedUpload";
@@ -56,6 +57,7 @@ import { captureVideoThumbnail, captureVideoThumbnailFromUrl } from "@/lib/video
 async function loadRemoteFile(
   url: string,
   name: string,
+  quality: MeshQuality,
   setters: {
     setFileName: (v: string) => void;
     setFileSize: (v: number) => void;
@@ -170,7 +172,7 @@ async function loadRemoteFile(
       const blob = await resp.blob();
       s.setFileSize(blob.size);
       const file = new File([blob], name);
-      const { data, parseTime: pt } = await parseFile(file);
+      const { data, parseTime: pt } = await parseFile(file, quality);
       s.setMeshData(data);
       s.setParseTime(pt);
       s.setMeshCount(data.meshes.length);
@@ -330,6 +332,8 @@ export default function Home() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isEncryptedFile, setIsEncryptedFile] = useState(false);
+  const [meshQuality, setMeshQuality] = useState<MeshQuality>("standard");
+  const [isReparsing, setIsReparsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const videoViewerRef = useRef<VideoViewerHandle>(null);
@@ -389,7 +393,7 @@ export default function Home() {
         setPendingThumbFileId(parseInt(generateThumbId, 10));
       }
       setStatus("loading");
-      loadRemoteFile(previewUrl, previewName, {
+      loadRemoteFile(previewUrl, previewName, meshQuality, {
         setFileName, setFileSize, setStatus, setViewerMode,
         setMeshData, setDxfFileUrl, setDwgFileBuffer,
         setImageUrl, setVideoUrl, setDocFile,
@@ -762,7 +766,7 @@ export default function Home() {
       setStatus("parsing");
 
       try {
-        const { data, parseTime: pt } = await parseFile(file);
+        const { data, parseTime: pt } = await parseFile(file, meshQuality);
         setMeshData(data);
         setParseTime(pt);
         setMeshCount(data.meshes.length);
@@ -779,7 +783,40 @@ export default function Home() {
         setErrorMsg(err.message || "解析文件时发生错误");
       }
     }
-  }, []);
+  }, [meshQuality]);
+
+  // Re-parse 3D file when quality changes
+  const handleQualityChange = useCallback(async (newQuality: MeshQuality) => {
+    if (newQuality === meshQuality) return;
+    setMeshQuality(newQuality);
+    // If we have a loaded 3D file, re-parse it with the new quality
+    if (viewerMode === "3d" && currentFileObj && status === "ready") {
+      const ext = getFileExtension(currentFileObj.name);
+      // Only STP/STEP/IGS/IGES benefit from quality settings (STL/OBJ/3MF are mesh-based)
+      if (["stp", "step", "igs", "iges"].includes(ext)) {
+        setIsReparsing(true);
+        setStatus("parsing");
+        try {
+          const { data, parseTime: pt } = await parseFile(currentFileObj, newQuality);
+          setMeshData(data);
+          setParseTime(pt);
+          setMeshCount(data.meshes.length);
+          let totalVerts = 0;
+          data.meshes.forEach((m) => {
+            totalVerts += m.attributes.position.array.length / 3;
+          });
+          setVertexCount(totalVerts);
+          setStatus("ready");
+          toast.success(`已切换为${QUALITY_PRESETS[newQuality].label}模式`);
+        } catch (err: any) {
+          setStatus("error");
+          setErrorMsg(err.message || "重新解析文件时发生错误");
+        } finally {
+          setIsReparsing(false);
+        }
+      }
+    }
+  }, [meshQuality, viewerMode, currentFileObj, status]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -910,19 +947,21 @@ export default function Home() {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-              <FileBox className="w-5 h-5 text-primary-foreground" />
+          <Link href="/">
+            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+              <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
+                <FileBox className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-foreground tracking-tight">
+                  零件云图
+                </h1>
+                <p className="text-xs text-muted-foreground -mt-0.5">
+                  3D / CAD / 文档 文件预览
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">
-                零件云图
-              </h1>
-              <p className="text-xs text-muted-foreground -mt-0.5">
-                3D / CAD / 文档 文件预览
-              </p>
-            </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-3">
             <Link href="/parts">
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
@@ -1425,6 +1464,45 @@ export default function Home() {
                       {(parseTime / 1000).toFixed(2)}s
                     </span>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Quality Settings (3D STP/IGES only) */}
+            {status === "ready" && viewerMode === "3d" && ["stp", "step", "igs", "iges"].includes(fileExt) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    渲染精度
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-1">
+                    {(["fast", "standard", "high"] as MeshQuality[]).map((q) => (
+                      <Button
+                        key={q}
+                        variant={meshQuality === q ? "default" : "outline"}
+                        size="sm"
+                        className="flex-1 h-8 text-xs"
+                        disabled={isReparsing}
+                        onClick={() => handleQualityChange(q)}
+                      >
+                        {QUALITY_PRESETS[q].label}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {meshQuality === "fast" && "快速模式：解析速度快，适合大型文件快速预览"}
+                    {meshQuality === "standard" && "标准模式：平衡精度与速度，推荐日常使用"}
+                    {meshQuality === "high" && "高精度模式：曲面最光滑，适合精密零件查看"}
+                  </p>
+                  {isReparsing && (
+                    <div className="flex items-center gap-2 text-xs text-primary">
+                      <div className="w-3 h-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                      正在重新解析...
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
