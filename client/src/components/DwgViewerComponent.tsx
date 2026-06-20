@@ -24,6 +24,15 @@ function hideCadViewerUI(container: HTMLElement) {
     .ml-ccl-overlay {
       display: none !important;
     }
+    .ml-ccl-wrapper {
+      display: none !important;
+    }
+    .ml-ccl-spinner {
+      display: none !important;
+    }
+    .ml-ccl-message {
+      display: none !important;
+    }
   `;
   container.appendChild(style);
 }
@@ -249,6 +258,12 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
               mtextRender: "/assets/mtext-renderer-worker.js",
             },
           });
+
+          // Hide cad-simple-viewer's built-in progress/UI immediately after instance creation
+          // to prevent its "Parsing blocks" spinner from overlapping with our own loading overlay
+          if (currentContainer) {
+            hideCadViewerUI(currentContainer);
+          }
 
           // Restore original getContext after the CAD viewer has created its canvas
           if (unpatchGetContext) {
