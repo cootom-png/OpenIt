@@ -1073,8 +1073,8 @@ export default function Home() {
                       将文件拖拽到此处，或点击选择文件
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           3D:
                         </span>
                         <Badge variant="outline">.STP</Badge>
@@ -1084,15 +1084,15 @@ export default function Home() {
                         <Badge variant="outline">.3MF</Badge>
                         <Badge variant="outline">.IGS</Badge>
                       </div>
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           CAD:
                         </span>
                         <Badge variant="outline">.DXF</Badge>
                         <Badge variant="outline">.DWG</Badge>
                       </div>
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           图片:
                         </span>
                         <Badge variant="outline">.JPG</Badge>
@@ -1104,16 +1104,16 @@ export default function Home() {
                         <Badge variant="outline">.BMP</Badge>
                         <Badge variant="outline">.TIFF</Badge>
                       </div>
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           视频:
                         </span>
                         <Badge variant="outline">.MP4</Badge>
                         <Badge variant="outline">.MOV</Badge>
                         <Badge variant="outline">.WebM</Badge>
                       </div>
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           文档:
                         </span>
                         <Badge variant="outline">.PDF</Badge>
@@ -1121,16 +1121,16 @@ export default function Home() {
                         <Badge variant="outline">.XLSX</Badge>
                         <Badge variant="outline">.CSV</Badge>
                       </div>
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           压缩包:
                         </span>
                         <Badge variant="outline">.ZIP</Badge>
                         <Badge variant="outline">.RAR</Badge>
                         <Badge variant="outline">.7Z</Badge>
                       </div>
-                      <div className="flex gap-1.5 items-center">
-                        <span className="text-xs text-primary font-medium">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs text-primary font-medium shrink-0">
                           邮件:
                         </span>
                         <Badge variant="outline">.EML</Badge>
