@@ -356,7 +356,16 @@ export default function Home() {
   // Listen for fullscreen change (e.g. user presses Esc)
   useEffect(() => {
     const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isFs = !!document.fullscreenElement;
+      setIsFullscreen(isFs);
+      // After exiting fullscreen, the canvas/viewer may retain fullscreen dimensions.
+      // Dispatch a resize event after a short delay to force viewers to recalculate.
+      if (!isFs) {
+        // Multiple delayed resize dispatches to ensure layout has settled
+        setTimeout(() => window.dispatchEvent(new Event("resize")), 50);
+        setTimeout(() => window.dispatchEvent(new Event("resize")), 200);
+        setTimeout(() => window.dispatchEvent(new Event("resize")), 500);
+      }
     };
     document.addEventListener("fullscreenchange", handleFsChange);
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
@@ -978,7 +987,7 @@ export default function Home() {
       <main className="container py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
           {/* Left: Viewer Area */}
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-hidden">
             <Card className={`overflow-hidden ${isFullscreen ? "!rounded-none" : ""}`}>
               <div
                 ref={viewerContainerRef}
@@ -986,7 +995,7 @@ export default function Home() {
                   isFullscreen
                     ? "h-screen w-screen"
                     : status === "ready"
-                      ? "h-[calc(100vh-220px)] min-h-[500px]"
+                      ? "h-[calc(100vh-220px)] min-h-[500px] overflow-hidden"
                       : ""
                 }`}
               >

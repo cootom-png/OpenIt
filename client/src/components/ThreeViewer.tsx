@@ -147,13 +147,27 @@ const ThreeViewer = forwardRef<ThreeViewerHandle, ThreeViewerProps>(
       const handleResize = () => {
         if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
         cameraRef.current.aspect = rect.width / rect.height;
         cameraRef.current.updateProjectionMatrix();
         rendererRef.current.setSize(rect.width, rect.height);
       };
 
       window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
+
+      // Also use ResizeObserver for more reliable container size tracking
+      let resizeObserver: ResizeObserver | null = null;
+      if (containerRef.current) {
+        resizeObserver = new ResizeObserver(() => {
+          handleResize();
+        });
+        resizeObserver.observe(containerRef.current);
+      }
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        resizeObserver?.disconnect();
+      };
     }, []);
 
     // Init scene
