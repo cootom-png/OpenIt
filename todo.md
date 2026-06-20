@@ -343,3 +343,7 @@
 ## BUG修复：远程文件精度切换无效
 
 - [x] 远程加载的3D文件（通过URL参数预览）切换精度无反应，因为 loadRemoteFile 没有设置 currentFileObj，导致 handleQualityChange 判断 currentFileObj 为 null 而跳过重新解析（已修复）
+
+## BUG修复：CAD图纸左键拖拽平移无效
+
+- [x] CAD图纸（DXF/DWG）左键拖拽平移功能无反应（DWG查看器加载后设置 viewMode=PAN，DXF查看器已原生支持左键平移）

@@ -299,13 +299,23 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
               }
             }
 
-            // Zoom to fit after rendering completes
+            // Zoom to fit after rendering completes, then set pan mode
             setTimeout(() => {
               if (!cancelled) {
                 try {
                   AcApDocManager.instance?.curView?.zoomToFitDrawing();
                 } catch {
                   // Zoom is optional
+                }
+                // Set view mode to PAN so left-drag pans the view
+                try {
+                  const view = AcApDocManager.instance?.curView;
+                  if (view) {
+                    // AcEdViewMode.PAN = 1
+                    view.mode = 1;
+                  }
+                } catch {
+                  // Pan mode is optional
                 }
               }
             }, 800);
