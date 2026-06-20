@@ -905,8 +905,8 @@ export default function Profile() {
                               </Link>
                             )}
 
-                            {/* Generate thumbnail (only show when no thumbnail exists) */}
-                            {!file.thumbnailUrl && file.s3Url && (
+                            {/* Generate thumbnail (only show when no thumbnail exists, hide for documents) */}
+                            {!file.thumbnailUrl && file.s3Url && file.category !== "document" && (
                               <Link href={`/?preview=${encodeURIComponent(file.s3Url)}&name=${encodeURIComponent(file.fileName)}&generateThumb=${file.id}`}>
                                 <Button
                                   variant="outline"
