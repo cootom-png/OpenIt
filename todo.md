@@ -339,3 +339,7 @@
 ## BUG修复：收藏零件查看改为直接预览
 
 - [x] 收藏零件"查看"按钮改为"预览"，点击后直接打开文件预览，不跳转到零件库页面
+
+## BUG修复：远程文件精度切换无效
+
+- [x] 远程加载的3D文件（通过URL参数预览）切换精度无反应，因为 loadRemoteFile 没有设置 currentFileObj，导致 handleQualityChange 判断 currentFileObj 为 null 而跳过重新解析（已修复）

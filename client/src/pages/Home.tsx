@@ -172,6 +172,7 @@ async function loadRemoteFile(
       const blob = await resp.blob();
       s.setFileSize(blob.size);
       const file = new File([blob], name);
+      s.setCurrentFileObj(file); // Store file obj so quality change can re-parse
       const { data, parseTime: pt } = await parseFile(file, quality);
       s.setMeshData(data);
       s.setParseTime(pt);
