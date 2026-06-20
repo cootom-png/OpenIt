@@ -254,12 +254,14 @@ function FavoritesSection() {
                       <span>{formatDate(fav.createdAt)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Link href="/parts">
-                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-                          <Eye className="w-3 h-3" />
-                          查看
-                        </Button>
-                      </Link>
+                      {file.s3Url && (
+                        <Link href={`/?preview=${encodeURIComponent(file.s3Url)}&name=${encodeURIComponent(file.fileName)}`}>
+                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                            <Eye className="w-3 h-3" />
+                            预览
+                          </Button>
+                        </Link>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
