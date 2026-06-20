@@ -409,7 +409,7 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
         {/* Hint */}
         {isReady && !isLoading && !error && (
           <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-muted-foreground border shadow-sm z-10">
-            滚轮缩放 · 左键拖拽平移
+            滚轮缩放 · 按住滚轮拖动平移
           </div>
         )}
       </div>

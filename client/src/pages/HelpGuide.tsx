@@ -163,7 +163,7 @@ export default function HelpGuide() {
                   <FileText className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
                   <div>
                     <div className="font-medium text-foreground mb-1">2D 图纸 (DXF / DWG)</div>
-                    <p className="text-muted-foreground">左键拖拽平移 / 滚轮缩放</p>
+                    <p className="text-muted-foreground">按住滚轮拖动平移 / 滚轮缩放</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">

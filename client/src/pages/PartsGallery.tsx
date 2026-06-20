@@ -250,7 +250,7 @@ export default function PartsGallery() {
         <div className="mb-6">
           <h2 className="text-2xl font-bold tracking-tight">3D 零件展示</h2>
           <p className="text-muted-foreground mt-1">
-            浏览医疗推车 3D 零件模型。
+            浏览和收藏 3D 零件模型。
             {!isApproved && (
               <span className="text-amber-600"> 注册并通过审核后可查看 3D 预览。</span>
             )}
@@ -707,7 +707,7 @@ export default function PartsGallery() {
 
       <footer className="border-t mt-12 py-6 bg-muted/30">
         <div className="container flex items-center justify-center">
-          <span className="text-xs text-muted-foreground/60">v1.2.0</span>
+          <span className="text-xs text-muted-foreground/60">v1.3.0</span>
         </div>
       </footer>
     </div>

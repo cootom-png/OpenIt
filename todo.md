@@ -347,3 +347,9 @@
 ## BUG修复：CAD图纸左键拖拽平移无效
 
 - [x] CAD图纸（DXF/DWG）左键拖拽平移功能无反应（DWG查看器加载后设置 viewMode=PAN，DXF查看器已原生支持左键平移）
+
+## 网页描述更新 & CAD操作说明 & 版本号
+
+- [x] 更新所有网页 head 描述（title/meta description）为"零件云图-在线预览、分享CAD和3D文件"
+- [x] 更新CAD操作说明：按住滚轮拖动平移（DwgViewer提示、Home.tsx提示、HelpGuide操作说明）
+- [x] 更新版本号为 v1.3.0（首页、零件库、个人中心）

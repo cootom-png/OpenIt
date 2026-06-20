@@ -1318,7 +1318,7 @@ export default function Home() {
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      左键拖拽平移
+                      按住滚轮拖动平移
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
@@ -1991,7 +1991,7 @@ export default function Home() {
           >
             管理员登录
           </a>
-          <span className="text-xs text-muted-foreground/60">v1.2.0</span>
+          <span className="text-xs text-muted-foreground/60">v1.3.0</span>
         </div>
       </footer>
     </div>
