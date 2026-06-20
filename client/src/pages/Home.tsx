@@ -1327,6 +1327,51 @@ export default function Home() {
                 )}
               </div>
             )}
+
+            {/* Model Stats (3D only) - shown below viewer on desktop */}
+            {status === "ready" && viewerMode === "3d" && (
+              <Card>
+                <CardContent className="py-3">
+                  <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">零件:</span>
+                      <span className="font-medium">{meshCount}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">顶点:</span>
+                      <span className="font-medium">{vertexCount.toLocaleString()}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">解析:</span>
+                      <span className="font-medium">{(parseTime / 1000).toFixed(2)}s</span>
+                    </span>
+                    {["stp", "step", "igs", "iges"].includes(fileExt) && (
+                      <span className="flex items-center gap-1.5 ml-auto">
+                        <Zap className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground">精度:</span>
+                        {(["fast", "standard", "high"] as MeshQuality[]).map((q) => (
+                          <Button
+                            key={q}
+                            variant={meshQuality === q ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            disabled={isReparsing}
+                            onClick={() => handleQualityChange(q)}
+                          >
+                            {QUALITY_PRESETS[q].label}
+                          </Button>
+                        ))}
+                        {isReparsing && (
+                          <div className="w-3 h-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right: Info Panel */}
@@ -1584,79 +1629,7 @@ export default function Home() {
               </Link>
             )}
 
-            {/* Model Stats (3D only) */}
-            {status === "ready" && viewerMode === "3d" && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Layers className="w-4 h-4" />
-                    模型统计
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">零件数量</span>
-                    <span className="font-medium">{meshCount}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">顶点数</span>
-                    <span className="font-medium">
-                      {vertexCount.toLocaleString()}
-                    </span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      解析耗时
-                    </span>
-                    <span className="font-medium">
-                      {(parseTime / 1000).toFixed(2)}s
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
-            {/* Quality Settings (3D STP/IGES only) */}
-            {status === "ready" && viewerMode === "3d" && ["stp", "step", "igs", "iges"].includes(fileExt) && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    渲染精度
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex gap-1">
-                    {(["fast", "standard", "high"] as MeshQuality[]).map((q) => (
-                      <Button
-                        key={q}
-                        variant={meshQuality === q ? "default" : "outline"}
-                        size="sm"
-                        className="flex-1 h-8 text-xs"
-                        disabled={isReparsing}
-                        onClick={() => handleQualityChange(q)}
-                      >
-                        {QUALITY_PRESETS[q].label}
-                      </Button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {meshQuality === "fast" && "快速模式：解析速度快，适合大型文件快速预览"}
-                    {meshQuality === "standard" && "标准模式：平衡精度与速度，推荐日常使用"}
-                    {meshQuality === "high" && "高精度模式：曲面最光滑，适合精密零件查看"}
-                  </p>
-                  {isReparsing && (
-                    <div className="flex items-center gap-2 text-xs text-primary">
-                      <div className="w-3 h-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                      正在重新解析...
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {/* DXF Info (2D DXF only) */}
             {status === "ready" && viewerMode === "2d-dxf" && (
