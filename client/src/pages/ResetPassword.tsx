@@ -108,7 +108,7 @@ export default function ResetPassword() {
             返回登录
           </Link>
           <h1 className="text-3xl font-bold text-white tracking-tight">零件云图</h1>
-          <p className="text-slate-400 mt-1">医疗推车零件库 & 在线预览管理</p>
+          <p className="text-slate-400 mt-1">在线预览、分享CAD和3D文件</p>
         </div>
 
         <Card className="border-slate-700/50 bg-slate-800/60 backdrop-blur-sm shadow-2xl">

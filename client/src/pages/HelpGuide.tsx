@@ -19,6 +19,7 @@ import {
   Clock,
   FolderOpen,
   Lock,
+  Zap,
 } from "lucide-react";
 
 export default function HelpGuide() {
@@ -56,11 +57,10 @@ export default function HelpGuide() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
               <p>
-                零件云图是一款面向工业/医疗设备领域的在线文件管理与分享工具。
-                支持 3D 模型、CAD 图纸、图片、视频、文档等多种格式的上传、在线预览和分享。
+                零件云图是一款在线文件预览与分享工具，支持 3D 模型、CAD 图纸、图片、视频、文档等多种格式的上传、在线预览和分享。
               </p>
               <p>
-                注册用户可将文件保存到个人账户，生成分享链接发送给客户或同事查看。
+                注册用户可将文件保存到个人账户，生成分享链接发送给客户或同事查看。无需安装任何软件，浏览器即可打开 STP、DWG 等专业格式文件。
               </p>
             </CardContent>
           </Card>
@@ -81,7 +81,7 @@ export default function HelpGuide() {
                     3D 模型文件
                   </div>
                   <p className="text-muted-foreground pl-6">
-                    STP / STEP / STL 格式，使用 WASM 引擎在浏览器端解析渲染
+                    STP / STEP / STL / OBJ / 3MF / IGS 格式，使用 WASM 引擎在浏览器端解析渲染
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -99,7 +99,7 @@ export default function HelpGuide() {
                     图片
                   </div>
                   <p className="text-muted-foreground pl-6">
-                    JPG / JPEG / PNG / GIF 格式，支持缩放、平移、旋转、下载
+                    JPG / JFIF / PNG / GIF / SVG / WebP / BMP / TIFF 格式，支持缩放、平移、旋转、下载
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -108,7 +108,7 @@ export default function HelpGuide() {
                     视频
                   </div>
                   <p className="text-muted-foreground pl-6">
-                    MP4 / MOV / WebM / AVI 格式，支持播放、暂停、进度跳转、全屏
+                    MP4 / MOV / WebM 格式，支持播放、暂停、进度跳转、全屏
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -126,7 +126,16 @@ export default function HelpGuide() {
                     Office 文档
                   </div>
                   <p className="text-muted-foreground pl-6">
-                    Word (DOC/DOCX) 和 Excel (XLS/XLSX) 支持在线预览和下载
+                    Word (DOCX) 和 Excel (XLSX) 支持在线预览和下载
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    <FolderOpen className="w-4 h-4 text-yellow-600" />
+                    压缩包
+                  </div>
+                  <p className="text-muted-foreground pl-6">
+                    ZIP / RAR 格式，支持在线浏览文件列表
                   </p>
                 </div>
               </div>
@@ -147,7 +156,7 @@ export default function HelpGuide() {
                   <Box className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
                   <div>
                     <div className="font-medium text-foreground mb-1">3D 模型</div>
-                    <p className="text-muted-foreground">左键拖拽旋转 / 滚轮缩放 / 右键拖拽平移</p>
+                    <p className="text-muted-foreground">左键拖拽旋转 / 滚轮缩放 / 右键拖拽平移 / 双击全屏</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
@@ -182,6 +191,40 @@ export default function HelpGuide() {
             </CardContent>
           </Card>
 
+          {/* 渲染精度设置 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Zap className="w-5 h-5 text-blue-600" />
+                3D 渲染精度设置
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-3">
+              <p>
+                打开 STP / STEP / IGS / IGES 格式的 3D 文件后，预览框下方会显示模型统计信息（零件数量、顶点数、解析耗时）以及精度选择器。
+              </p>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">快速模式：</span>
+                <span>解析速度快，适合大型文件快速预览，网格较粗。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">标准模式：</span>
+                <span>平衡精度与速度，推荐日常使用。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">高精度模式：</span>
+                <span>曲面最光滑，适合精密零件查看，解析时间较长。</span>
+              </div>
+              <Separator />
+              <p>
+                切换精度后系统会自动重新解析文件，解析完成后 3D 视图自动更新。图片和 CAD 文件的信息也会显示在预览框正下方。
+              </p>
+            </CardContent>
+          </Card>
+
           {/* 文件上传与保存 */}
           <Card>
             <CardHeader className="pb-3">
@@ -199,6 +242,11 @@ export default function HelpGuide() {
               <div className="flex items-start gap-2">
                 <span className="font-medium text-foreground shrink-0">注册用户：</span>
                 <span>上传文件后可点击"保存到我的文件"将文件持久化存储到个人账户，支持后续管理和分享。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">上传其他文件：</span>
+                <span>预览文件后，点击蓝色的"上传其他文件"按钮可快速切换到新文件。</span>
               </div>
               <Separator />
               <div className="flex items-start gap-2">
@@ -290,6 +338,32 @@ export default function HelpGuide() {
             </CardContent>
           </Card>
 
+          {/* 页面布局说明 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Monitor className="w-5 h-5 text-blue-600" />
+                页面布局
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-3">
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">左侧区域：</span>
+                <span>文件预览区，包括 3D 模型、CAD 图纸、图片、视频等的可视化展示。预览框下方显示对应的文件统计信息（模型统计、图片信息、图纸信息等）。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">右侧区域：</span>
+                <span>文件信息面板和操作按钮。包括文件名、大小、格式等基本信息，以及"上传其他文件"、"保存到我的文件"、"我的文件"等操作入口。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">顶部导航：</span>
+                <span>点击左上角 Logo 或"零件云图"标题可随时返回首页。右侧提供 3D 零件库、登录/注册入口。</span>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 注意事项 */}
           <Card className="border-amber-200 bg-amber-50/50">
             <CardHeader className="pb-3">
@@ -302,7 +376,7 @@ export default function HelpGuide() {
               <ul className="space-y-2 list-disc pl-4">
                 <li>请使用现代浏览器（Chrome、Edge、Firefox）访问本平台，以获得最佳预览体验。</li>
                 <li>3D 模型和 CAD 图纸依赖 WebGL 渲染，请确保浏览器已启用硬件加速。</li>
-                <li>大文件（如复杂 STEP 模型）解析可能需要较长时间，请耐心等待。</li>
+                <li>大文件（如复杂 STEP 模型）解析可能需要较长时间，可先使用"快速模式"预览再切换到高精度。</li>
                 <li>分享链接有效期为 7 天，过期后需在"我的文件"中手动续期。</li>
                 <li>上传的文件请勿包含敏感或机密信息，平台管理员可查看所有文件。</li>
                 <li>如遇到问题，请联系管理员获取帮助。</li>
