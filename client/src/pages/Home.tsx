@@ -364,6 +364,11 @@ export default function Home() {
     }
   }, []);
 
+  // Set page title for SEO
+  useEffect(() => {
+    document.title = "零件云图 - 在线预览、分享CAD和3D文件 | STP/DWG/DXF查看器";
+  }, []);
+
   // Listen for fullscreen change (e.g. user presses Esc)
   useEffect(() => {
     const handleFsChange = () => {
@@ -1040,9 +1045,9 @@ export default function Home() {
                     <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
                       <Upload className="w-10 h-10 text-primary" />
                     </div>
-                    <h3 className="text-xl font-semibold text-foreground mb-2">
-                      上传文件预览
-                    </h3>
+                    <h2 className="text-xl font-semibold text-foreground mb-2">
+                      在线预览CAD和3D文件
+                    </h2>
                     <p className="text-muted-foreground text-center max-w-md mb-4">
                       将文件拖拽到此处，或点击选择文件
                     </p>
