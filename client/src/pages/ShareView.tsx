@@ -332,19 +332,19 @@ export default function ShareView() {
                 {status === "ready" && (
                   <>
                     {viewerMode === "pdf" && docFile ? (
-                      <PdfViewer file={docFile} onInfo={(info) => setPdfInfo(info)} />
+                      <PdfViewer file={docFile} hideDownload onInfo={(info) => setPdfInfo(info)} />
                     ) : viewerMode === "word" && docFile ? (
-                      <WordViewer file={docFile} onInfo={(info) => setWordInfo(info)} />
+                      <WordViewer file={docFile} hideDownload onInfo={(info) => setWordInfo(info)} />
                     ) : viewerMode === "excel" && docFile ? (
-                      <ExcelViewer file={docFile} onInfo={(info) => setExcelInfo(info)} />
+                      <ExcelViewer file={docFile} hideDownload onInfo={(info) => setExcelInfo(info)} />
                     ) : viewerMode === "csv" && docFile ? (
                       <CsvViewer file={docFile} />
                     ) : viewerMode === "archive" && docFile ? (
                       <ArchiveViewer file={docFile} />
                     ) : viewerMode === "video" ? (
-                      <VideoViewer videoUrl={videoUrl} fileName={sharedFile.fileName} onVideoLoaded={(info) => setVideoInfo(info)} />
+                      <VideoViewer videoUrl={videoUrl} fileName={sharedFile.fileName} hideDownload onVideoLoaded={(info) => setVideoInfo(info)} />
                     ) : viewerMode === "image" ? (
-                      <ImageViewer imageUrl={imageUrl} fileName={sharedFile.fileName} onImageLoaded={(info) => setImageInfo(info)} />
+                      <ImageViewer imageUrl={imageUrl} fileName={sharedFile.fileName} hideDownload onImageLoaded={(info) => setImageInfo(info)} />
                     ) : viewerMode === "2d-dwg" ? (
                       <DwgViewerComponent fileBuffer={dwgFileBuffer} fileName={sharedFile.fileName} onParsed={(info) => setDwgInfo(info)} />
                     ) : viewerMode === "2d-dxf" ? (

@@ -17,6 +17,7 @@ import { Slider } from "@/components/ui/slider";
 interface VideoViewerProps {
   videoUrl: string | null;
   fileName: string;
+  hideDownload?: boolean;
   onVideoLoaded?: (info: {
     width: number;
     height: number;
@@ -115,7 +116,7 @@ function captureViaProxy(originalUrl: string, seekTime: number): Promise<string 
 }
 
 const VideoViewer = forwardRef<VideoViewerHandle, VideoViewerProps>(
-  ({ videoUrl, fileName, onVideoLoaded }, ref) => {
+  ({ videoUrl, fileName, hideDownload, onVideoLoaded }, ref) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -441,15 +442,17 @@ const VideoViewer = forwardRef<VideoViewerHandle, VideoViewerProps>(
                 </Button>
 
                 {/* Download */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-white hover:bg-white/20 hover:text-white"
-                  onClick={handleDownload}
-                  title="下载视频"
-                >
-                  <Download className="w-4 h-4" />
-                </Button>
+                {!hideDownload && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-white hover:bg-white/20 hover:text-white"
+                    onClick={handleDownload}
+                    title="下载视频"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                )}
 
                 {/* Fullscreen */}
                 <Button

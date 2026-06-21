@@ -15,6 +15,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dis
 
 interface PdfViewerProps {
   file: File;
+  hideDownload?: boolean;
   onInfo?: (info: {
     pages: number;
     width: number;
@@ -24,7 +25,7 @@ interface PdfViewerProps {
   }) => void;
 }
 
-export default function PdfViewer({ file, onInfo }: PdfViewerProps) {
+export default function PdfViewer({ file, hideDownload, onInfo }: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -316,13 +317,15 @@ export default function PdfViewer({ file, onInfo }: PdfViewerProps) {
           >
             <RotateCw className="w-4 h-4" />
           </button>
-          <button
-            onClick={downloadFile}
-            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-            title="下载"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+          {!hideDownload && (
+            <button
+              onClick={downloadFile}
+              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+              title="下载"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

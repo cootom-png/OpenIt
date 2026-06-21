@@ -4,6 +4,7 @@ import { Download, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 interface ExcelViewerProps {
   file: File;
+  hideDownload?: boolean;
   onInfo?: (info: {
     sheets: number;
     sheetNames: string[];
@@ -19,7 +20,7 @@ type SheetData = {
   merges: XLSX.Range[];
 };
 
-export default function ExcelViewer({ file, onInfo }: ExcelViewerProps) {
+export default function ExcelViewer({ file, hideDownload, onInfo }: ExcelViewerProps) {
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -234,13 +235,15 @@ export default function ExcelViewer({ file, onInfo }: ExcelViewerProps) {
           >
             <Maximize2 className="w-4 h-4" />
           </button>
-          <button
-            onClick={downloadFile}
-            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-            title="下载"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+          {!hideDownload && (
+            <button
+              onClick={downloadFile}
+              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+              title="下载"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

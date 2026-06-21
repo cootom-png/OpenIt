@@ -4,6 +4,7 @@ import { Download, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 interface WordViewerProps {
   file: File;
+  hideDownload?: boolean;
   onInfo?: (info: {
     paragraphs: number;
     images: number;
@@ -11,7 +12,7 @@ interface WordViewerProps {
   }) => void;
 }
 
-export default function WordViewer({ file, onInfo }: WordViewerProps) {
+export default function WordViewer({ file, hideDownload, onInfo }: WordViewerProps) {
   const [html, setHtml] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,13 +166,15 @@ export default function WordViewer({ file, onInfo }: WordViewerProps) {
           >
             <Maximize2 className="w-4 h-4" />
           </button>
-          <button
-            onClick={downloadFile}
-            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-            title="下载"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+          {!hideDownload && (
+            <button
+              onClick={downloadFile}
+              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+              title="下载"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

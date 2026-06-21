@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 interface ImageViewerProps {
   imageUrl: string | null;
   fileName?: string;
+  hideDownload?: boolean;
   onImageLoaded?: (info: { width: number; height: number }) => void;
 }
 
 export default function ImageViewer({
   imageUrl,
   fileName,
+  hideDownload,
   onImageLoaded,
 }: ImageViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,9 +155,11 @@ export default function ImageViewer({
           <Maximize className="w-4 h-4" />
         </Button>
         <div className="w-px h-5 bg-border mx-1" />
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleDownload} title="下载">
-          <Download className="w-4 h-4" />
-        </Button>
+        {!hideDownload && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleDownload} title="下载">
+            <Download className="w-4 h-4" />
+          </Button>
+        )}
         <span className="text-xs text-muted-foreground ml-1 min-w-[45px] text-center">
           {Math.round(scale * 100)}%
         </span>
