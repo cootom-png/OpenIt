@@ -29,6 +29,7 @@ import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import ArchiveViewer from "@/components/ArchiveViewer";
+import CsvViewer from "@/components/CsvViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
@@ -40,8 +41,9 @@ const SUPPORTED_PDF = ["pdf"];
 const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
 const SUPPORTED_ARCHIVE = ["zip", "rar"];
+const SUPPORTED_CSV = ["csv"];
 
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "archive" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | null;
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
 
 const formatFileSize = (bytes: number) => {
@@ -159,6 +161,13 @@ export default function ShareView() {
           const file = new File([blob], sharedFile.fileName);
           setDocFile(file);
           setStatus("ready");
+        } else if (SUPPORTED_CSV.includes(ext)) {
+          setViewerMode("csv");
+          const resp = await fetch(sharedFile.s3Url);
+          const blob = await resp.blob();
+          const file = new File([blob], sharedFile.fileName);
+          setDocFile(file);
+          setStatus("ready");
         } else if (SUPPORTED_ARCHIVE.includes(ext)) {
           setViewerMode("archive");
           const resp = await fetch(sharedFile.s3Url);
@@ -266,6 +275,7 @@ export default function ShareView() {
   const isWord = SUPPORTED_WORD.includes(fileExt);
   const isExcel = SUPPORTED_EXCEL.includes(fileExt);
   const isArchive = SUPPORTED_ARCHIVE.includes(fileExt);
+  const isCsv = SUPPORTED_CSV.includes(fileExt);
 
   return (
     <div className="min-h-screen bg-background">
@@ -327,6 +337,8 @@ export default function ShareView() {
                       <WordViewer file={docFile} onInfo={(info) => setWordInfo(info)} />
                     ) : viewerMode === "excel" && docFile ? (
                       <ExcelViewer file={docFile} onInfo={(info) => setExcelInfo(info)} />
+                    ) : viewerMode === "csv" && docFile ? (
+                      <CsvViewer file={docFile} />
                     ) : viewerMode === "archive" && docFile ? (
                       <ArchiveViewer file={docFile} />
                     ) : viewerMode === "video" ? (
@@ -463,7 +475,7 @@ export default function ShareView() {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">类别</span>
                   <Badge variant="outline" className="text-xs">
-                    {is3D ? "3D 模型" : is2D ? "CAD 图纸" : isImage ? "图片" : isVideo ? "视频" : isPdf ? "PDF" : isWord ? "Word" : isExcel ? "Excel" : "文件"}
+                    {is3D ? "3D 模型" : is2D ? "CAD 图纸" : isImage ? "图片" : isVideo ? "视频" : isPdf ? "PDF" : isWord ? "Word" : isExcel ? "Excel" : isCsv ? "CSV" : "文件"}
                   </Badge>
                 </div>
                 <Separator />
