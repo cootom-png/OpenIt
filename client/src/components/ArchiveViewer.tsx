@@ -276,21 +276,29 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
 
         // Check if File System Access API is supported (Chrome/Edge)
         if ("showDirectoryPicker" in window) {
+          // Step 1: Prompt user to create a new folder first
+          const confirmed = window.confirm(
+            "解压下载操作步骤：\n\n" +
+            "1. 点击“确定”后会弹出文件夹选择器\n" +
+            "2. 请先导航到您希望保存的位置（如桌面、D盘等）\n" +
+            "3. 点击“新建文件夹”按钮创建一个新文件夹\n" +
+            "4. 选择该新文件夹，点击“选择文件夹”\n\n" +
+            "解压后的文件将直接保存到该文件夹中。"
+          );
+          if (!confirmed) return;
+
           try {
             const dirHandle = await (window as any).showDirectoryPicker({
               mode: "readwrite",
-              startIn: "downloads",
+              startIn: "desktop",
             });
-            // Create a subfolder with the archive name
-            const baseName = file.name.replace(/\.[^.]+$/, "");
-            const subDir = await dirHandle.getDirectoryHandle(baseName, { create: true });
 
-            // Extract all files into the subfolder
+            // Extract all files directly into the selected folder
             const fileEntries = Object.entries(zip.files).filter(([_, entry]) => !entry.dir);
             for (const [path, entry] of fileEntries) {
               // Create subdirectories as needed
               const parts = path.split("/").filter(Boolean);
-              let currentDir = subDir;
+              let currentDir = dirHandle;
               for (let i = 0; i < parts.length - 1; i++) {
                 currentDir = await currentDir.getDirectoryHandle(parts[i], { create: true });
               }
@@ -302,20 +310,41 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
               await writable.write(content);
               await writable.close();
             }
-            alert(`解压完成！已将 ${fileEntries.length} 个文件解压到 "${baseName}" 文件夹`);
+
+            alert(`解压完成！已将 ${fileEntries.length} 个文件保存到所选文件夹中。\n\n点击“确定”后将自动打开文件夹。`);
+
+            // Try to open the folder - use a workaround by opening a file in the folder
+            // Unfortunately browsers cannot directly open file explorer,
+            // but we can iterate and open the first file to trigger the OS file manager
+            try {
+              const firstFile = fileEntries[0];
+              if (firstFile) {
+                const [firstPath] = firstFile;
+                const firstParts = firstPath.split("/").filter(Boolean);
+                let navDir = dirHandle;
+                for (let i = 0; i < firstParts.length - 1; i++) {
+                  navDir = await navDir.getDirectoryHandle(firstParts[i]);
+                }
+                const fh = await navDir.getFileHandle(firstParts[firstParts.length - 1]);
+                const f = await fh.getFile();
+                const url = URL.createObjectURL(f);
+                window.open(url, "_blank");
+                setTimeout(() => URL.revokeObjectURL(url), 5000);
+              }
+            } catch {
+              // Silently ignore if we can't open the file
+            }
           } catch (fsErr: any) {
             if (fsErr.name === "AbortError") {
-              // User cancelled the folder picker
               return;
             }
-            if (fsErr.name === "NotAllowedError" || fsErr.message?.includes("系统文件") || fsErr.message?.includes("permission")) {
-              alert("无法写入该文件夹（系统保护目录）。\n\n解决方法：\n1. 点击“选择其他文件夹”\n2. 在左侧导航栏找到“桌面”或手动输入路径：\n   C:\\Users\\你的用户名\\Desktop\n3. 点击“选择文件夹”即可");
+            if (fsErr.name === "NotAllowedError" || fsErr.message?.includes("permission")) {
+              alert("无法写入该文件夹。\n\n请尝试：\n1. 在目标位置（如桌面）先手动新建一个文件夹\n2. 然后选择该新建的文件夹即可");
               return;
             }
             throw fsErr;
           }
         } else {
-          // Browser does not support File System Access API
           alert("当前浏览器不支持此功能，请使用 Chrome 或 Edge 浏览器进行解压下载。");
         }
       } else {
