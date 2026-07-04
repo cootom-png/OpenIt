@@ -46,6 +46,7 @@ import { ArchiveViewer } from "@/components/ArchiveViewer";
 import CsvViewer from "@/components/CsvViewer";
 import EmailViewer from "@/components/EmailViewer";
 import MarkdownViewer from "@/components/MarkdownViewer";
+import CodeViewer from "@/components/CodeViewer";
 import { parseFile, getFileExtension, type MeshQuality, QUALITY_PRESETS } from "@/lib/fileParser";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
@@ -207,6 +208,14 @@ async function loadRemoteFile(
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
+    } else if (SUPPORTED_CODE.includes(ext)) {
+      s.setViewerMode("code");
+      s.setStatus("parsing");
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      s.setFileSize(blob.size);
+      s.setDocFile(new File([blob], name));
+      s.setStatus("ready");
     } else {
       s.setStatus("error");
       s.setErrorMsg("不支持预览此文件格式");
@@ -218,7 +227,7 @@ async function loadRemoteFile(
 }
 
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "svg" | "email" | "markdown" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "svg" | "email" | "markdown" | "code" | null;
 
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
 const SUPPORTED_2D_DXF = ["dxf"];
@@ -232,7 +241,8 @@ const SUPPORTED_ARCHIVE = ["zip", "rar", "7z"];
 const SUPPORTED_CSV = ["csv"];
 const SUPPORTED_EMAIL = ["eml", "msg"];
 const SUPPORTED_MARKDOWN = ["md"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL, ...SUPPORTED_MARKDOWN];
+const SUPPORTED_CODE = ["css"];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL, ...SUPPORTED_MARKDOWN, ...SUPPORTED_CODE];
 // On iOS Safari, the accept attribute greys out files with unrecognized MIME types
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
 // the extension in handleFile() instead.
@@ -589,6 +599,7 @@ export default function Home() {
       if (SUPPORTED_PDF.includes(ext) || SUPPORTED_WORD.includes(ext) || SUPPORTED_EXCEL.includes(ext) || SUPPORTED_CSV.includes(ext)) return "document";
       if (SUPPORTED_ARCHIVE.includes(ext)) return "archive";
       if (SUPPORTED_EMAIL.includes(ext)) return "email";
+      if (SUPPORTED_CODE.includes(ext)) return "code";
       return "unknown";
     };
 
@@ -737,6 +748,20 @@ export default function Home() {
       } catch (err: any) {
         setStatus("error");
         setErrorMsg(err.message || "加载 Markdown 文件时发生错误");
+      }
+    } else if (SUPPORTED_CODE.includes(ext)) {
+      // Code file (.css) - use CodeViewer
+      setViewerMode("code");
+      setStatus("parsing");
+      try {
+        setDocFile(file);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || "加载代码文件时发生错误");
       }
     } else if (SUPPORTED_VIDEO.includes(ext)) {
       // Video file - use VideoViewer
@@ -930,7 +955,11 @@ export default function Home() {
     () => SUPPORTED_MARKDOWN.includes(fileExt),
     [fileExt]
   );
-  const isDocFile = isPdfFile || isWordFile || isExcelFile || isMarkdownFile;
+  const isCodeFile = useMemo(
+    () => SUPPORTED_CODE.includes(fileExt),
+    [fileExt]
+  );
+  const isDocFile = isPdfFile || isWordFile || isExcelFile || isMarkdownFile || isCodeFile;
 
   // Reset file input value so the same file can be re-selected
   const triggerFileInput = useCallback(() => {
@@ -1116,6 +1145,7 @@ export default function Home() {
                           文本:
                         </span>
                         <Badge variant="outline">.MD</Badge>
+                        <Badge variant="outline">.CSS</Badge>
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
@@ -1197,6 +1227,8 @@ export default function Home() {
                   />
                 ) : viewerMode === "markdown" && docFile ? (
                   <MarkdownViewer file={docFile} />
+                ) : viewerMode === "code" && docFile ? (
+                  <CodeViewer file={docFile} />
                 ) : viewerMode === "video" ? (
                   <VideoViewer
                     ref={videoViewerRef}
@@ -1594,6 +1626,11 @@ export default function Home() {
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
                             Markdown 文本
+                          </span>
+                        ) : isCodeFile ? (
+                          <span className="flex items-center gap-1">
+                            <FileType className="w-3 h-3" />
+                            代码文件
                           </span>
                         ) : (
                           <span className="flex items-center gap-1">

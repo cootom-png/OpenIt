@@ -30,6 +30,7 @@ import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
 import { ArchiveViewer } from "@/components/ArchiveViewer";
 import CsvViewer from "@/components/CsvViewer";
+import CodeViewer from "@/components/CodeViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 
 const SUPPORTED_3D = ["stp", "step", "stl", "obj", "3mf", "igs", "iges"];
@@ -42,8 +43,9 @@ const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
 const SUPPORTED_ARCHIVE = ["zip", "rar"];
 const SUPPORTED_CSV = ["csv"];
+const SUPPORTED_CODE = ["css"];
 
-type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | null;
+type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "code" | null;
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
 
 const formatFileSize = (bytes: number) => {
@@ -173,6 +175,13 @@ export default function ShareView() {
           const resp = await fetch(sharedFile.s3Url);
           const blob = await resp.blob();
           const file = new File([blob], sharedFile.fileName + "." + ext);
+          setDocFile(file);
+          setStatus("ready");
+        } else if (SUPPORTED_CODE.includes(ext)) {
+          setViewerMode("code");
+          const resp = await fetch(sharedFile.s3Url);
+          const blob = await resp.blob();
+          const file = new File([blob], sharedFile.fileName);
           setDocFile(file);
           setStatus("ready");
         } else if (SUPPORTED_2D_DXF.includes(ext)) {
@@ -341,6 +350,8 @@ export default function ShareView() {
                       <CsvViewer file={docFile} />
                     ) : viewerMode === "archive" && docFile ? (
                       <ArchiveViewer file={docFile} />
+                    ) : viewerMode === "code" && docFile ? (
+                      <CodeViewer file={docFile} />
                     ) : viewerMode === "video" ? (
                       <VideoViewer videoUrl={videoUrl} fileName={sharedFile.fileName} hideDownload onVideoLoaded={(info) => setVideoInfo(info)} />
                     ) : viewerMode === "image" ? (
