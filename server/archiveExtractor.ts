@@ -6,15 +6,7 @@
 import { Readable } from 'stream';
 import * as unzipper from 'unzipper';
 import { Buffer } from 'buffer';
-
-let archiverModule: any = null;
-
-async function getArchiver() {
-  if (!archiverModule) {
-    archiverModule = await import('archiver');
-  }
-  return archiverModule.default || archiverModule;
-}
+import { ZipArchive } from 'archiver';
 
 export interface ExtractedFile {
   path: string;
@@ -32,13 +24,11 @@ export async function extractAndRepackZip(
   fileBuffer: Buffer,
   rootFolderName: string
 ): Promise<Buffer> {
-  const archiver = await getArchiver();
-
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
 
-    // Create a new ZIP archive
-    const archive = archiver('zip', {
+    // Create a new ZIP archive using ZipArchive class
+    const archive = new ZipArchive({
       zlib: { level: 6 },
     });
 
@@ -73,7 +63,7 @@ export async function extractAndRepackZip(
         const newPath = `${rootFolderName}/${fileName}`;
 
         if (type === 'Directory') {
-          archive.append(null, { name: newPath });
+          archive.append(Buffer.alloc(0), { name: newPath });
           entry.autodrain();
         } else {
           archive.append(entry, { name: newPath });
