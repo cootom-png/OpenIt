@@ -3,6 +3,7 @@
  *  - Image compression before upload
  *  - File slicing into 2MB chunks
  *  - Per-chunk retry (max 3 attempts)
+ *  - 429 (server busy) auto-retry with countdown
  *  - Resume support (query server for already-uploaded chunks)
  *  - Progress callback
  */
@@ -12,18 +13,98 @@ const MAX_RETRIES = 3;
 const MAX_IMAGE_DIMENSION = 2000;
 const IMAGE_QUALITY = 0.85;
 
+// 429 重试配置
+const MAX_429_RETRIES = 5; // 最多重试 5 次
+const INITIAL_429_WAIT_MS = 5000; // 首次等待 5 秒
+const MAX_429_WAIT_MS = 30000; // 最长等待 30 秒
+
 export interface UploadProgress {
-  phase: "compressing" | "uploading" | "completing";
+  phase: "compressing" | "uploading" | "completing" | "waiting";
   percent: number; // 0-100
   uploadedChunks: number;
   totalChunks: number;
   speed?: string; // e.g. "1.2 MB/s"
+  waitMessage?: string; // 429 等待时的提示信息
+  waitSeconds?: number; // 剩余等待秒数
 }
 
 export interface ChunkedUploadResult {
   success: boolean;
   file?: any;
   error?: string;
+}
+
+// ─── 429 等待辅助函数 ───
+
+/**
+ * 等待指定毫秒数，期间通过 onProgress 回调显示倒计时
+ */
+async function waitWithCountdown(
+  waitMs: number,
+  message: string,
+  currentProgress: Omit<UploadProgress, "phase" | "waitMessage" | "waitSeconds">,
+  onProgress?: (progress: UploadProgress) => void
+): Promise<void> {
+  const totalSeconds = Math.ceil(waitMs / 1000);
+  for (let remaining = totalSeconds; remaining > 0; remaining--) {
+    onProgress?.({
+      ...currentProgress,
+      phase: "waiting",
+      waitMessage: `${message}${remaining}秒后自动重试...`,
+      waitSeconds: remaining,
+    });
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+/**
+ * 带 429 重试的 fetch 封装
+ * 当服务器返回 429 时自动等待并重试
+ */
+async function fetchWith429Retry(
+  url: string,
+  options: RequestInit,
+  currentProgress: Omit<UploadProgress, "phase" | "waitMessage" | "waitSeconds">,
+  onProgress?: (progress: UploadProgress) => void
+): Promise<Response> {
+  let waitMs = INITIAL_429_WAIT_MS;
+
+  for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+    const resp = await fetch(url, options);
+
+    if (resp.status === 429) {
+      if (attempt === MAX_429_RETRIES) {
+        // 超过最大重试次数
+        return resp;
+      }
+
+      // 从响应中获取等待时间（如果服务器提供了 Retry-After 头）
+      const retryAfter = resp.headers.get("Retry-After");
+      if (retryAfter) {
+        const seconds = parseInt(retryAfter, 10);
+        if (!isNaN(seconds)) {
+          waitMs = seconds * 1000;
+        }
+      }
+
+      // 显示倒计时并等待
+      await waitWithCountdown(
+        waitMs,
+        "服务器繁忙，",
+        currentProgress,
+        onProgress
+      );
+
+      // 指数退避：每次等待时间增加 50%，但不超过最大值
+      waitMs = Math.min(waitMs * 1.5, MAX_429_WAIT_MS);
+      continue;
+    }
+
+    return resp;
+  }
+
+  // 不应该到达这里，但为了类型安全
+  throw new Error("服务器持续繁忙，请稍后再试");
 }
 
 // ─── Image Compression ───
@@ -99,12 +180,14 @@ async function compressImage(file: File): Promise<File> {
   });
 }
 
-// ─── Chunk Upload with Retry ───
+// ─── Chunk Upload with Retry (including 429 handling) ───
 
 async function uploadChunkWithRetry(
   uploadId: string,
   chunkIndex: number,
   chunkBlob: Blob,
+  currentProgress: Omit<UploadProgress, "phase" | "waitMessage" | "waitSeconds">,
+  onProgress?: (progress: UploadProgress) => void,
   retries: number = MAX_RETRIES
 ): Promise<void> {
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -114,13 +197,18 @@ async function uploadChunkWithRetry(
       formData.append("chunkIndex", String(chunkIndex));
       formData.append("chunk", chunkBlob, `chunk-${chunkIndex}`);
 
-      const resp = await fetch("/api/upload/chunk", {
-        method: "POST",
-        body: formData,
-      });
+      const resp = await fetchWith429Retry(
+        "/api/upload/chunk",
+        { method: "POST", body: formData },
+        currentProgress,
+        onProgress
+      );
 
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({ error: resp.statusText }));
+        if (resp.status === 429) {
+          throw new Error(body.error || "服务器繁忙，请稍后再试");
+        }
         throw new Error(body.error || `HTTP ${resp.status}`);
       }
 
@@ -168,7 +256,7 @@ export async function chunkedUpload(
 
   const totalChunks = Math.ceil(uploadFile.size / CHUNK_SIZE);
 
-  // Step 2: Init upload session
+  // Step 2: Init upload session (with 429 retry)
   onProgress?.({
     phase: "uploading",
     percent: 0,
@@ -176,22 +264,32 @@ export async function chunkedUpload(
     totalChunks,
   });
 
-  const initResp = await fetch("/api/upload/init", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userId,
-      fileName: file.name, // original name
-      fileExt: ext,
-      fileSize: uploadFile.size,
-      mimeType: isCompressibleImage(ext) ? "image/jpeg" : file.type || "application/octet-stream",
-      category,
-      totalChunks,
-    }),
-  });
+  const initProgress = { percent: 0, uploadedChunks: 0, totalChunks };
+
+  const initResp = await fetchWith429Retry(
+    "/api/upload/init",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        fileName: file.name, // original name
+        fileExt: ext,
+        fileSize: uploadFile.size,
+        mimeType: isCompressibleImage(ext) ? "image/jpeg" : file.type || "application/octet-stream",
+        category,
+        totalChunks,
+      }),
+    },
+    initProgress,
+    onProgress
+  );
 
   if (!initResp.ok) {
     const body = await initResp.json().catch(() => ({ error: initResp.statusText }));
+    if (initResp.status === 429) {
+      return { success: false, error: "服务器当前繁忙，请等待几分钟后再试" };
+    }
     return { success: false, error: body.error || "初始化上传失败" };
   }
 
@@ -223,8 +321,14 @@ export async function chunkedUpload(
     const end = Math.min(start + CHUNK_SIZE, uploadFile.size);
     const chunkBlob = uploadFile.slice(start, end);
 
+    const chunkProgress = {
+      percent: Math.round((i / totalChunks) * 100),
+      uploadedChunks: i,
+      totalChunks,
+    };
+
     try {
-      await uploadChunkWithRetry(uploadId, i, chunkBlob);
+      await uploadChunkWithRetry(uploadId, i, chunkBlob, chunkProgress, onProgress);
     } catch (err: any) {
       return {
         success: false,
