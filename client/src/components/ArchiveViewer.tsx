@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Archive, Download, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { trpc } from "@/lib/trpc";
 
 interface ArchiveViewerProps {
   file?: File;
@@ -22,8 +21,12 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [extracting, setExtracting] = useState(false);
-  const extractArchive = trpc.archive.extractAndDownload.useMutation();
+  const [fileTree, setFileTree] = useState<FileEntry[]>([]);
+  const [loading, setLoading] = useState(false);
 
+  const getFileExt = (f: File) => f.name.split(".").pop()?.toLowerCase() || "";
+
+  // Parse ZIP files client-side with JSZip
   const parseZipFile = async (zipFile: File): Promise<FileEntry[]> => {
     const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(zipFile);
@@ -47,7 +50,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           const newEntry: FileEntry = {
             path: currentPath,
             name: part,
-            size: isLastPart ? (entry as any)._data?.uncompressedSize || 0 : 0,
+            size: isLastPart && !isDirectory ? (entry as any)._data?.uncompressedSize || 0 : 0,
             isDir: isDirectory,
             level: i,
             children: [],
@@ -71,7 +74,68 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
     return entries;
   };
 
-  const [fileTree, setFileTree] = useState<FileEntry[]>([]);
+  // Parse RAR/7z files server-side with libarchive-wasm
+  const parseArchiveServerSide = async (archiveFile: File): Promise<FileEntry[]> => {
+    const arrayBuffer = await archiveFile.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+
+    const response = await fetch("/api/parse-archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buffer: base64, filename: archiveFile.name }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "Failed to parse archive");
+    }
+
+    const { entries: rawEntries } = await response.json();
+
+    // Build tree structure from flat entries
+    const tree: FileEntry[] = [];
+    const pathMap = new Map<string, FileEntry>();
+
+    rawEntries.forEach((raw: { path: string; name: string; size: number; isDir: boolean }) => {
+      const parts = raw.path.replace(/\/$/, "").split(/[\/\\]/).filter(Boolean);
+
+      let currentPath = "";
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const parentPath = currentPath;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        const isLastPart = i === parts.length - 1;
+        const isDirectory = raw.isDir || !isLastPart;
+
+        if (!pathMap.has(currentPath)) {
+          const newEntry: FileEntry = {
+            path: currentPath,
+            name: part,
+            size: isLastPart ? raw.size : 0,
+            isDir: isDirectory,
+            level: i,
+            children: [],
+          };
+
+          if (parentPath) {
+            const parent = pathMap.get(parentPath);
+            if (parent) {
+              parent.children = parent.children || [];
+              parent.children.push(newEntry);
+            }
+          } else {
+            tree.push(newEntry);
+          }
+
+          pathMap.set(currentPath, newEntry);
+        }
+      }
+    });
+
+    return tree;
+  };
 
   useEffect(() => {
     if (!file) {
@@ -79,13 +143,23 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
       return;
     }
     let cancelled = false;
-    parseZipFile(file)
+    setLoading(true);
+
+    const ext = getFileExt(file);
+    const parsePromise = ext === "zip" ? parseZipFile(file) : parseArchiveServerSide(file);
+
+    parsePromise
       .then((entries) => {
         if (!cancelled) setFileTree(entries);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Archive parse error:", err);
         if (!cancelled) setFileTree([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
+
     return () => { cancelled = true; };
   }, [file]);
 
@@ -112,10 +186,10 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
     const matchedPaths = new Set<string>();
     const matchedFiles: FileEntry[] = [];
 
-    allFiles.forEach((file) => {
-      if (file.name.toLowerCase().includes(query)) {
-        matchedFiles.push(file);
-        let currentPath = file.path;
+    allFiles.forEach((f) => {
+      if (f.name.toLowerCase().includes(query)) {
+        matchedFiles.push(f);
+        let currentPath = f.path;
         while (currentPath) {
           matchedPaths.add(currentPath);
           const lastSlash = currentPath.lastIndexOf("/");
@@ -129,7 +203,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
     setExpandedDirs(expandedSet);
 
     return matchedFiles;
-  }, [searchQuery, allFiles, expandedDirs]);
+  }, [searchQuery, allFiles]);
 
   const fileCount = allFiles.filter((f) => !f.isDir).length;
   const dirCount = allFiles.filter((f) => f.isDir).length;
@@ -173,16 +247,16 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
                   className="p-0 h-4 w-4 flex items-center justify-center"
                 >
                   <span className="text-xs">
-                    {expandedDirs.has(item.path) ? "▼" : "▶"}
+                    {expandedDirs.has(item.path) ? "\u25BC" : "\u25B6"}
                   </span>
                 </button>
-                <span>📁</span>
+                <span>\uD83D\uDCC1</span>
                 <span className="font-medium">{item.name}</span>
               </>
             ) : (
               <>
                 <span className="w-4"></span>
-                <span>📄</span>
+                <span>\uD83D\uDCC4</span>
                 <span>
                   {searchQuery && item.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
                     <>
@@ -222,19 +296,18 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
 
   const handleExtractDownload = async () => {
     if (!file) {
-      alert("请先选择文件");
+      alert("\u8BF7\u5148\u9009\u62E9\u6587\u4EF6");
       return;
     }
     setExtracting(true);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "";
+      const ext = getFileExt(file);
 
       if (ext === "zip") {
         // ZIP: extract client-side with JSZip and download all files
         const JSZip = (await import("jszip")).default;
         const zip = await JSZip.loadAsync(file);
 
-        // Extract and download all files
         const fileEntries = Object.entries(zip.files).filter(
           ([_, entry]) => !entry.dir
         );
@@ -249,16 +322,55 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
-          // Small delay between downloads to avoid browser blocking
           await new Promise((r) => setTimeout(r, 500));
         }
-        alert(`解压完成！已下载 ${fileEntries.length} 个文件到浏览器默认下载位置。`);
+        alert(`\u89E3\u538B\u5B8C\u6210\uFF01\u5DF2\u4E0B\u8F7D ${fileEntries.length} \u4E2A\u6587\u4EF6\u5230\u6D4F\u89C8\u5668\u9ED8\u8BA4\u4E0B\u8F7D\u4F4D\u7F6E\u3002`);
       } else {
-        // RAR/7z: not supported for client-side extraction, show message
-        alert("RAR/7z 格式暂不支持解压下载，请使用本地解压软件");
+        // RAR/7z: send to server for extraction, then download each file
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+        );
+
+        const response = await fetch("/api/extract-archive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ buffer: base64, filename: file.name }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Extraction failed");
+        }
+
+        const result = await response.json();
+
+        if (result.files && result.files.length > 0) {
+          // Download each extracted file
+          for (const f of result.files) {
+            const binaryStr = atob(f.data);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const blob = new Blob([bytes]);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = f.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            await new Promise((r) => setTimeout(r, 500));
+          }
+          alert(`\u89E3\u538B\u5B8C\u6210\uFF01\u5DF2\u4E0B\u8F7D ${result.files.length} \u4E2A\u6587\u4EF6\u5230\u6D4F\u89C8\u5668\u9ED8\u8BA4\u4E0B\u8F7D\u4F4D\u7F6E\u3002`);
+        } else {
+          alert("\u538B\u7F29\u5305\u5185\u6CA1\u6709\u53EF\u89E3\u538B\u7684\u6587\u4EF6");
+        }
       }
     } catch (err: any) {
-      alert(`解压失败: ${err.message}`);
+      alert(`\u89E3\u538B\u5931\u8D25: ${err.message}`);
     } finally {
       setExtracting(false);
     }
@@ -276,7 +388,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           <div className="flex items-center gap-1.5 shrink-0">
             <Archive className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium">
-              {file?.name.split(".").pop()?.toUpperCase()} 压缩包
+              {getFileExt(file).toUpperCase()} \u538B\u7F29\u5305
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -288,10 +400,10 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
               ) : (
                 fileCount
               )}{" "}
-              个文件
+              \u4E2A\u6587\u4EF6
             </span>
-            {dirCount > 0 && <span>{dirCount} 个文件夹</span>}
-            <span>解压后 {formatSize(totalSize)}</span>
+            {dirCount > 0 && <span>{dirCount} \u4E2A\u6587\u4EF6\u5939</span>}
+            <span>\u89E3\u538B\u540E {formatSize(totalSize)}</span>
           </div>
         </div>
         <Button
@@ -300,10 +412,10 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           onClick={handleExtractDownload}
           disabled={extracting || !file}
           className="shrink-0"
-          title="点击下载解压后的所有文件到浏览器默认下载位置"
+          title="\u70B9\u51FB\u4E0B\u8F7D\u89E3\u538B\u540E\u7684\u6240\u6709\u6587\u4EF6\u5230\u6D4F\u89C8\u5668\u9ED8\u8BA4\u4E0B\u8F7D\u4F4D\u7F6E"
         >
           <Download className="w-4 h-4 mr-2" />
-          {extracting ? "解压中..." : "解压下载"}
+          {extracting ? "\u89E3\u538B\u4E2D..." : "\u89E3\u538B\u4E0B\u8F7D"}
         </Button>
       </div>
 
@@ -312,7 +424,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
         <div className="relative">
           <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="搜索文件名..."
+            placeholder="\u641C\u7D22\u6587\u4EF6\u540D..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8 h-8 text-sm"
@@ -330,9 +442,17 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
 
       {/* File tree */}
       <div className="flex-1 overflow-auto p-3">
-        {filteredFiles.length === 0 && searchQuery ? (
+        {loading ? (
           <div className="text-center text-sm text-muted-foreground py-8">
-            未找到匹配的文件
+            \u6B63\u5728\u89E3\u6790\u538B\u7F29\u5305...
+          </div>
+        ) : filteredFiles.length === 0 && searchQuery ? (
+          <div className="text-center text-sm text-muted-foreground py-8">
+            \u672A\u627E\u5230\u5339\u914D\u7684\u6587\u4EF6
+          </div>
+        ) : fileTree.length === 0 ? (
+          <div className="text-center text-sm text-muted-foreground py-8">
+            \u538B\u7F29\u5305\u5185\u6CA1\u6709\u6587\u4EF6
           </div>
         ) : (
           <div className="space-y-0">{renderTree(fileTree)}</div>

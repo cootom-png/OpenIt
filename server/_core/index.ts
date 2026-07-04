@@ -77,18 +77,41 @@ async function startServer() {
         return res.status(400).json({ error: "Missing buffer or filename" });
       }
       const ext = filename.split(".").pop()?.toLowerCase() || "";
-      if (ext !== "zip") {
-        return res.status(400).json({ error: "Only ZIP extraction is supported" });
+      if (!['zip', 'rar', '7z'].includes(ext)) {
+        return res.status(400).json({ error: "Unsupported format" });
       }
-      const { extractAndRepackZip } = await import("../archiveExtractor");
       const fileBuffer = Buffer.from(buffer, "base64");
-      const baseName = filename.replace(/\.[^.]+$/, "");
-      const timestamp = Date.now();
-      const rootFolderName = `${baseName}_${timestamp}`;
-      const repacked = await extractAndRepackZip(fileBuffer, rootFolderName);
-      const base64 = repacked.toString("base64");
-      const newFileName = `${baseName}_extracted_${timestamp}.zip`;
-      return res.json({ success: true, base64, fileName: newFileName });
+
+      if (ext === 'zip') {
+        const { extractAndRepackZip } = await import("../archiveExtractor");
+        const baseName = filename.replace(/\.[^.]+$/, "");
+        const timestamp = Date.now();
+        const rootFolderName = `${baseName}_${timestamp}`;
+        const repacked = await extractAndRepackZip(fileBuffer, rootFolderName);
+        const base64 = repacked.toString("base64");
+        const newFileName = `${baseName}_extracted_${timestamp}.zip`;
+        return res.json({ success: true, base64, fileName: newFileName });
+      } else {
+        // RAR/7z: use libarchive-wasm to extract files
+        const { ArchiveReader, libarchiveWasm } = await import("libarchive-wasm");
+        const mod = await libarchiveWasm();
+        const reader = new ArchiveReader(mod, new Int8Array(fileBuffer));
+        const files: Array<{ name: string; data: string }> = [];
+        for (const entry of reader.entries()) {
+          const pathStr = entry.getPathname();
+          if (pathStr.endsWith('/')) continue; // skip directories
+          const fileData = entry.readData();
+          if (fileData) {
+            const fileName = pathStr.split(/[\/\\]/).filter(Boolean).pop() || pathStr;
+            files.push({
+              name: fileName,
+              data: Buffer.from(fileData).toString('base64')
+            });
+          }
+        }
+        reader.free();
+        return res.json({ success: true, files });
+      }
     } catch (err: any) {
       console.error("[extract-archive]", err);
       return res.status(500).json({ error: err.message || "Extraction failed" });
