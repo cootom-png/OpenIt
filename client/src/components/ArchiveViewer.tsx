@@ -267,51 +267,69 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
     }
     setExtracting(true);
     try {
-      let base64: string;
-      let fileName: string;
+      const ext = file.name.split(".").pop()?.toLowerCase() || "";
 
-      if (s3Url) {
-        // Logged-in / saved: fetch from S3 via server
-        const result = await extractArchive.mutateAsync({ s3Url, fileName: file.name });
-        base64 = result.base64;
-        fileName = result.fileName;
+      if (ext === "zip") {
+        // ZIP: extract client-side with JSZip and use File System Access API
+        const JSZip = (await import("jszip")).default;
+        const zip = await JSZip.loadAsync(file);
+
+        // Check if File System Access API is supported (Chrome/Edge)
+        if ("showDirectoryPicker" in window) {
+          try {
+            const dirHandle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+            // Create a subfolder with the archive name
+            const baseName = file.name.replace(/\.[^.]+$/, "");
+            const subDir = await dirHandle.getDirectoryHandle(baseName, { create: true });
+
+            // Extract all files into the subfolder
+            const fileEntries = Object.entries(zip.files).filter(([_, entry]) => !entry.dir);
+            for (const [path, entry] of fileEntries) {
+              // Create subdirectories as needed
+              const parts = path.split("/").filter(Boolean);
+              let currentDir = subDir;
+              for (let i = 0; i < parts.length - 1; i++) {
+                currentDir = await currentDir.getDirectoryHandle(parts[i], { create: true });
+              }
+              // Write the file
+              const fileName = parts[parts.length - 1];
+              const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
+              const writable = await fileHandle.createWritable();
+              const content = await entry.async("uint8array");
+              await writable.write(content);
+              await writable.close();
+            }
+            alert(`解压完成！已将 ${fileEntries.length} 个文件解压到 "${baseName}" 文件夹`);
+          } catch (fsErr: any) {
+            if (fsErr.name === "AbortError") {
+              // User cancelled the folder picker
+              return;
+            }
+            throw fsErr;
+          }
+        } else {
+          // Fallback for browsers without File System Access API (Firefox/Safari)
+          // Download each file individually
+          const fileEntries = Object.entries(zip.files).filter(([_, entry]) => !entry.dir);
+          for (const [path, entry] of fileEntries) {
+            const content = await entry.async("blob");
+            const fileName = path.split("/").filter(Boolean).pop() || path;
+            const url = URL.createObjectURL(content);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            // Small delay between downloads to avoid browser blocking
+            await new Promise(r => setTimeout(r, 300));
+          }
+        }
       } else {
-        // Not logged-in or not saved: read local file and send to server
-        const arrayBuffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const chunkSize = 8192;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
-        }
-        const fileBase64 = btoa(binary);
-        const response = await fetch("/api/extract-archive", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ buffer: fileBase64, filename: file.name }),
-        });
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({ error: "解压失败" }));
-          throw new Error(err.error || "解压失败");
-        }
-        const data = await response.json();
-        base64 = data.base64;
-        fileName = data.fileName;
+        // RAR/7z: not supported for client-side extraction, show message
+        alert("RAR/7z 格式暂不支持解压下载，请使用本地解压软件");
       }
-
-      // Trigger browser download from base64
-      const byteChars = atob(base64);
-      const byteArr = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-      const blob = new Blob([byteArr], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(`解压失败: ${err.message}`);
     } finally {
