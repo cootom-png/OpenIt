@@ -42,7 +42,7 @@ import VideoViewer, { type VideoViewerHandle } from "@/components/VideoViewer";
 import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
-import ArchiveViewer from "@/components/ArchiveViewer";
+import { ArchiveViewer } from "@/components/ArchiveViewer";
 import CsvViewer from "@/components/CsvViewer";
 import EmailViewer from "@/components/EmailViewer";
 import MarkdownViewer from "@/components/MarkdownViewer";
@@ -1185,11 +1185,6 @@ export default function Home() {
                   <ArchiveViewer
                     file={docFile}
                     s3Url={archiveS3Url || undefined}
-                    onInfo={(info) => {
-                      setMeshCount(info.totalFiles);
-                      setVertexCount(0);
-                      setParseTime(0);
-                    }}
                   />
                 ) : viewerMode === "email" && docFile ? (
                   <EmailViewer

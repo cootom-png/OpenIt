@@ -28,7 +28,7 @@ import VideoViewer from "@/components/VideoViewer";
 import PdfViewer from "@/components/PdfViewer";
 import WordViewer from "@/components/WordViewer";
 import ExcelViewer from "@/components/ExcelViewer";
-import ArchiveViewer from "@/components/ArchiveViewer";
+import { ArchiveViewer } from "@/components/ArchiveViewer";
 import CsvViewer from "@/components/CsvViewer";
 import { parseFile, getFileExtension } from "@/lib/fileParser";
 

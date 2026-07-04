@@ -47,7 +47,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           const newEntry: FileEntry = {
             path: currentPath,
             name: part,
-            size: isLastPart ? entry._data?.uncompressedSize || 0 : 0,
+            size: isLastPart ? (entry as any)._data?.uncompressedSize || 0 : 0,
             isDir: isDirectory,
             level: i,
             children: [],
