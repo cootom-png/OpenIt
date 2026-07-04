@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Archive, Download, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,18 +71,22 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
     return entries;
   };
 
-  const fileTree = useMemo(() => {
-    if (!file) return [];
-    const parseFile = async () => {
-      try {
-        return await parseZipFile(file);
-      } catch {
-        return [];
-      }
-    };
-    let result: FileEntry[] = [];
-    parseFile().then((r) => (result = r));
-    return result;
+  const [fileTree, setFileTree] = useState<FileEntry[]>([]);
+
+  useEffect(() => {
+    if (!file) {
+      setFileTree([]);
+      return;
+    }
+    let cancelled = false;
+    parseZipFile(file)
+      .then((entries) => {
+        if (!cancelled) setFileTree(entries);
+      })
+      .catch(() => {
+        if (!cancelled) setFileTree([]);
+      });
+    return () => { cancelled = true; };
   }, [file]);
 
   const flattenTree = (entries: FileEntry[]): FileEntry[] => {
