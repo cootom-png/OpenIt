@@ -358,6 +358,7 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [savedFileId, setSavedFileId] = useState<number | null>(null);
+  const [archiveS3Url, setArchiveS3Url] = useState<string | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -623,6 +624,7 @@ export default function Home() {
     setErrorMsg("");
     setCurrentFileObj(file);
     setSavedFileId(null);
+    setArchiveS3Url(null);
     setShareLink(null);
     setLinkCopied(false);
     setMeshData(null);
@@ -1182,6 +1184,7 @@ export default function Home() {
                 ) : viewerMode === "archive" && docFile ? (
                   <ArchiveViewer
                     file={docFile}
+                    s3Url={archiveS3Url || undefined}
                     onInfo={(info) => {
                       setMeshCount(info.totalFiles);
                       setVertexCount(0);
@@ -1224,8 +1227,8 @@ export default function Home() {
                 ) : (
                   <ThreeViewer ref={threeViewerRef} meshData={meshData} />
                 )}
-                {/* Fullscreen toggle button */}
-                {status === "ready" && (
+                {/* Fullscreen toggle button — hidden for archive mode to avoid overlapping the action bar */}
+                {status === "ready" && viewerMode !== "archive" && (
                   <button
                     onClick={toggleFullscreen}
                     className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
@@ -1659,6 +1662,9 @@ export default function Home() {
                         throw new Error(result.error || "上传失败");
                       }
                       setSavedFileId(result.file.id);
+                      if (viewerMode === "archive" && result.file.s3Url) {
+                        setArchiveS3Url(result.file.s3Url);
+                      }
                       refetchQuota();
                       setUploadProgress(null);
                       toast.success("文件已保存到您的账户");

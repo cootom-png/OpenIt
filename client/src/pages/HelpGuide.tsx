@@ -20,6 +20,11 @@ import {
   FolderOpen,
   Lock,
   Zap,
+  Archive,
+  Mail,
+  FileCode2,
+  Search,
+  Download,
 } from "lucide-react";
 
 export default function HelpGuide() {
@@ -57,7 +62,7 @@ export default function HelpGuide() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
               <p>
-                零件云图是一款在线文件预览与分享工具，支持 3D 模型、CAD 图纸、图片、视频、文档等多种格式的上传、在线预览和分享。
+                零件云图是一款在线文件预览与分享工具，支持 3D 模型、CAD 图纸、图片、视频、文档、邮件、Markdown、压缩包等多种格式的上传、在线预览和分享。
               </p>
               <p>
                 注册用户可将文件保存到个人账户，生成分享链接发送给客户或同事查看。无需安装任何软件，浏览器即可打开 STP、DWG 等专业格式文件。
@@ -126,16 +131,34 @@ export default function HelpGuide() {
                     Office 文档
                   </div>
                   <p className="text-muted-foreground pl-6">
-                    Word (DOCX) 和 Excel (XLSX) 支持在线预览和下载
+                    Word (DOCX)、Excel (XLSX)、CSV 支持在线预览；CSV 支持编码自动检测（GBK/UTF-8 等）
                   </p>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 font-medium text-foreground">
-                    <FolderOpen className="w-4 h-4 text-yellow-600" />
+                    <Archive className="w-4 h-4 text-yellow-600" />
                     压缩包
                   </div>
                   <p className="text-muted-foreground pl-6">
-                    ZIP / RAR 格式，支持在线浏览文件列表
+                    ZIP / RAR / 7z 格式，支持在线浏览文件树、关键字搜索文件名、解压下载（ZIP 格式）
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    <Mail className="w-4 h-4 text-blue-400" />
+                    邮件文件
+                  </div>
+                  <p className="text-muted-foreground pl-6">
+                    EML / MSG 格式，在线预览邮件头（发件人、收件人、主题、日期）、正文及附件列表，仅预览不保存
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    <FileCode2 className="w-4 h-4 text-purple-500" />
+                    Markdown 文档
+                  </div>
+                  <p className="text-muted-foreground pl-6">
+                    .md 格式，支持 GitHub 风格 Markdown 渲染（标题、列表、代码块、表格等），可保存到我的文件
                   </p>
                 </div>
               </div>
@@ -163,7 +186,7 @@ export default function HelpGuide() {
                   <FileText className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
                   <div>
                     <div className="font-medium text-foreground mb-1">2D 图纸 (DXF / DWG)</div>
-                    <p className="text-muted-foreground">按住滚轮拖动平移 / 滚轮缩放</p>
+                    <p className="text-muted-foreground">左键拖拽平移 / 按住滚轮左右移动 / 滚轮缩放</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
@@ -186,6 +209,54 @@ export default function HelpGuide() {
                     <div className="font-medium text-foreground mb-1">PDF / Word / Excel</div>
                     <p className="text-muted-foreground">滚动浏览 / 翻页 / 缩放查看 / 切换工作表（Excel）</p>
                   </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
+                  <Archive className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-medium text-foreground mb-1">压缩包 (ZIP / RAR / 7z)</div>
+                    <p className="text-muted-foreground">展开/折叠文件夹 / 搜索框过滤文件名 / 点击"解压下载"将压缩包解压为带根文件夹的新 ZIP 下载</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
+                  <Mail className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-medium text-foreground mb-1">邮件 (EML / MSG)</div>
+                    <p className="text-muted-foreground">查看邮件头信息（发件人、收件人、主题、日期）、正文内容（HTML 或纯文本）及附件列表；邮件文件仅供预览，不支持保存</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
+                  <FileCode2 className="w-5 h-5 text-purple-500 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-medium text-foreground mb-1">Markdown (.md)</div>
+                    <p className="text-muted-foreground">渲染为格式化文档，支持标题、列表、代码块、表格、粗体、斜体等 GitHub 风格语法</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 压缩包搜索与解压 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Archive className="w-5 h-5 text-blue-600" />
+                压缩包搜索与解压下载
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-3">
+              <div className="flex items-start gap-2">
+                <Search className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-medium text-foreground">文件搜索：</span>
+                  <span className="ml-1">打开压缩包后，顶部搜索框可输入关键字实时过滤文件树。匹配的文件名会高亮显示，包含匹配文件的文件夹会自动展开。搜索结果统计显示"匹配数 / 总文件数"。</span>
+                </div>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <Download className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-medium text-foreground">解压下载：</span>
+                  <span className="ml-1">点击右上角"解压下载"按钮，系统会将压缩包内所有文件解压并自动创建以原文件名命名的根文件夹，重新打包为新的 ZIP 文件后下载到本地。此功能需要登录账户。</span>
                 </div>
               </div>
             </CardContent>
@@ -242,6 +313,11 @@ export default function HelpGuide() {
               <div className="flex items-start gap-2">
                 <span className="font-medium text-foreground shrink-0">注册用户：</span>
                 <span>上传文件后可点击"保存到我的文件"将文件持久化存储到个人账户，支持后续管理和分享。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">仅预览格式：</span>
+                <span>邮件文件（EML / MSG）仅供在线预览，不支持保存到账户。</span>
               </div>
               <Separator />
               <div className="flex items-start gap-2">
@@ -328,12 +404,17 @@ export default function HelpGuide() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-3">
               <p>
-                3D 零件库展示平台上所有用户上传的 3D 模型文件（STP/STEP/STL），以卡片缩略图形式呈现，支持按名称搜索。
+                3D 零件库展示平台上所有用户上传的 3D 模型文件（STP/STEP/STL），以卡片缩略图形式呈现，支持按名称搜索和按格式筛选。
               </p>
               <Separator />
               <div className="flex items-start gap-2">
                 <Shield className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
                 <span>注册并审核通过的用户可点击缩略图查看 3D 在线预览；未注册或未审核用户仅可浏览缩略图。</span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <FolderOpen className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
+                <span>审核通过的用户还可以收藏感兴趣的零件，在个人中心"收藏零件"标签页中统一管理。</span>
               </div>
             </CardContent>
           </Card>
@@ -361,6 +442,11 @@ export default function HelpGuide() {
                 <span className="font-medium text-foreground shrink-0">顶部导航：</span>
                 <span>点击左上角 Logo 或"零件云图"标题可随时返回首页。右侧提供 3D 零件库、登录/注册入口。</span>
               </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">个人中心：</span>
+                <span>登录后点击用户名进入个人中心，包含三个标签页：我的文件（文件管理与配额）、收藏零件（收藏的 3D 零件）、个人信息（修改昵称和密码）。</span>
+              </div>
             </CardContent>
           </Card>
 
@@ -378,6 +464,8 @@ export default function HelpGuide() {
                 <li>3D 模型和 CAD 图纸依赖 WebGL 渲染，请确保浏览器已启用硬件加速。</li>
                 <li>大文件（如复杂 STEP 模型）解析可能需要较长时间，可先使用"快速模式"预览再切换到高精度。</li>
                 <li>分享链接有效期为 7 天，过期后需在"我的文件"中手动续期。</li>
+                <li>邮件文件（EML / MSG）仅供在线预览，不会保存到账户，关闭页面后不可恢复。</li>
+                <li>压缩包"解压下载"功能需要登录账户后才能使用。</li>
                 <li>上传的文件请勿包含敏感或机密信息，平台管理员可查看所有文件。</li>
                 <li>如遇到问题，请联系管理员获取帮助。</li>
               </ul>

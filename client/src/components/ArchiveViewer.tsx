@@ -12,9 +12,12 @@ import {
   ChevronDown,
   Package,
   Download,
+  Search,
+  X,
 } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 interface ArchiveEntry {
   path: string;
@@ -41,24 +44,18 @@ interface TreeNode {
 
 function getFileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() || "";
-  if (["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp"].includes(ext)) {
+  if (["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp"].includes(ext))
     return <Image className="w-4 h-4 text-green-500 shrink-0" />;
-  }
-  if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(ext)) {
+  if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(ext))
     return <Film className="w-4 h-4 text-purple-500 shrink-0" />;
-  }
-  if (["stp", "step", "stl", "dxf", "dwg", "iges", "igs", "obj", "3mf"].includes(ext)) {
+  if (["stp", "step", "stl", "dxf", "dwg", "iges", "igs", "obj", "3mf"].includes(ext))
     return <FileBox className="w-4 h-4 text-blue-500 shrink-0" />;
-  }
-  if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"].includes(ext)) {
+  if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"].includes(ext))
     return <FileText className="w-4 h-4 text-amber-500 shrink-0" />;
-  }
-  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) {
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext))
     return <Archive className="w-4 h-4 text-orange-500 shrink-0" />;
-  }
-  if (["js", "ts", "py", "c", "cpp", "h", "java", "html", "css", "json", "xml"].includes(ext)) {
+  if (["js", "ts", "py", "c", "cpp", "h", "java", "html", "css", "json", "xml"].includes(ext))
     return <FileCode className="w-4 h-4 text-cyan-500 shrink-0" />;
-  }
   return <FileText className="w-4 h-4 text-muted-foreground shrink-0" />;
 }
 
@@ -72,24 +69,19 @@ function formatSize(bytes: number): string {
 function buildTree(entries: ArchiveEntry[]): TreeNode[] {
   const root: TreeNode[] = [];
   const map = new Map<string, TreeNode>();
-
-  // Sort: directories first, then alphabetical
   const sorted = [...entries].sort((a, b) => {
     if (a.isDir && !b.isDir) return -1;
     if (!a.isDir && b.isDir) return 1;
     return a.path.localeCompare(b.path);
   });
-
   for (const entry of sorted) {
     const parts = entry.path.replace(/\/$/, "").split("/").filter(Boolean);
     let current = root;
     let path = "";
-
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       path += (path ? "/" : "") + part;
       const isLast = i === parts.length - 1;
-
       let node = map.get(path);
       if (!node) {
         node = {
@@ -106,44 +98,98 @@ function buildTree(entries: ArchiveEntry[]): TreeNode[] {
       current = node.children;
     }
   }
-
   return root;
 }
 
-function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
-  const [expanded, setExpanded] = useState(false);
+function nodeMatchesSearch(node: TreeNode, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  if (node.name.toLowerCase().includes(q)) return true;
+  return node.children.some((child) => nodeMatchesSearch(child, q));
+}
+
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query) return <span>{text}</span>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <span>{text}</span>;
+  return (
+    <span>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </span>
+  );
+}
+
+function TreeItem({
+  node,
+  depth,
+  searchQuery,
+  forceExpand,
+}: {
+  node: TreeNode;
+  depth: number;
+  searchQuery: string;
+  forceExpand: boolean;
+}) {
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const isExpanded = manualExpanded !== null ? manualExpanded : forceExpand;
+
+  useEffect(() => {
+    setManualExpanded(null);
+  }, [forceExpand]);
 
   if (node.isDir) {
+    const visibleChildren = node.children.filter((c) => nodeMatchesSearch(c, searchQuery));
+    if (
+      searchQuery &&
+      visibleChildren.length === 0 &&
+      !node.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
+      return null;
+    }
     return (
       <div>
         <div
           className="flex items-center gap-1.5 py-1 px-2 hover:bg-muted/30 rounded cursor-pointer"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => setManualExpanded(!isExpanded)}
         >
-          {expanded ? (
+          {isExpanded ? (
             <ChevronDown className="w-4 h-4 shrink-0" />
           ) : (
             <ChevronRight className="w-4 h-4 shrink-0" />
           )}
-          {expanded ? (
+          {isExpanded ? (
             <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" />
           ) : (
             <Folder className="w-4 h-4 text-amber-500 shrink-0" />
           )}
           <span className="text-sm truncate flex-1" title={node.name}>
-            {node.name}
+            <HighlightText text={node.name} query={searchQuery} />
           </span>
         </div>
-        {expanded && (
+        {isExpanded && (
           <div>
-            {node.children.map((child, i) => (
-              <TreeItem key={child.path + i} node={child} depth={depth + 1} />
+            {visibleChildren.map((child, i) => (
+              <TreeItem
+                key={child.path + i}
+                node={child}
+                depth={depth + 1}
+                searchQuery={searchQuery}
+                forceExpand={forceExpand}
+              />
             ))}
           </div>
         )}
       </div>
     );
+  }
+
+  if (searchQuery && !node.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+    return null;
   }
 
   return (
@@ -153,11 +199,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
     >
       {getFileIcon(node.name)}
       <span className="text-sm truncate flex-1" title={node.name}>
-        {node.name}
+        <HighlightText text={node.name} query={searchQuery} />
       </span>
-      <span className="text-xs text-muted-foreground shrink-0 ml-2">
-        {formatSize(node.size)}
-      </span>
+      <span className="text-xs text-muted-foreground shrink-0 ml-2">{formatSize(node.size)}</span>
     </div>
   );
 }
@@ -166,10 +210,8 @@ async function parseZipFile(file: File): Promise<ArchiveEntry[]> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(file);
   const entries: ArchiveEntry[] = [];
-
   zip.forEach((relativePath, zipEntry) => {
     const name = relativePath.split("/").filter(Boolean).pop() || relativePath;
-    // Access internal _data for size info (not in public types)
     const internal = zipEntry as any;
     entries.push({
       path: relativePath,
@@ -179,13 +221,11 @@ async function parseZipFile(file: File): Promise<ArchiveEntry[]> {
       compressedSize: internal._data?.compressedSize || 0,
     });
   });
-
   return entries;
 }
 
 async function parseRarFile(file: File): Promise<ArchiveEntry[]> {
   const arrayBuffer = await file.arrayBuffer();
-  // Convert to base64 for JSON transport to server
   const bytes = new Uint8Array(arrayBuffer);
   let binary = "";
   const chunkSize = 8192;
@@ -193,18 +233,15 @@ async function parseRarFile(file: File): Promise<ArchiveEntry[]> {
     binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
   }
   const base64 = btoa(binary);
-
   const response = await fetch("/api/parse-archive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ buffer: base64, filename: file.name }),
   });
-
   if (!response.ok) {
     const err = await response.json().catch(() => ({ error: "解析失败" }));
     throw new Error(err.error || "RAR 文件解析失败");
   }
-
   const { entries: serverEntries } = await response.json();
   return serverEntries.map((e: any) => ({
     path: e.path,
@@ -220,23 +257,18 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const extractArchive = trpc.archive.extractAndDownload.useMutation();
 
   const handleExtractDownload = async () => {
     if (!file || !s3Url) {
-      alert('文件未上传或URL不可用');
+      alert("文件未上传或URL不可用");
       return;
     }
-
     setExtracting(true);
     try {
-      const result = await extractArchive.mutateAsync({
-        s3Url,
-        fileName: file.name,
-      });
-
-      // Trigger download
-      const link = document.createElement('a');
+      const result = await extractArchive.mutateAsync({ s3Url, fileName: file.name });
+      const link = document.createElement("a");
       link.href = result.downloadUrl;
       link.download = result.fileName;
       document.body.appendChild(link);
@@ -244,7 +276,6 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
       document.body.removeChild(link);
     } catch (err: any) {
       alert(`解压失败: ${err.message}`);
-      console.error('Archive extraction error:', err);
     } finally {
       setExtracting(false);
     }
@@ -252,14 +283,13 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
 
   useEffect(() => {
     if (!file) return;
-
     const parse = async () => {
       setLoading(true);
       setError(null);
+      setSearchQuery("");
       try {
         const ext = file.name.split(".").pop()?.toLowerCase() || "";
         let result: ArchiveEntry[];
-
         if (ext === "zip") {
           result = await parseZipFile(file);
         } else if (ext === "rar" || ext === "7z") {
@@ -267,24 +297,16 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
         } else {
           throw new Error(`不支持的压缩格式: .${ext}`);
         }
-
         setEntries(result);
-
-        // Report info
         const fileEntries = result.filter((e) => !e.isDir);
         const totalSize = fileEntries.reduce((sum, e) => sum + e.size, 0);
-        onInfo?.({
-          totalFiles: fileEntries.length,
-          totalSize,
-          format: ext.toUpperCase(),
-        });
+        onInfo?.({ totalFiles: fileEntries.length, totalSize, format: ext.toUpperCase() });
       } catch (err: any) {
         setError(err.message || "解析压缩文件失败");
       } finally {
         setLoading(false);
       }
     };
-
     parse();
   }, [file]);
 
@@ -295,6 +317,14 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
     () => entries.filter((e) => !e.isDir).reduce((sum, e) => sum + e.size, 0),
     [entries]
   );
+  const matchCount = useMemo(() => {
+    if (!searchQuery) return fileCount;
+    return entries.filter(
+      (e) => !e.isDir && e.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ).length;
+  }, [entries, searchQuery, fileCount]);
+
+  const forceExpand = searchQuery.length > 0;
 
   if (loading) {
     return (
@@ -335,7 +365,16 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>{fileCount} 个文件</span>
+            <span>
+              {searchQuery ? (
+                <span className="text-primary font-medium">
+                  {matchCount} / {fileCount}
+                </span>
+              ) : (
+                fileCount
+              )}{" "}
+              个文件
+            </span>
             {dirCount > 0 && <span>{dirCount} 个文件夹</span>}
             <span>解压后 {formatSize(totalSize)}</span>
           </div>
@@ -352,11 +391,48 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
         </Button>
       </div>
 
+      {/* Search bar */}
+      <div className="px-3 py-2 border-b bg-background">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            className="pl-8 pr-8 h-8 text-sm"
+            placeholder="搜索文件名..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setSearchQuery("")}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* File tree */}
       <div className="flex-1 overflow-auto p-2">
-        {tree.map((node, i) => (
-          <TreeItem key={node.path + i} node={node} depth={0} />
-        ))}
+        {tree.filter((node) => nodeMatchesSearch(node, searchQuery)).length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <Search className="w-8 h-8 mb-2 opacity-30" />
+            <p className="text-sm">未找到匹配的文件</p>
+            <p className="text-xs mt-1 opacity-70">关键字："{searchQuery}"</p>
+          </div>
+        ) : (
+          tree
+            .filter((node) => nodeMatchesSearch(node, searchQuery))
+            .map((node, i) => (
+              <TreeItem
+                key={node.path + i}
+                node={node}
+                depth={0}
+                searchQuery={searchQuery}
+                forceExpand={forceExpand}
+              />
+            ))
+        )}
       </div>
     </div>
   );
