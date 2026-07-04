@@ -43,7 +43,7 @@ const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
 const SUPPORTED_ARCHIVE = ["zip", "rar"];
 const SUPPORTED_CSV = ["csv"];
-const SUPPORTED_CODE = ["css"];
+const SUPPORTED_CODE = ["css", "txt", "log"];
 
 type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "code" | null;
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";

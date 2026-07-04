@@ -241,7 +241,7 @@ const SUPPORTED_ARCHIVE = ["zip", "rar", "7z"];
 const SUPPORTED_CSV = ["csv"];
 const SUPPORTED_EMAIL = ["eml", "msg"];
 const SUPPORTED_MARKDOWN = ["md"];
-const SUPPORTED_CODE = ["css"];
+const SUPPORTED_CODE = ["css", "txt", "log"];
 const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL, ...SUPPORTED_MARKDOWN, ...SUPPORTED_CODE];
 // On iOS Safari, the accept attribute greys out files with unrecognized MIME types
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
@@ -1146,6 +1146,8 @@ export default function Home() {
                         </span>
                         <Badge variant="outline">.MD</Badge>
                         <Badge variant="outline">.CSS</Badge>
+                        <Badge variant="outline">.TXT</Badge>
+                        <Badge variant="outline">.LOG</Badge>
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
