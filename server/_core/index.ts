@@ -69,6 +69,32 @@ async function startServer() {
     }
   });
 
+  // Archive extraction API (public, no login required)
+  app.post("/api/extract-archive", async (req, res) => {
+    try {
+      const { buffer, filename } = req.body;
+      if (!buffer || !filename) {
+        return res.status(400).json({ error: "Missing buffer or filename" });
+      }
+      const ext = filename.split(".").pop()?.toLowerCase() || "";
+      if (ext !== "zip") {
+        return res.status(400).json({ error: "Only ZIP extraction is supported" });
+      }
+      const { extractAndRepackZip } = await import("../archiveExtractor");
+      const fileBuffer = Buffer.from(buffer, "base64");
+      const baseName = filename.replace(/\.[^.]+$/, "");
+      const timestamp = Date.now();
+      const rootFolderName = `${baseName}_${timestamp}`;
+      const repacked = await extractAndRepackZip(fileBuffer, rootFolderName);
+      const base64 = repacked.toString("base64");
+      const newFileName = `${baseName}_extracted_${timestamp}.zip`;
+      return res.json({ success: true, base64, fileName: newFileName });
+    } catch (err: any) {
+      console.error("[extract-archive]", err);
+      return res.status(500).json({ error: err.message || "Extraction failed" });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

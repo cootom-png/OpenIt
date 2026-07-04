@@ -3,10 +3,9 @@
  * Handles ZIP file extraction and repacking
  */
 
-import { router, protectedProcedure } from '../_core/trpc';
+import { router, publicProcedure } from '../_core/trpc';
 import { z } from 'zod';
 import { extractAndRepackZip } from '../archiveExtractor';
-import { storagePut } from '../storage';
 
 export const archiveRouter = router({
   /**
@@ -15,14 +14,14 @@ export const archiveRouter = router({
    * @param fileName - Original file name (for folder naming)
    * @returns Download URL for the extracted ZIP
    */
-  extractAndDownload: protectedProcedure
+  extractAndDownload: publicProcedure
     .input(
       z.object({
         s3Url: z.string().url(),
         fileName: z.string(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       try {
         // Download the ZIP file from S3
         const response = await fetch(input.s3Url);
@@ -42,15 +41,13 @@ export const archiveRouter = router({
         // Extract and repack the ZIP
         const repachedBuffer = await extractAndRepackZip(buffer, rootFolderName);
 
-        // Upload the repacked ZIP to S3
+        // Return as base64 so the client can download directly without S3 upload
+        const base64 = repachedBuffer.toString('base64');
         const newFileName = `${baseName}_extracted_${timestamp}.zip`;
-        const fileKey = `${ctx.user.id}/extracted-archives/${newFileName}`;
-
-        const { url } = await storagePut(fileKey, repachedBuffer, 'application/zip');
 
         return {
           success: true,
-          downloadUrl: url,
+          base64,
           fileName: newFileName,
         };
       } catch (error: any) {

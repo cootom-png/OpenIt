@@ -261,19 +261,57 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
   const extractArchive = trpc.archive.extractAndDownload.useMutation();
 
   const handleExtractDownload = async () => {
-    if (!file || !s3Url) {
-      alert("文件未上传或URL不可用");
+    if (!file) {
+      alert("请先选择文件");
       return;
     }
     setExtracting(true);
     try {
-      const result = await extractArchive.mutateAsync({ s3Url, fileName: file.name });
+      let base64: string;
+      let fileName: string;
+
+      if (s3Url) {
+        // Logged-in / saved: fetch from S3 via server
+        const result = await extractArchive.mutateAsync({ s3Url, fileName: file.name });
+        base64 = result.base64;
+        fileName = result.fileName;
+      } else {
+        // Not logged-in or not saved: read local file and send to server
+        const arrayBuffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+        }
+        const fileBase64 = btoa(binary);
+        const response = await fetch("/api/extract-archive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ buffer: fileBase64, filename: file.name }),
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ error: "解压失败" }));
+          throw new Error(err.error || "解压失败");
+        }
+        const data = await response.json();
+        base64 = data.base64;
+        fileName = data.fileName;
+      }
+
+      // Trigger browser download from base64
+      const byteChars = atob(base64);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = result.downloadUrl;
-      link.download = result.fileName;
+      link.href = url;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(`解压失败: ${err.message}`);
     } finally {
@@ -383,7 +421,7 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
           size="sm"
           variant="outline"
           onClick={handleExtractDownload}
-          disabled={extracting || !s3Url}
+          disabled={extracting || !file}
           className="shrink-0"
         >
           <Download className="w-4 h-4 mr-2" />
