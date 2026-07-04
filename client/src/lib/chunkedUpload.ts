@@ -4,6 +4,7 @@
  *  - File slicing into 2MB chunks
  *  - Per-chunk retry (max 3 attempts)
  *  - 429 (server busy) auto-retry with countdown
+ *  - Cancel support via AbortController
  *  - Resume support (query server for already-uploaded chunks)
  *  - Progress callback
  */
@@ -32,45 +33,83 @@ export interface ChunkedUploadResult {
   success: boolean;
   file?: any;
   error?: string;
+  cancelled?: boolean; // 是否被用户取消
+}
+
+// ─── 取消错误类 ───
+
+class UploadCancelledError extends Error {
+  constructor() {
+    super("用户取消了上传");
+    this.name = "UploadCancelledError";
+  }
+}
+
+// ─── 可取消的 sleep ───
+
+function cancellableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new UploadCancelledError());
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new UploadCancelledError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 // ─── 429 等待辅助函数 ───
 
 /**
  * 等待指定毫秒数，期间通过 onProgress 回调显示倒计时
+ * 支持通过 AbortSignal 取消
  */
 async function waitWithCountdown(
   waitMs: number,
   message: string,
   currentProgress: Omit<UploadProgress, "phase" | "waitMessage" | "waitSeconds">,
-  onProgress?: (progress: UploadProgress) => void
+  onProgress?: (progress: UploadProgress) => void,
+  signal?: AbortSignal
 ): Promise<void> {
   const totalSeconds = Math.ceil(waitMs / 1000);
   for (let remaining = totalSeconds; remaining > 0; remaining--) {
+    if (signal?.aborted) {
+      throw new UploadCancelledError();
+    }
     onProgress?.({
       ...currentProgress,
       phase: "waiting",
       waitMessage: `${message}${remaining}秒后自动重试...`,
       waitSeconds: remaining,
     });
-    await new Promise((r) => setTimeout(r, 1000));
+    await cancellableSleep(1000, signal);
   }
 }
 
 /**
  * 带 429 重试的 fetch 封装
  * 当服务器返回 429 时自动等待并重试
+ * 支持通过 AbortSignal 取消
  */
 async function fetchWith429Retry(
   url: string,
   options: RequestInit,
   currentProgress: Omit<UploadProgress, "phase" | "waitMessage" | "waitSeconds">,
-  onProgress?: (progress: UploadProgress) => void
+  onProgress?: (progress: UploadProgress) => void,
+  signal?: AbortSignal
 ): Promise<Response> {
   let waitMs = INITIAL_429_WAIT_MS;
 
   for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-    const resp = await fetch(url, options);
+    if (signal?.aborted) {
+      throw new UploadCancelledError();
+    }
+
+    const resp = await fetch(url, { ...options, signal });
 
     if (resp.status === 429) {
       if (attempt === MAX_429_RETRIES) {
@@ -87,12 +126,13 @@ async function fetchWith429Retry(
         }
       }
 
-      // 显示倒计时并等待
+      // 显示倒计时并等待（可取消）
       await waitWithCountdown(
         waitMs,
         "服务器繁忙，",
         currentProgress,
-        onProgress
+        onProgress,
+        signal
       );
 
       // 指数退避：每次等待时间增加 50%，但不超过最大值
@@ -188,9 +228,14 @@ async function uploadChunkWithRetry(
   chunkBlob: Blob,
   currentProgress: Omit<UploadProgress, "phase" | "waitMessage" | "waitSeconds">,
   onProgress?: (progress: UploadProgress) => void,
+  signal?: AbortSignal,
   retries: number = MAX_RETRIES
 ): Promise<void> {
   for (let attempt = 0; attempt < retries; attempt++) {
+    if (signal?.aborted) {
+      throw new UploadCancelledError();
+    }
+
     try {
       const formData = new FormData();
       formData.append("uploadId", uploadId);
@@ -201,7 +246,8 @@ async function uploadChunkWithRetry(
         "/api/upload/chunk",
         { method: "POST", body: formData },
         currentProgress,
-        onProgress
+        onProgress,
+        signal
       );
 
       if (!resp.ok) {
@@ -213,12 +259,15 @@ async function uploadChunkWithRetry(
       }
 
       return; // success
-    } catch (err) {
+    } catch (err: any) {
+      if (err instanceof UploadCancelledError || err.name === "AbortError") {
+        throw new UploadCancelledError();
+      }
       if (attempt === retries - 1) {
         throw err; // final attempt failed
       }
       // Wait before retry: 1s, 2s, 4s (exponential backoff)
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      await cancellableSleep(1000 * Math.pow(2, attempt), signal);
     }
   }
 }
@@ -229,9 +278,32 @@ export async function chunkedUpload(
   file: File,
   userId: number,
   category: string,
-  onProgress?: (progress: UploadProgress) => void
+  onProgress?: (progress: UploadProgress) => void,
+  signal?: AbortSignal
+): Promise<ChunkedUploadResult> {
+  try {
+    return await _doChunkedUpload(file, userId, category, onProgress, signal);
+  } catch (err: any) {
+    if (err instanceof UploadCancelledError || err.name === "AbortError") {
+      return { success: false, error: "上传已取消", cancelled: true };
+    }
+    throw err;
+  }
+}
+
+async function _doChunkedUpload(
+  file: File,
+  userId: number,
+  category: string,
+  onProgress?: (progress: UploadProgress) => void,
+  signal?: AbortSignal
 ): Promise<ChunkedUploadResult> {
   const ext = file.name.split(".").pop()?.toLowerCase() || "";
+
+  // Check cancel before start
+  if (signal?.aborted) {
+    return { success: false, error: "上传已取消", cancelled: true };
+  }
 
   // Step 1: Compress image if applicable
   let uploadFile = file;
@@ -282,7 +354,8 @@ export async function chunkedUpload(
       }),
     },
     initProgress,
-    onProgress
+    onProgress,
+    signal
   );
 
   if (!initResp.ok) {
@@ -298,13 +371,16 @@ export async function chunkedUpload(
   // Step 3: Check for already-uploaded chunks (resume support)
   let uploadedSet = new Set<number>();
   try {
-    const statusResp = await fetch(`/api/upload/status?uploadId=${uploadId}`);
+    const statusResp = await fetch(`/api/upload/status?uploadId=${uploadId}`, { signal });
     if (statusResp.ok) {
       const statusData = await statusResp.json();
       uploadedSet = new Set(statusData.uploadedChunks || []);
     }
-  } catch {
-    // Ignore — fresh upload
+  } catch (err: any) {
+    if (err instanceof UploadCancelledError || err.name === "AbortError") {
+      return { success: false, error: "上传已取消", cancelled: true };
+    }
+    // Ignore other errors — fresh upload
   }
 
   // Step 4: Upload chunks with progress tracking
@@ -312,6 +388,10 @@ export async function chunkedUpload(
   let uploadedBytes = uploadedSet.size * CHUNK_SIZE;
 
   for (let i = 0; i < totalChunks; i++) {
+    if (signal?.aborted) {
+      return { success: false, error: "上传已取消", cancelled: true };
+    }
+
     if (uploadedSet.has(i)) {
       // Already uploaded (resume)
       continue;
@@ -328,8 +408,11 @@ export async function chunkedUpload(
     };
 
     try {
-      await uploadChunkWithRetry(uploadId, i, chunkBlob, chunkProgress, onProgress);
+      await uploadChunkWithRetry(uploadId, i, chunkBlob, chunkProgress, onProgress, signal);
     } catch (err: any) {
+      if (err instanceof UploadCancelledError || err.name === "AbortError") {
+        return { success: false, error: "上传已取消", cancelled: true };
+      }
       return {
         success: false,
         error: `分片 ${i + 1}/${totalChunks} 上传失败: ${err.message}`,
@@ -354,6 +437,10 @@ export async function chunkedUpload(
   }
 
   // Step 5: Complete — merge and save
+  if (signal?.aborted) {
+    return { success: false, error: "上传已取消", cancelled: true };
+  }
+
   onProgress?.({
     phase: "completing",
     percent: 100,
@@ -365,6 +452,7 @@ export async function chunkedUpload(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uploadId }),
+    signal,
   });
 
   if (!completeResp.ok) {
