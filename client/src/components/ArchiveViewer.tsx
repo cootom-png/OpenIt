@@ -294,6 +294,20 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
       ));
   };
 
+  const getDownloadLocationTip = (): string => {
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) {
+      return `\n\n\u6587\u4ef6\u4f4d\u7f6e: \u6253\u5f00 [\u6587\u4ef6] App -> \u6d4f\u89c8 -> \u4e0b\u8f7d`;
+    } else if (/Android/.test(ua)) {
+      return `\n\n\u6587\u4ef6\u4f4d\u7f6e: \u6587\u4ef6\u7ba1\u7406\u5668 -> Download \u6587\u4ef6\u5939`;
+    } else if (/Mac/.test(ua)) {
+      return `\n\n\u6587\u4ef6\u4f4d\u7f6e: Finder -> \u4e0b\u8f7d (Downloads)`;
+    } else if (/Win/.test(ua)) {
+      return `\n\n\u6587\u4ef6\u4f4d\u7f6e: \u6b64\u7535\u8111 -> \u4e0b\u8f7d (\u6216\u6d4f\u89c8\u5668\u8bbe\u7f6e\u7684\u4e0b\u8f7d\u76ee\u5f55)`;
+    }
+    return "";
+  };
+
   const handleExtractDownload = async () => {
     if (!file) {
       alert("请先选择文件");
@@ -324,7 +338,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           URL.revokeObjectURL(url);
           await new Promise((r) => setTimeout(r, 500));
         }
-        alert(`解压完成！已下载 ${fileEntries.length} 个文件到浏览器默认下载位置。`);
+        alert(`解压完成！已下载 ${fileEntries.length} 个文件。${getDownloadLocationTip()}`);
       } else {
         // RAR/7z: send to server for extraction, then download each file
         const arrayBuffer = await file.arrayBuffer();
@@ -364,7 +378,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
             URL.revokeObjectURL(url);
             await new Promise((r) => setTimeout(r, 500));
           }
-          alert(`解压完成！已下载 ${result.files.length} 个文件到浏览器默认下载位置。`);
+          alert(`解压完成！已下载 ${result.files.length} 个文件。${getDownloadLocationTip()}`);
         } else {
           alert("压缩包内没有可解压的文件");
         }
