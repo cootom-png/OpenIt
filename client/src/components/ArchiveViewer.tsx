@@ -247,16 +247,16 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
                   className="p-0 h-4 w-4 flex items-center justify-center"
                 >
                   <span className="text-xs">
-                    {expandedDirs.has(item.path) ? "\u25BC" : "\u25B6"}
+                    {expandedDirs.has(item.path) ? "▼" : "▶"}
                   </span>
                 </button>
-                <span>\uD83D\uDCC1</span>
+                <span>📁</span>
                 <span className="font-medium">{item.name}</span>
               </>
             ) : (
               <>
                 <span className="w-4"></span>
-                <span>\uD83D\uDCC4</span>
+                <span>📄</span>
                 <span>
                   {searchQuery && item.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
                     <>
@@ -296,7 +296,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
 
   const handleExtractDownload = async () => {
     if (!file) {
-      alert("\u8BF7\u5148\u9009\u62E9\u6587\u4EF6");
+      alert("请先选择文件");
       return;
     }
     setExtracting(true);
@@ -324,7 +324,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           URL.revokeObjectURL(url);
           await new Promise((r) => setTimeout(r, 500));
         }
-        alert(`\u89E3\u538B\u5B8C\u6210\uFF01\u5DF2\u4E0B\u8F7D ${fileEntries.length} \u4E2A\u6587\u4EF6\u5230\u6D4F\u89C8\u5668\u9ED8\u8BA4\u4E0B\u8F7D\u4F4D\u7F6E\u3002`);
+        alert(`解压完成！已下载 ${fileEntries.length} 个文件到浏览器默认下载位置。`);
       } else {
         // RAR/7z: send to server for extraction, then download each file
         const arrayBuffer = await file.arrayBuffer();
@@ -364,13 +364,13 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
             URL.revokeObjectURL(url);
             await new Promise((r) => setTimeout(r, 500));
           }
-          alert(`\u89E3\u538B\u5B8C\u6210\uFF01\u5DF2\u4E0B\u8F7D ${result.files.length} \u4E2A\u6587\u4EF6\u5230\u6D4F\u89C8\u5668\u9ED8\u8BA4\u4E0B\u8F7D\u4F4D\u7F6E\u3002`);
+          alert(`解压完成！已下载 ${result.files.length} 个文件到浏览器默认下载位置。`);
         } else {
-          alert("\u538B\u7F29\u5305\u5185\u6CA1\u6709\u53EF\u89E3\u538B\u7684\u6587\u4EF6");
+          alert("压缩包内没有可解压的文件");
         }
       }
     } catch (err: any) {
-      alert(`\u89E3\u538B\u5931\u8D25: ${err.message}`);
+      alert(`解压失败: ${err.message}`);
     } finally {
       setExtracting(false);
     }
@@ -388,7 +388,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           <div className="flex items-center gap-1.5 shrink-0">
             <Archive className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium">
-              {getFileExt(file).toUpperCase()} \u538B\u7F29\u5305
+              {getFileExt(file).toUpperCase()} 压缩包
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -400,10 +400,10 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
               ) : (
                 fileCount
               )}{" "}
-              \u4E2A\u6587\u4EF6
+              个文件
             </span>
-            {dirCount > 0 && <span>{dirCount} \u4E2A\u6587\u4EF6\u5939</span>}
-            <span>\u89E3\u538B\u540E {formatSize(totalSize)}</span>
+            {dirCount > 0 && <span>{dirCount} 个文件夹</span>}
+            <span>解压后 {formatSize(totalSize)}</span>
           </div>
         </div>
         <Button
@@ -412,10 +412,10 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
           onClick={handleExtractDownload}
           disabled={extracting || !file}
           className="shrink-0"
-          title="\u70B9\u51FB\u4E0B\u8F7D\u89E3\u538B\u540E\u7684\u6240\u6709\u6587\u4EF6\u5230\u6D4F\u89C8\u5668\u9ED8\u8BA4\u4E0B\u8F7D\u4F4D\u7F6E"
+          title="点击下载解压后的所有文件到浏览器默认下载位置"
         >
           <Download className="w-4 h-4 mr-2" />
-          {extracting ? "\u89E3\u538B\u4E2D..." : "\u89E3\u538B\u4E0B\u8F7D"}
+          {extracting ? "解压中..." : "解压下载"}
         </Button>
       </div>
 
@@ -424,7 +424,7 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
         <div className="relative">
           <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="\u641C\u7D22\u6587\u4EF6\u540D..."
+            placeholder="搜索文件名..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8 h-8 text-sm"
@@ -444,15 +444,15 @@ export function ArchiveViewer({ file, s3Url }: ArchiveViewerProps) {
       <div className="flex-1 overflow-auto p-3">
         {loading ? (
           <div className="text-center text-sm text-muted-foreground py-8">
-            \u6B63\u5728\u89E3\u6790\u538B\u7F29\u5305...
+            正在解析压缩包...
           </div>
         ) : filteredFiles.length === 0 && searchQuery ? (
           <div className="text-center text-sm text-muted-foreground py-8">
-            \u672A\u627E\u5230\u5339\u914D\u7684\u6587\u4EF6
+            未找到匹配的文件
           </div>
         ) : fileTree.length === 0 ? (
           <div className="text-center text-sm text-muted-foreground py-8">
-            \u538B\u7F29\u5305\u5185\u6CA1\u6709\u6587\u4EF6
+            压缩包内没有文件
           </div>
         ) : (
           <div className="space-y-0">{renderTree(fileTree)}</div>
