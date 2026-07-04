@@ -276,18 +276,8 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
 
         // Check if File System Access API is supported (Chrome/Edge)
         if ("showDirectoryPicker" in window) {
-          // Step 1: Prompt user to create a new folder first
-          const confirmed = window.confirm(
-            "解压下载操作步骤：\n\n" +
-            "1. 点击“确定”后会弹出文件夹选择器\n" +
-            "2. 请先导航到您希望保存的位置（如桌面、D盘等）\n" +
-            "3. 点击“新建文件夹”按钮创建一个新文件夹\n" +
-            "4. 选择该新文件夹，点击“选择文件夹”\n\n" +
-            "解压后的文件将直接保存到该文件夹中。"
-          );
-          if (!confirmed) return;
-
           try {
+            // Directly show directory picker (must be in user gesture chain, no confirm/alert before)
             const dirHandle = await (window as any).showDirectoryPicker({
               mode: "readwrite",
               startIn: "desktop",
@@ -462,7 +452,7 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
           onClick={handleExtractDownload}
           disabled={extracting || !file}
           className="shrink-0"
-          title="选择文件夹，将解压后的文件直接保存到指定位置（支持 Chrome/Edge）"
+          title="点击后请在目标位置（如桌面）新建一个文件夹，选择它即可解压文件到该文件夹（仅支持 Chrome/Edge）"
         >
           <Download className="w-4 h-4 mr-2" />
           {extracting ? "解压中..." : "解压下载"}
