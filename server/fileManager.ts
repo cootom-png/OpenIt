@@ -1,11 +1,73 @@
 /**
  * File manager — handles user file CRUD, quota checks, and share tokens.
  */
-import { eq, desc, and, count, sql, like, or, sum } from "drizzle-orm";
-import { userFiles, emailUsers, downloadRequests, type UserFile, type InsertUserFile, type DownloadRequest } from "../drizzle/schema";
-import { getDb } from "./db";
-import { storagePut } from "./storage";
+import type { UserFile, InsertUserFile, DownloadRequest } from "../drizzle/schema";
 import crypto from "crypto";
+
+let dataDepsPromise: Promise<{
+  eq: typeof import("drizzle-orm").eq;
+  desc: typeof import("drizzle-orm").desc;
+  and: typeof import("drizzle-orm").and;
+  count: typeof import("drizzle-orm").count;
+  sql: typeof import("drizzle-orm").sql;
+  like: typeof import("drizzle-orm").like;
+  or: typeof import("drizzle-orm").or;
+  userFiles: typeof import("../drizzle/schema").userFiles;
+  emailUsers: typeof import("../drizzle/schema").emailUsers;
+  downloadRequests: typeof import("../drizzle/schema").downloadRequests;
+  getDb: typeof import("./db").getDb;
+}> | null = null;
+
+let dbDepPromise: Promise<{
+  getDb: typeof import("./db").getDb;
+}> | null = null;
+
+function getDbDep() {
+  dbDepPromise ??= import("./db").then((db) => ({ getDb: db.getDb }));
+  return dbDepPromise;
+}
+
+function getDataDeps() {
+  dataDepsPromise ??= Promise.all([
+    import("drizzle-orm"),
+    import("../drizzle/schema"),
+    import("./db"),
+  ]).then(([orm, schema, db]) => ({
+    eq: orm.eq,
+    desc: orm.desc,
+    and: orm.and,
+    count: orm.count,
+    sql: orm.sql,
+    like: orm.like,
+    or: orm.or,
+    userFiles: schema.userFiles,
+    emailUsers: schema.emailUsers,
+    downloadRequests: schema.downloadRequests,
+    getDb: db.getDb,
+  }));
+
+  return dataDepsPromise;
+}
+
+async function getDbContext() {
+  const { getDb } = await getDbDep();
+  const db = await getDb();
+  if (!db) {
+    return { db } as Awaited<ReturnType<typeof getDataDeps>> & { db: typeof db };
+  }
+
+  const deps = await getDataDeps();
+  return { ...deps, db };
+}
+
+async function storagePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream"
+) {
+  const storage = await import("./storage");
+  return storage.storagePut(relKey, data, contentType);
+}
 
 // ─── Constants ───
 export const MAX_FILES_PER_USER = 50;
@@ -15,7 +77,7 @@ export const MAX_SINGLE_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 // ─── Quota ───
 
 export async function getUserQuota(userId: number) {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { fileCount: 0, totalSize: 0, maxFiles: MAX_FILES_PER_USER, maxTotalSize: MAX_TOTAL_SIZE_BYTES, maxSingleFile: MAX_SINGLE_FILE_BYTES };
 
   const result = await db
@@ -66,7 +128,7 @@ export async function uploadUserFile(params: {
   category: string;
   fileBuffer: Buffer;
 }): Promise<UserFile> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   const { userId, fileName, fileExt, fileSize, mimeType, category, fileBuffer } = params;
@@ -119,7 +181,7 @@ export async function uploadUserFile(params: {
 // ─── User File Operations ───
 
 export async function listUserFiles(userId: number, opts: { page: number; pageSize: number; search?: string; category?: string }) {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { records: [], total: 0 };
 
   const conditions: any[] = [eq(userFiles.userId, userId)];
@@ -150,7 +212,7 @@ export async function listUserFiles(userId: number, opts: { page: number; pageSi
 }
 
 export async function deleteUserFile(fileId: number, userId: number): Promise<boolean> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   // Get file info first
@@ -178,7 +240,7 @@ export async function deleteUserFile(fileId: number, userId: number): Promise<bo
 }
 
 export async function toggleFileShare(fileId: number, userId: number, enabled: boolean): Promise<UserFile | null> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   // Verify ownership
@@ -213,7 +275,7 @@ export async function toggleFileShare(fileId: number, userId: number, enabled: b
  * Only works if the file is currently shared.
  */
 export async function renewFileShare(fileId: number, userId: number): Promise<UserFile | null> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   const file = await db
@@ -242,7 +304,7 @@ export async function renewFileShare(fileId: number, userId: number): Promise<Us
 // ─── Share ───
 
 export async function getFileByShareToken(token: string): Promise<(UserFile & { ownerNickname: string; expired: boolean }) | null> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return null;
 
   const result = await db
@@ -268,7 +330,7 @@ export async function getFileByShareToken(token: string): Promise<(UserFile & { 
  * Update allowDownload setting for a user's file.
  */
 export async function updateAllowDownload(fileId: number, userId: number, allowDownload: boolean): Promise<UserFile | null> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   const file = await db
@@ -297,7 +359,7 @@ export async function adminListFiles(opts: {
   userId?: number;
   category?: string;
 }) {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { records: [], total: 0 };
 
   const conditions: any[] = [];
@@ -354,7 +416,7 @@ export async function adminListFiles(opts: {
 }
 
 export async function adminDeleteFile(fileId: number): Promise<boolean> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   const file = await db.select().from(userFiles).where(eq(userFiles.id, fileId)).limit(1);
@@ -375,7 +437,7 @@ export async function adminDeleteFile(fileId: number): Promise<boolean> {
 }
 
 export async function adminGetFileStats() {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { totalFiles: 0, totalSize: 0, totalShared: 0 };
 
   const [filesResult, sharedResult] = await Promise.all([
@@ -401,7 +463,7 @@ export async function adminGetFileStats() {
 // ─── Public 3D Parts Gallery ───
 
 export async function listPublic3DParts(opts: { page: number; pageSize: number; search?: string; fileExt?: string }) {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { records: [], total: 0 };
 
   // List all 3D category files from approved users
@@ -450,7 +512,7 @@ export async function listPublic3DParts(opts: { page: number; pageSize: number; 
 // ─── Thumbnail ───
 
 export async function updateFileThumbnail(fileId: number, userId: number, thumbnailBase64: string): Promise<string | null> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   // Verify ownership
@@ -472,7 +534,7 @@ export async function updateFileThumbnail(fileId: number, userId: number, thumbn
 // ─── Update user profile ───
 
 export async function updateEmailUserNickname(userId: number, nickname: string): Promise<void> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   await db.update(emailUsers).set({ nickname }).where(eq(emailUsers.id, userId));
@@ -484,7 +546,7 @@ export async function updateEmailUserNickname(userId: number, nickname: string):
  * Increment view count for a file (called when someone previews a 3D part).
  */
 export async function incrementViewCount(fileId: number): Promise<void> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return;
 
   await db
@@ -505,7 +567,7 @@ export async function submitDownloadRequest(data: {
   realName: string;
   message?: string;
 }): Promise<DownloadRequest> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   // Verify file exists
@@ -537,7 +599,7 @@ export async function submitDownloadRequest(data: {
  * List download requests for a specific file (for file owner).
  */
 export async function listDownloadRequestsByFile(fileId: number, opts: { page: number; pageSize: number }) {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { records: [], total: 0 };
 
   const whereClause = eq(downloadRequests.fileId, fileId);
@@ -565,7 +627,7 @@ export async function adminListDownloadRequests(opts: {
   status?: string;
   search?: string;
 }) {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { records: [], total: 0 };
 
   const conditions: any[] = [];
@@ -634,7 +696,7 @@ export async function adminListDownloadRequests(opts: {
  * Get download request statistics.
  */
 export async function getDownloadRequestStats() {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) return { total: 0, pending: 0, approved: 0, rejected: 0 };
 
   const results = await db
@@ -657,7 +719,7 @@ export async function getDownloadRequestStats() {
  * Update download request status (admin).
  */
 export async function updateDownloadRequestStatus(requestId: number, status: "approved" | "rejected"): Promise<boolean> {
-  const db = await getDb();
+  const { db, userFiles, emailUsers, downloadRequests, eq, desc, and, count, sql, like, or } = await getDbContext();
   if (!db) throw new Error("Database not available");
 
   const result = await db

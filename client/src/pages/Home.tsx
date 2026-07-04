@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from "react";
+import { lazy, Suspense, useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,24 +34,42 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { useAuth } from "@/_core/hooks/useAuth";
-import ThreeViewer, { type ParsedMeshData, type ThreeViewerHandle } from "@/components/ThreeViewer";
-import DxfViewerComponent from "@/components/DxfViewerComponent";
-import DwgViewerComponent, { type DwgViewerHandle } from "@/components/DwgViewerComponent";
+import type { ParsedMeshData, ThreeViewerHandle } from "@/components/ThreeViewer";
+import type { DwgViewerHandle } from "@/components/DwgViewerComponent";
 import ImageViewer from "@/components/ImageViewer";
 import VideoViewer, { type VideoViewerHandle } from "@/components/VideoViewer";
-import PdfViewer from "@/components/PdfViewer";
-import WordViewer from "@/components/WordViewer";
-import ExcelViewer from "@/components/ExcelViewer";
-import { ArchiveViewer } from "@/components/ArchiveViewer";
 import CsvViewer from "@/components/CsvViewer";
-import EmailViewer from "@/components/EmailViewer";
 import MarkdownViewer from "@/components/MarkdownViewer";
 import CodeViewer from "@/components/CodeViewer";
-import { parseFile, getFileExtension, type MeshQuality, QUALITY_PRESETS } from "@/lib/fileParser";
+import { getFileExtension, type MeshQuality, QUALITY_PRESETS } from "@/lib/fileMetadata";
 import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
 import { chunkedUpload, type UploadProgress } from "@/lib/chunkedUpload";
 import { captureVideoThumbnail, captureVideoThumbnailFromUrl } from "@/lib/videoThumbnail";
+
+const ThreeViewer = lazy(() => import("@/components/ThreeViewer"));
+const DxfViewerComponent = lazy(() => import("@/components/DxfViewerComponent"));
+const DwgViewerComponent = lazy(() => import("@/components/DwgViewerComponent"));
+const PdfViewer = lazy(() => import("@/components/PdfViewer"));
+const WordViewer = lazy(() => import("@/components/WordViewer"));
+const ExcelViewer = lazy(() => import("@/components/ExcelViewer"));
+const ArchiveViewer = lazy(() =>
+  import("@/components/ArchiveViewer").then((module) => ({ default: module.ArchiveViewer }))
+);
+const EmailViewer = lazy(() => import("@/components/EmailViewer"));
+
+function ViewerLoading() {
+  return (
+    <div className="flex h-full min-h-[500px] items-center justify-center bg-muted/30 text-sm text-muted-foreground">
+      加载预览器...
+    </div>
+  );
+}
+
+async function parseMeshFile(file: File, quality: MeshQuality) {
+  const { parseFile } = await import("@/lib/fileParser");
+  return parseFile(file, quality);
+}
 
 /**
  * Load a remote file from S3 URL into the viewer.
@@ -184,7 +202,7 @@ async function loadRemoteFile(
       s.setFileSize(blob.size);
       const file = new File([blob], name);
       s.setCurrentFileObj(file); // Store file obj so quality change can re-parse
-      const { data, parseTime: pt } = await parseFile(file, quality);
+      const { data, parseTime: pt } = await parseMeshFile(file, quality);
       s.setMeshData(data);
       s.setParseTime(pt);
       s.setMeshCount(data.meshes.length);
@@ -834,7 +852,7 @@ export default function Home() {
       setStatus("parsing");
 
       try {
-        const { data, parseTime: pt } = await parseFile(file, meshQuality);
+        const { data, parseTime: pt } = await parseMeshFile(file, meshQuality);
         setMeshData(data);
         setParseTime(pt);
         setMeshCount(data.meshes.length);
@@ -865,7 +883,7 @@ export default function Home() {
         setIsReparsing(true);
         setStatus("parsing");
         try {
-          const { data, parseTime: pt } = await parseFile(currentFileObj, newQuality);
+          const { data, parseTime: pt } = await parseMeshFile(currentFileObj, newQuality);
           setMeshData(data);
           setParseTime(pt);
           setMeshCount(data.meshes.length);
@@ -1070,6 +1088,7 @@ export default function Home() {
                       : ""
                 }`}
               >
+                <Suspense fallback={<ViewerLoading />}>
                 {status === "idle" || status === "error" ? (
                   <div
                     className={`p-12 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${
@@ -1257,6 +1276,7 @@ export default function Home() {
                 ) : (
                   <ThreeViewer ref={threeViewerRef} meshData={meshData} />
                 )}
+                </Suspense>
                 {/* Fullscreen toggle button — hidden for archive mode to avoid overlapping the action bar */}
                 {status === "ready" && viewerMode !== "archive" && (
                   <button

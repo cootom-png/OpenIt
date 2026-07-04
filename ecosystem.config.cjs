@@ -10,12 +10,19 @@
  *   6. 重启服务: pm2 restart coriton-parts
  *   7. 停止服务: pm2 stop coriton-parts
  */
+const logDir = process.env.PM2_LOG_DIR || "./logs";
+
 module.exports = {
   apps: [
     {
-      name: "coriton-parts",
+      name: "cloudparts",
       script: "dist/index.js",
       cwd: __dirname,
+      interpreter: process.env.NODE_INTERPRETER || "node",
+      instances: 1,
+      exec_mode: "fork",
+      uid: process.env.PM2_RUN_USER,
+      gid: process.env.PM2_RUN_GROUP,
 
       // 环境变量
       env: {
@@ -40,8 +47,8 @@ module.exports = {
       min_uptime: 5000,
 
       // ─── 日志配置 ───
-      error_file: "./logs/pm2-error.log",
-      out_file: "./logs/pm2-output.log",
+      error_file: `${logDir}/pm2-error.log`,
+      out_file: `${logDir}/pm2-output.log`,
 
       // 合并所有实例的日志到同一文件
       merge_logs: true,

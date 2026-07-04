@@ -173,6 +173,35 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+
+          if (
+            id.includes("three") ||
+            id.includes("occt-import-js") ||
+            id.includes("dxf-viewer") ||
+            id.includes("@mlightcad")
+          ) {
+            return "viewer-3d-cad";
+          }
+          if (id.includes("pdfjs-dist")) return "viewer-pdf";
+          if (id.includes("xlsx")) return "viewer-excel";
+          if (id.includes("mammoth")) return "viewer-word";
+          if (id.includes("eml-parse-js") || id.includes("dotmsg")) return "viewer-email";
+          if (id.includes("@radix-ui") || id.includes("lucide-react")) return "ui-vendor";
+          if (
+            id.includes("@tanstack") ||
+            id.includes("@trpc") ||
+            id.includes("superjson")
+          ) {
+            return "data-client";
+          }
+          return "vendor";
+        },
+      },
+    },
   },
   server: {
     host: true,

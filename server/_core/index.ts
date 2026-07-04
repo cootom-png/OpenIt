@@ -82,6 +82,10 @@ async function startServer() {
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
+  app.get("/healthz", (_req, res) => {
+    res.status(200).json({ ok: true, service: "cloudparts" });
+  });
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Chunked file upload routes

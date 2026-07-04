@@ -1,8 +1,11 @@
-import type { ParsedMeshData } from "@/components/ThreeViewer";
+﻿import type { ParsedMeshData } from "@/components/ThreeViewer";
+import { getFileExtension, QUALITY_PRESETS, type MeshQuality } from "@/lib/fileMetadata";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import * as THREE from "three";
+
+export { getFileExtension, QUALITY_PRESETS, type MeshQuality } from "@/lib/fileMetadata";
 
 const WASM_CDN_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/occt-import-js_dde0c27b.wasm";
 
@@ -31,15 +34,6 @@ async function getOcctInstance(): Promise<any> {
 
   return occtInstance;
 }
-
-/** Quality presets for STEP/IGES tessellation */
-export type MeshQuality = "fast" | "standard" | "high";
-
-export const QUALITY_PRESETS: Record<MeshQuality, { linearDeflection: number; angularDeflection: number; label: string }> = {
-  fast: { linearDeflection: 0.5, angularDeflection: 0.5, label: "快速" },
-  standard: { linearDeflection: 0.1, angularDeflection: 0.3, label: "标准" },
-  high: { linearDeflection: 0.01, angularDeflection: 0.1, label: "高精度" },
-};
 
 export async function parseStepFile(fileBuffer: Uint8Array, quality: MeshQuality = "standard"): Promise<ParsedMeshData> {
   const occt = await getOcctInstance();
@@ -98,10 +92,6 @@ export function parseStlFile(fileBuffer: ArrayBuffer): ParsedMeshData {
       },
     ],
   };
-}
-
-export function getFileExtension(filename: string): string {
-  return filename.split(".").pop()?.toLowerCase() || "";
 }
 
 export function parseObjFile(text: string): ParsedMeshData {
