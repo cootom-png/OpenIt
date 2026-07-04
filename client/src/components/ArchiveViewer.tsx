@@ -277,7 +277,10 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
         // Check if File System Access API is supported (Chrome/Edge)
         if ("showDirectoryPicker" in window) {
           try {
-            const dirHandle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+            const dirHandle = await (window as any).showDirectoryPicker({
+              mode: "readwrite",
+              startIn: "downloads",
+            });
             // Create a subfolder with the archive name
             const baseName = file.name.replace(/\.[^.]+$/, "");
             const subDir = await dirHandle.getDirectoryHandle(baseName, { create: true });
@@ -303,6 +306,10 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
           } catch (fsErr: any) {
             if (fsErr.name === "AbortError") {
               // User cancelled the folder picker
+              return;
+            }
+            if (fsErr.name === "NotAllowedError" || fsErr.message?.includes("系统文件") || fsErr.message?.includes("permission")) {
+              alert("无法写入该文件夹（系统保护目录）。\n\n解决方法：\n1. 点击“选择其他文件夹”\n2. 在左侧导航栏找到“桌面”或手动输入路径：\n   C:\\Users\\你的用户名\\Desktop\n3. 点击“选择文件夹”即可");
               return;
             }
             throw fsErr;
@@ -426,6 +433,7 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
           onClick={handleExtractDownload}
           disabled={extracting || !file}
           className="shrink-0"
+          title="选择文件夹，将解压后的文件直接保存到指定位置（支持 Chrome/Edge）"
         >
           <Download className="w-4 h-4 mr-2" />
           {extracting ? "解压中..." : "解压下载"}
