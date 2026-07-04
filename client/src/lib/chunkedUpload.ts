@@ -5,7 +5,7 @@
  *  - Per-chunk retry (max 3 attempts)
  *  - 429 (server busy) auto-retry with countdown
  *  - Cancel support via AbortController
- *  - Resume support (query server for already-uploaded chunks)
+ *  - Resume support: saves uploadId to localStorage on cancel, resumes from last chunk
  *  - Progress callback
  */
 
@@ -19,8 +19,13 @@ const MAX_429_RETRIES = 5; // 最多重试 5 次
 const INITIAL_429_WAIT_MS = 5000; // 首次等待 5 秒
 const MAX_429_WAIT_MS = 30000; // 最长等待 30 秒
 
+// 断点续传缓存 key
+const RESUME_CACHE_KEY = "chunked-upload-resume-cache";
+// 缓存过期时间（2小时，与服务端 session 保留时间一致）
+const RESUME_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+
 export interface UploadProgress {
-  phase: "compressing" | "uploading" | "completing" | "waiting";
+  phase: "compressing" | "uploading" | "completing" | "waiting" | "resuming";
   percent: number; // 0-100
   uploadedChunks: number;
   totalChunks: number;
@@ -34,6 +39,70 @@ export interface ChunkedUploadResult {
   file?: any;
   error?: string;
   cancelled?: boolean; // 是否被用户取消
+}
+
+// ─── 断点续传缓存管理 ───
+
+interface ResumeEntry {
+  uploadId: string;
+  userId: number;
+  fileName: string;
+  fileSize: number;
+  totalChunks: number;
+  createdAt: number;
+}
+
+/** 生成文件指纹（基于文件名+大小+用户ID） */
+function getFileFingerprint(fileName: string, fileSize: number, userId: number): string {
+  return `${userId}:${fileName}:${fileSize}`;
+}
+
+/** 从 localStorage 获取续传缓存 */
+function getResumeCache(): Record<string, ResumeEntry> {
+  try {
+    const raw = localStorage.getItem(RESUME_CACHE_KEY);
+    if (!raw) return {};
+    const cache = JSON.parse(raw) as Record<string, ResumeEntry>;
+    // 清理过期条目
+    const now = Date.now();
+    const cleaned: Record<string, ResumeEntry> = {};
+    for (const [key, entry] of Object.entries(cache)) {
+      if (now - entry.createdAt < RESUME_CACHE_TTL_MS) {
+        cleaned[key] = entry;
+      }
+    }
+    return cleaned;
+  } catch {
+    return {};
+  }
+}
+
+/** 保存续传信息到 localStorage */
+function saveResumeEntry(fingerprint: string, entry: ResumeEntry): void {
+  try {
+    const cache = getResumeCache();
+    cache[fingerprint] = entry;
+    localStorage.setItem(RESUME_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // localStorage 不可用时静默失败
+  }
+}
+
+/** 删除续传缓存条目 */
+function removeResumeEntry(fingerprint: string): void {
+  try {
+    const cache = getResumeCache();
+    delete cache[fingerprint];
+    localStorage.setItem(RESUME_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // 静默失败
+  }
+}
+
+/** 查找续传缓存条目 */
+function findResumeEntry(fingerprint: string): ResumeEntry | null {
+  const cache = getResumeCache();
+  return cache[fingerprint] || null;
 }
 
 // ─── 取消错误类 ───
@@ -281,8 +350,15 @@ export async function chunkedUpload(
   onProgress?: (progress: UploadProgress) => void,
   signal?: AbortSignal
 ): Promise<ChunkedUploadResult> {
+  const fingerprint = getFileFingerprint(file.name, file.size, userId);
+
   try {
-    return await _doChunkedUpload(file, userId, category, onProgress, signal);
+    const result = await _doChunkedUpload(file, userId, category, fingerprint, onProgress, signal);
+    if (result.success) {
+      // 上传成功，清除续传缓存
+      removeResumeEntry(fingerprint);
+    }
+    return result;
   } catch (err: any) {
     if (err instanceof UploadCancelledError || err.name === "AbortError") {
       return { success: false, error: "上传已取消", cancelled: true };
@@ -295,6 +371,7 @@ async function _doChunkedUpload(
   file: File,
   userId: number,
   category: string,
+  fingerprint: string,
   onProgress?: (progress: UploadProgress) => void,
   signal?: AbortSignal
 ): Promise<ChunkedUploadResult> {
@@ -328,13 +405,27 @@ async function _doChunkedUpload(
 
   const totalChunks = Math.ceil(uploadFile.size / CHUNK_SIZE);
 
-  // Step 2: Init upload session (with 429 retry)
-  onProgress?.({
-    phase: "uploading",
-    percent: 0,
-    uploadedChunks: 0,
-    totalChunks,
-  });
+  // Step 2: Check for resume cache
+  const resumeEntry = findResumeEntry(fingerprint);
+  const resumeId = resumeEntry?.uploadId || undefined;
+
+  if (resumeId) {
+    onProgress?.({
+      phase: "resuming",
+      percent: 0,
+      uploadedChunks: 0,
+      totalChunks,
+      waitMessage: "检测到上次未完成的上传，正在继续...",
+    });
+    console.log(`[Upload] Found resume cache for ${file.name}, trying to resume uploadId: ${resumeId}`);
+  } else {
+    onProgress?.({
+      phase: "uploading",
+      percent: 0,
+      uploadedChunks: 0,
+      totalChunks,
+    });
+  }
 
   const initProgress = { percent: 0, uploadedChunks: 0, totalChunks };
 
@@ -351,6 +442,7 @@ async function _doChunkedUpload(
         mimeType: isCompressibleImage(ext) ? "image/jpeg" : file.type || "application/octet-stream",
         category,
         totalChunks,
+        resumeId, // 传入续传 ID（如果有）
       }),
     },
     initProgress,
@@ -366,21 +458,52 @@ async function _doChunkedUpload(
     return { success: false, error: body.error || "初始化上传失败" };
   }
 
-  const { uploadId } = await initResp.json();
+  const initData = await initResp.json();
+  const uploadId = initData.uploadId;
+  const resumed = initData.resumed === true;
 
-  // Step 3: Check for already-uploaded chunks (resume support)
+  // 保存当前 uploadId 到续传缓存（无论是新建还是恢复）
+  saveResumeEntry(fingerprint, {
+    uploadId,
+    userId,
+    fileName: file.name,
+    fileSize: uploadFile.size,
+    totalChunks,
+    createdAt: Date.now(),
+  });
+
+  // Step 3: Determine already-uploaded chunks
   let uploadedSet = new Set<number>();
-  try {
-    const statusResp = await fetch(`/api/upload/status?uploadId=${uploadId}`, { signal });
-    if (statusResp.ok) {
-      const statusData = await statusResp.json();
-      uploadedSet = new Set(statusData.uploadedChunks || []);
+
+  if (resumed && initData.uploadedChunks) {
+    // 服务端直接返回了已上传分片列表
+    uploadedSet = new Set(initData.uploadedChunks);
+    console.log(`[Upload] Resumed: ${uploadedSet.size}/${totalChunks} chunks already uploaded`);
+  } else {
+    // 查询服务器获取已上传分片（兼容旧逻辑）
+    try {
+      const statusResp = await fetch(`/api/upload/status?uploadId=${uploadId}`, { signal });
+      if (statusResp.ok) {
+        const statusData = await statusResp.json();
+        uploadedSet = new Set(statusData.uploadedChunks || []);
+      }
+    } catch (err: any) {
+      if (err instanceof UploadCancelledError || err.name === "AbortError") {
+        return { success: false, error: "上传已取消", cancelled: true };
+      }
+      // Ignore other errors — fresh upload
     }
-  } catch (err: any) {
-    if (err instanceof UploadCancelledError || err.name === "AbortError") {
-      return { success: false, error: "上传已取消", cancelled: true };
-    }
-    // Ignore other errors — fresh upload
+  }
+
+  // 如果有已上传的分片，更新进度显示
+  if (uploadedSet.size > 0) {
+    onProgress?.({
+      phase: "uploading",
+      percent: Math.round((uploadedSet.size / totalChunks) * 100),
+      uploadedChunks: uploadedSet.size,
+      totalChunks,
+      waitMessage: resumed ? `已恢复 ${uploadedSet.size}/${totalChunks} 个分片，继续上传...` : undefined,
+    });
   }
 
   // Step 4: Upload chunks with progress tracking
@@ -411,6 +534,7 @@ async function _doChunkedUpload(
       await uploadChunkWithRetry(uploadId, i, chunkBlob, chunkProgress, onProgress, signal);
     } catch (err: any) {
       if (err instanceof UploadCancelledError || err.name === "AbortError") {
+        // 取消时不删除缓存，保留供下次续传
         return { success: false, error: "上传已取消", cancelled: true };
       }
       return {
@@ -461,5 +585,7 @@ async function _doChunkedUpload(
   }
 
   const result = await completeResp.json();
+  // 上传成功，清除续传缓存
+  removeResumeEntry(fingerprint);
   return { success: true, file: result.file };
 }

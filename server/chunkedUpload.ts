@@ -76,10 +76,10 @@ function generateShareToken(): string {
 export function createChunkedUploadRouter(): Router {
   const r = Router();
 
-  // ─── 1. Init upload session ───
+  // ─── 1. Init upload session (supports resume via resumeId) ───
   r.post("/api/upload/init", async (req, res) => {
     try {
-      const { userId, fileName, fileExt, fileSize, mimeType, category, totalChunks } = req.body;
+      const { userId, fileName, fileExt, fileSize, mimeType, category, totalChunks, resumeId } = req.body;
 
       if (!userId || !fileName || !fileSize || !totalChunks) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -87,6 +87,29 @@ export function createChunkedUploadRouter(): Router {
 
       if (fileSize > MAX_SINGLE_FILE_BYTES) {
         return res.status(400).json({ error: `文件大小超过 ${MAX_SINGLE_FILE_BYTES / (1024 * 1024)}MB 限制` });
+      }
+
+      // 断点续传：如果前端传入 resumeId，尝试恢复已有会话
+      if (resumeId) {
+        const existingSession = sessions.get(resumeId);
+        if (
+          existingSession &&
+          existingSession.userId === userId &&
+          existingSession.fileName === fileName &&
+          existingSession.fileSize === fileSize &&
+          existingSession.totalChunks === totalChunks
+        ) {
+          // 会话匹配，返回已有 uploadId 和已上传分片信息
+          console.log(`[ChunkedUpload] Resuming session: ${resumeId} (${existingSession.chunks.size}/${totalChunks} chunks)`);
+          return res.json({
+            uploadId: resumeId,
+            totalChunks,
+            resumed: true,
+            uploadedChunks: Array.from(existingSession.chunks.keys()).sort((a, b) => a - b),
+          });
+        }
+        // resumeId 无效或不匹配，继续创建新会话
+        console.log(`[ChunkedUpload] Resume failed for ${resumeId}, creating new session`);
       }
 
       // 检查并发会话数限制
@@ -121,7 +144,7 @@ export function createChunkedUploadRouter(): Router {
         memoryUsed: 0,
       });
 
-      res.json({ uploadId, totalChunks });
+      res.json({ uploadId, totalChunks, resumed: false });
     } catch (err: any) {
       console.error("[ChunkedUpload] Init error:", err);
       res.status(500).json({ error: err.message || "Init failed" });
