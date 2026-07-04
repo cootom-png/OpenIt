@@ -280,7 +280,7 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
             // Directly show directory picker (must be in user gesture chain, no confirm/alert before)
             const dirHandle = await (window as any).showDirectoryPicker({
               mode: "readwrite",
-              startIn: "desktop",
+              startIn: "downloads",
             });
 
             // Extract all files directly into the selected folder
@@ -328,8 +328,8 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
             if (fsErr.name === "AbortError") {
               return;
             }
-            if (fsErr.name === "NotAllowedError" || fsErr.message?.includes("permission")) {
-              alert("无法写入该文件夹。\n\n请尝试：\n1. 在目标位置（如桌面）先手动新建一个文件夹\n2. 然后选择该新建的文件夹即可");
+            if (fsErr.name === "NotAllowedError" || fsErr.message?.includes("permission") || fsErr.message?.includes("system")) {
+              alert("无法写入该文件夹（系统保护目录）。\n\n请点击“选择其他文件夹”，然后：\n• 新建一个文件夹，或\n• 选择其他非系统文件夹（如 D盘、下载等）");
               return;
             }
             throw fsErr;
@@ -467,7 +467,7 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
           onClick={handleExtractDownload}
           disabled={extracting || !file}
           className="shrink-0"
-          title="点击后请在目标位置（如桌面）新建一个文件夹，选择它即可解压文件到该文件夹（仅支持 Chrome/Edge）"
+          title="点击后请新建或选择一个非系统文件夹，解压后的文件将直接保存到该文件夹"
         >
           <Download className="w-4 h-4 mr-2" />
           {extracting ? "解压中..." : "解压下载"}
