@@ -26,6 +26,7 @@ import { TRPCError } from "@trpc/server";
 import { cleanupGuestUploadRecords } from "./cleanup";
 import { initTRPC } from "@trpc/server";
 import type { TrpcContext } from "./_core/context";
+import { archiveRouter } from "./routers/archive";
 
 // ─── Email user middleware (approved users only) ───
 const t = initTRPC.context<TrpcContext>().create();
@@ -45,6 +46,7 @@ const requireApprovedEmailUser = t.middleware(async ({ ctx, next }) => {
 
 export const appRouter = router({
   system: systemRouter,
+  archive: archiveRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

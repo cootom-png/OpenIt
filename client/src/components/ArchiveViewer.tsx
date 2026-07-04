@@ -11,7 +11,10 @@ import {
   ChevronRight,
   ChevronDown,
   Package,
+  Download,
 } from "lucide-react";
+import { trpc } from "../lib/trpc";
+import { Button } from "./ui/button";
 
 interface ArchiveEntry {
   path: string;
@@ -23,6 +26,7 @@ interface ArchiveEntry {
 
 interface ArchiveViewerProps {
   file: File | null;
+  s3Url?: string;
   onInfo?: (info: { totalFiles: number; totalSize: number; format: string }) => void;
 }
 
@@ -77,73 +81,58 @@ function buildTree(entries: ArchiveEntry[]): TreeNode[] {
   });
 
   for (const entry of sorted) {
-    const parts = entry.path.replace(/\/$/, "").split("/");
-    let currentPath = "";
-    let parentChildren = root;
+    const parts = entry.path.replace(/\/$/, "").split("/").filter(Boolean);
+    let current = root;
+    let path = "";
 
     for (let i = 0; i < parts.length; i++) {
-      currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+      const part = parts[i];
+      path += (path ? "/" : "") + part;
       const isLast = i === parts.length - 1;
 
-      if (isLast) {
-        const node: TreeNode = {
-          name: entry.name || parts[i],
-          path: entry.path,
-          isDir: entry.isDir,
-          size: entry.size,
-          compressedSize: entry.compressedSize,
+      let node = map.get(path);
+      if (!node) {
+        node = {
+          name: part,
+          path,
+          isDir: entry.isDir || !isLast,
+          size: isLast ? entry.size : 0,
+          compressedSize: isLast ? entry.compressedSize : 0,
           children: [],
         };
-        // Avoid duplicates
-        if (!map.has(currentPath)) {
-          map.set(currentPath, node);
-          parentChildren.push(node);
-        }
-      } else {
-        // Ensure intermediate directories exist
-        if (!map.has(currentPath)) {
-          const dirNode: TreeNode = {
-            name: parts[i],
-            path: currentPath + "/",
-            isDir: true,
-            size: 0,
-            children: [],
-          };
-          map.set(currentPath, dirNode);
-          parentChildren.push(dirNode);
-        }
-        parentChildren = map.get(currentPath)!.children;
+        map.set(path, node);
+        current.push(node);
       }
+      current = node.children;
     }
   }
 
   return root;
 }
 
-function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
-  const [expanded, setExpanded] = useState(depth < 2);
+function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
+  const [expanded, setExpanded] = useState(false);
 
   if (node.isDir) {
     return (
       <div>
         <div
-          className="flex items-center gap-1.5 py-1 px-2 hover:bg-muted/50 rounded cursor-pointer select-none"
+          className="flex items-center gap-1.5 py-1 px-2 hover:bg-muted/30 rounded cursor-pointer"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <ChevronDown className="w-4 h-4 shrink-0" />
           ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <ChevronRight className="w-4 h-4 shrink-0" />
           )}
           {expanded ? (
             <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" />
           ) : (
             <Folder className="w-4 h-4 text-amber-500 shrink-0" />
           )}
-          <span className="text-sm font-medium truncate">{node.name}</span>
-          <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
-            {node.children.length} 项
+          <span className="text-sm truncate flex-1" title={node.name}>
+            {node.name}
           </span>
         </div>
         {expanded && (
@@ -226,10 +215,40 @@ async function parseRarFile(file: File): Promise<ArchiveEntry[]> {
   }));
 }
 
-export default function ArchiveViewer({ file, onInfo }: ArchiveViewerProps) {
+export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProps) {
   const [entries, setEntries] = useState<ArchiveEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const extractArchive = trpc.archive.extractAndDownload.useMutation();
+
+  const handleExtractDownload = async () => {
+    if (!file || !s3Url) {
+      alert('文件未上传或URL不可用');
+      return;
+    }
+
+    setExtracting(true);
+    try {
+      const result = await extractArchive.mutateAsync({
+        s3Url,
+        fileName: file.name,
+      });
+
+      // Trigger download
+      const link = document.createElement('a');
+      link.href = result.downloadUrl;
+      link.download = result.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert(`解压失败: ${err.message}`);
+      console.error('Archive extraction error:', err);
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   useEffect(() => {
     if (!file) return;
@@ -307,18 +326,30 @@ export default function ArchiveViewer({ file, onInfo }: ArchiveViewerProps) {
   return (
     <div className="flex flex-col h-full min-h-[400px] bg-background">
       {/* Summary bar */}
-      <div className="flex items-center gap-4 px-4 py-2.5 border-b bg-muted/30">
-        <div className="flex items-center gap-1.5">
-          <Archive className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">
-            {file?.name.split(".").pop()?.toUpperCase()} 压缩包
-          </span>
+      <div className="flex items-center justify-between gap-4 px-4 py-2.5 border-b bg-muted/30">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Archive className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">
+              {file?.name.split(".").pop()?.toUpperCase()} 压缩包
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>{fileCount} 个文件</span>
+            {dirCount > 0 && <span>{dirCount} 个文件夹</span>}
+            <span>解压后 {formatSize(totalSize)}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>{fileCount} 个文件</span>
-          {dirCount > 0 && <span>{dirCount} 个文件夹</span>}
-          <span>解压后 {formatSize(totalSize)}</span>
-        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleExtractDownload}
+          disabled={extracting || !s3Url}
+          className="shrink-0"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          {extracting ? "解压中..." : "解压下载"}
+        </Button>
       </div>
 
       {/* File tree */}
