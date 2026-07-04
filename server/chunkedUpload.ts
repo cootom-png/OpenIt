@@ -16,6 +16,15 @@ import { getDb } from "./db";
 import { userFiles, emailUsers } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
+// ═══════════════════════════════════════════════════════════════
+// 内存限制配置
+// ═══════════════════════════════════════════════════════════════
+
+// 所有上传会话的总内存上限（500MB）
+const MAX_TOTAL_MEMORY_BYTES = 500 * 1024 * 1024;
+// 最大并发上传会话数
+const MAX_CONCURRENT_SESSIONS = 10;
+
 // ─── In-memory upload session store ───
 interface UploadSession {
   userId: number;
@@ -27,9 +36,19 @@ interface UploadSession {
   totalChunks: number;
   chunks: Map<number, Buffer>; // chunkIndex → data
   createdAt: number;
+  memoryUsed: number; // 当前会话已使用的内存（字节）
 }
 
 const sessions = new Map<string, UploadSession>();
+
+/** 计算所有会话当前占用的总内存 */
+function getTotalMemoryUsage(): number {
+  let total = 0;
+  for (const session of sessions.values()) {
+    total += session.memoryUsed;
+  }
+  return total;
+}
 
 // Clean up stale sessions every 30 minutes (sessions older than 2 hours)
 setInterval(() => {
@@ -39,6 +58,7 @@ setInterval(() => {
     const session = sessions.get(id);
     if (session && now - session.createdAt > 2 * 60 * 60 * 1000) {
       sessions.delete(id);
+      console.log(`[ChunkedUpload] Cleaned up stale session: ${id} (${(session.memoryUsed / 1024 / 1024).toFixed(1)}MB freed)`);
     }
   }
 }, 30 * 60 * 1000);
@@ -69,6 +89,17 @@ export function createChunkedUploadRouter(): Router {
         return res.status(400).json({ error: `文件大小超过 ${MAX_SINGLE_FILE_BYTES / (1024 * 1024)}MB 限制` });
       }
 
+      // 检查并发会话数限制
+      if (sessions.size >= MAX_CONCURRENT_SESSIONS) {
+        return res.status(429).json({ error: "服务器繁忙，请稍后再试（上传队列已满）" });
+      }
+
+      // 检查总内存限制
+      const currentMemory = getTotalMemoryUsage();
+      if (currentMemory + fileSize > MAX_TOTAL_MEMORY_BYTES) {
+        return res.status(429).json({ error: "服务器内存不足，请稍后再试" });
+      }
+
       // Check user quota
       const quota = await getUserQuota(userId);
       const check = checkQuota(quota, fileSize);
@@ -87,6 +118,7 @@ export function createChunkedUploadRouter(): Router {
         totalChunks,
         chunks: new Map(),
         createdAt: Date.now(),
+        memoryUsed: 0,
       });
 
       res.json({ uploadId, totalChunks });
@@ -116,7 +148,14 @@ export function createChunkedUploadRouter(): Router {
         return res.status(400).json({ error: "Invalid chunk index" });
       }
 
+      // 如果是重传的 chunk，先减去旧 chunk 的内存
+      const oldChunk = session.chunks.get(idx);
+      if (oldChunk) {
+        session.memoryUsed -= oldChunk.length;
+      }
+
       session.chunks.set(idx, file.buffer);
+      session.memoryUsed += file.buffer.length;
 
       res.json({
         success: true,
@@ -204,7 +243,7 @@ export function createChunkedUploadRouter(): Router {
         .where(eq(userFiles.id, result[0].insertId))
         .limit(1);
 
-      // Clean up session
+      // Clean up session (释放内存)
       sessions.delete(uploadId);
 
       res.json({ success: true, file: inserted[0] });
@@ -267,7 +306,15 @@ export function createChunkedUploadRouter(): Router {
         headers["Range"] = req.headers.range;
       }
 
-      const upstream = await fetch(videoUrl, { headers: Object.keys(headers).length > 0 ? headers : undefined });
+      // 添加 60 秒超时
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60_000);
+
+      const upstream = await fetch(videoUrl, {
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
       // Forward response headers
       const contentType = upstream.headers.get("content-type") || "video/mp4";

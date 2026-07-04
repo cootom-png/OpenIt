@@ -23,8 +23,13 @@ export const archiveRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        // Download the ZIP file from S3
-        const response = await fetch(input.s3Url);
+        // Download the ZIP file from S3 (with 60s timeout)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60_000);
+
+        const response = await fetch(input.s3Url, { signal: controller.signal });
+        clearTimeout(timeout);
+
         if (!response.ok) {
           throw new Error(`Failed to fetch file from S3: ${response.statusText}`);
         }

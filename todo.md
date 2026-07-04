@@ -435,3 +435,12 @@
 ## 新增功能：CSS 文件预览
 
 - [x] 支持 .css 文件上传和代码高亮预览
+
+## 代码优化：服务器稳定性提升
+
+- [x] 添加全局异常处理（uncaughtException + unhandledRejection + SIGTERM 优雅关闭）
+- [x] 降低 JSON body limit 从 110MB 到 10MB
+- [x] libarchive-wasm 模块缓存为单例（避免每次请求重新初始化）
+- [x] chunkedUpload 添加总内存限制（防止内存泄漏）
+- [x] storage.ts fetch 请求添加超时机制
+- [x] 创建 PM2 配置文件 ecosystem.config.cjs

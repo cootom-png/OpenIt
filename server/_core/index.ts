@@ -10,6 +10,50 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startCleanupScheduler } from "../cleanup";
 
+// ═══════════════════════════════════════════════════════════════
+// 全局异常处理 — 防止未捕获错误导致进程退出
+// ═══════════════════════════════════════════════════════════════
+
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] Uncaught Exception:", err);
+  // 记录错误但不立即退出，让 PM2 决定是否重启
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[FATAL] Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+// 优雅关闭：收到 SIGTERM 时清理资源后退出
+process.on("SIGTERM", () => {
+  console.log("[Server] Received SIGTERM, shutting down gracefully...");
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  console.log("[Server] Received SIGINT, shutting down...");
+  process.exit(0);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// libarchive-wasm 单例缓存 — 避免每次请求重新初始化 WASM 模块
+// ═══════════════════════════════════════════════════════════════
+
+let _libarchiveMod: any = null;
+let _ArchiveReader: any = null;
+
+async function getLibarchive() {
+  if (!_libarchiveMod) {
+    const { ArchiveReader, libarchiveWasm } = await import("libarchive-wasm");
+    _libarchiveMod = await libarchiveWasm();
+    _ArchiveReader = ArchiveReader;
+  }
+  return { mod: _libarchiveMod, ArchiveReader: _ArchiveReader };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 服务器启动
+// ═══════════════════════════════════════════════════════════════
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -32,14 +76,18 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "110mb" }));
-  app.use(express.urlencoded({ limit: "110mb", extended: true }));
+
+  // ─── Body parser: 降低 limit 到 10MB ───
+  // 大文件已通过分块上传 (chunkedUpload) 处理，不需要超大 JSON body
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ limit: "10mb", extended: true }));
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Chunked file upload routes
   app.use(createChunkedUploadRouter());
-  // RAR file parsing API (server-side WASM)
+
+  // ─── RAR/7z 文件解析 API（使用缓存的 WASM 单例）───
   app.post("/api/parse-archive", async (req, res) => {
     try {
       const { buffer, filename } = req.body;
@@ -50,9 +98,9 @@ async function startServer() {
       if (ext !== "rar" && ext !== "zip" && ext !== "7z") {
         return res.status(400).json({ error: "Unsupported format" });
       }
-      const { ArchiveReader, libarchiveWasm } = await import("libarchive-wasm");
+
+      const { mod, ArchiveReader } = await getLibarchive();
       const data = Buffer.from(buffer, "base64");
-      const mod = await libarchiveWasm();
       const reader = new ArchiveReader(mod, new Int8Array(data));
       const entries: Array<{ path: string; name: string; size: number; isDir: boolean }> = [];
       for (const entry of reader.entries()) {
@@ -65,11 +113,12 @@ async function startServer() {
       reader.free();
       return res.json({ entries });
     } catch (err: any) {
+      console.error("[parse-archive] Error:", err.message);
       return res.status(500).json({ error: err.message || "Failed to parse archive" });
     }
   });
 
-  // Archive extraction API (public, no login required)
+  // ─── 压缩包解压 API（使用缓存的 WASM 单例）───
   app.post("/api/extract-archive", async (req, res) => {
     try {
       const { buffer, filename } = req.body;
@@ -92,9 +141,8 @@ async function startServer() {
         const newFileName = `${baseName}_extracted_${timestamp}.zip`;
         return res.json({ success: true, base64, fileName: newFileName });
       } else {
-        // RAR/7z: use libarchive-wasm to extract files
-        const { ArchiveReader, libarchiveWasm } = await import("libarchive-wasm");
-        const mod = await libarchiveWasm();
+        // RAR/7z: use cached libarchive-wasm singleton
+        const { mod, ArchiveReader } = await getLibarchive();
         const reader = new ArchiveReader(mod, new Int8Array(fileBuffer));
         const files: Array<{ name: string; data: string }> = [];
         for (const entry of reader.entries()) {
@@ -113,7 +161,7 @@ async function startServer() {
         return res.json({ success: true, files });
       }
     } catch (err: any) {
-      console.error("[extract-archive]", err);
+      console.error("[extract-archive] Error:", err.message);
       return res.status(500).json({ error: err.message || "Extraction failed" });
     }
   });
@@ -147,4 +195,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => {
+  console.error("[Server] Failed to start:", err);
+  process.exit(1);
+});
