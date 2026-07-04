@@ -335,7 +335,22 @@ export default function ArchiveViewer({ file, s3Url, onInfo }: ArchiveViewerProp
             throw fsErr;
           }
         } else {
-          alert("当前浏览器不支持此功能，请使用 Chrome 或 Edge 浏览器进行解压下载。");
+          // Mobile / unsupported browsers: download each file individually
+          const fileEntries = Object.entries(zip.files).filter(([_, entry]) => !entry.dir);
+          for (const [path, entry] of fileEntries) {
+            const content = await entry.async("blob");
+            const fileName = path.split("/").filter(Boolean).pop() || path;
+            const url = URL.createObjectURL(content);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            // Small delay between downloads to avoid browser blocking
+            await new Promise(r => setTimeout(r, 500));
+          }
         }
       } else {
         // RAR/7z: not supported for client-side extraction, show message
