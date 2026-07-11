@@ -10,84 +10,80 @@ import { toast } from "sonner";
 
 export default function AdminLogin() {
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const loginMutation = trpc.emailAuth.login.useMutation({
     onSuccess: (data) => {
       if (data.user.role !== "admin") {
-        toast.error("该账号没有管理员权限");
+        toast.error("This account does not have admin privileges");
         return;
       }
-      toast.success("管理员登录成功");
+      toast.success("Admin login successful");
       navigate("/admin/users");
     },
     onError: (err) => {
-      toast.error(err.message || "登录失败");
+      toast.error(err.message || "Login failed");
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("请输入邮箱和密码");
+    if (!username || !password) {
+      toast.error("Please enter username and password");
       return;
     }
-    loginMutation.mutate({ email, password });
+    loginMutation.mutate({ email: username, password });
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-sm">
         <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
-          <CardHeader className="text-center pb-4">
-            <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <Shield className="w-6 h-6 text-blue-600" />
+          <CardHeader className="pb-4 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+              <Shield className="h-6 w-6 text-blue-600" />
             </div>
-            <CardTitle className="text-xl">管理员登录</CardTitle>
-            <CardDescription>零件云图 后台管理</CardDescription>
+            <CardTitle className="text-xl">Admin Login</CardTitle>
+            <CardDescription>OpenIt admin console</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">邮箱</Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="请输入管理员邮箱"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
+                  id="username"
+                  type="text"
+                  placeholder="admin"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="请输入密码"
+                  placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                 />
               </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loginMutation.isPending}
-              >
-                {loginMutation.isPending ? "登录中..." : "登录"}
+              <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+                {loginMutation.isPending ? "Logging in..." : "Log in"}
               </Button>
             </form>
             <div className="mt-4 text-center">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-muted-foreground gap-1"
+                className="gap-1 text-xs text-muted-foreground"
                 onClick={() => navigate("/")}
               >
-                <ArrowLeft className="w-3 h-3" />
-                返回首页
+                <ArrowLeft className="h-3 w-3" />
+                Back to home
               </Button>
             </div>
           </CardContent>

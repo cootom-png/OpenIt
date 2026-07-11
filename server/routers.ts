@@ -85,7 +85,7 @@ export const appRouter = router({
 
     login: publicProcedure
       .input(z.object({
-        email: z.string().email("请输入有效的邮箱地址"),
+        email: z.string().min(1, "Please enter a username or email"),
         password: z.string().min(1, "请输入密码"),
       }))
       .mutation(async ({ input, ctx }) => {

@@ -11,6 +11,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startCleanupScheduler } from "../cleanup";
+import { ensureDefaultAdminAccount } from "../bootstrapAdmin";
 
 // ═══════════════════════════════════════════════════════════════
 // 全局异常处理 — 防止未捕获错误导致进程退出
@@ -138,6 +139,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  await ensureDefaultAdminAccount();
+
   const app = express();
   const server = createServer(app);
 

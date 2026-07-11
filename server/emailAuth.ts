@@ -133,14 +133,17 @@ export async function resetPasswordWithCode(email: string, resetCode: string, ne
  * Returns the user if successful, throws on failure.
  */
 export async function loginEmailUser(email: string, password: string): Promise<EmailUser> {
-  const user = await getEmailUserByEmail(email);
+  const normalized = email.trim();
+  const user =
+    (await getEmailUserByEmail(normalized)) ||
+    (normalized === ENV.adminUsername ? await getEmailUserByEmail(`${normalized}@openit.cc`) : undefined);
   if (!user) {
-    throw new Error("邮箱或密码错误");
+    throw new Error("Invalid username or password");
   }
 
   const valid = await comparePassword(password, user.passwordHash);
   if (!valid) {
-    throw new Error("邮箱或密码错误");
+    throw new Error("Invalid username or password");
   }
 
   // Update last signed in

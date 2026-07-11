@@ -237,7 +237,7 @@ export async function listEmailUsers(opts: {
   return { records: safeRecords, total: totalResult[0]?.count || 0 };
 }
 
-export async function updateEmailUserStatus(id: number, status: "approved" | "rejected"): Promise<void> {
+export async function updateEmailUserStatus(id: number, status: "approved" | "rejected" | "pending"): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
