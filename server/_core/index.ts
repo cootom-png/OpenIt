@@ -1,7 +1,9 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
+import dns from "dns/promises";
 import net from "net";
+import { Readable } from "stream";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { createChunkedUploadRouter } from "../chunkedUpload";
@@ -40,6 +42,68 @@ process.on("SIGINT", () => {
 
 let _libarchiveMod: any = null;
 let _ArchiveReader: any = null;
+
+const PROXY_MAX_BYTES = 100 * 1024 * 1024;
+const PROXY_TIMEOUT_MS = 30_000;
+
+function isPrivateHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".localhost")
+  );
+}
+
+function isPrivateIp(address: string): boolean {
+  if (net.isIPv4(address)) {
+    const parts = address.split(".").map(Number);
+    return (
+      parts[0] === 10 ||
+      parts[0] === 127 ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      (parts[0] === 169 && parts[1] === 254)
+    );
+  }
+
+  if (net.isIPv6(address)) {
+    const normalized = address.toLowerCase();
+    return (
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80:")
+    );
+  }
+
+  return true;
+}
+
+async function validateProxyUrl(rawUrl: string): Promise<URL> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only http and https URLs are supported");
+  }
+
+  if (isPrivateHostname(parsed.hostname)) {
+    throw new Error("Private hosts are not allowed");
+  }
+
+  const addresses = await dns.lookup(parsed.hostname, { all: true });
+  if (addresses.length === 0 || addresses.some((entry) => isPrivateIp(entry.address))) {
+    throw new Error("Private network targets are not allowed");
+  }
+
+  return parsed;
+}
 
 async function getLibarchive() {
   if (!_libarchiveMod) {
@@ -84,6 +148,70 @@ async function startServer() {
 
   app.get("/healthz", (_req, res) => {
     res.status(200).json({ ok: true, service: "cloudparts" });
+  });
+
+  app.get("/api/proxy-file", async (req, res) => {
+    const rawUrl = typeof req.query.url === "string" ? req.query.url : "";
+    if (!rawUrl) {
+      return res.status(400).json({ error: "Missing url parameter" });
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+
+    try {
+      const targetUrl = await validateProxyUrl(rawUrl);
+      const response = await fetch(targetUrl, {
+        headers: {
+          "User-Agent": "CloudpartsFileProxy/1.0",
+        },
+        redirect: "follow",
+        signal: controller.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        return res.status(response.status || 502).json({
+          error: `Remote file request failed (${response.status})`,
+        });
+      }
+
+      const lengthHeader = response.headers.get("content-length");
+      const contentLength = lengthHeader ? Number(lengthHeader) : 0;
+      if (contentLength > PROXY_MAX_BYTES) {
+        return res.status(413).json({ error: "Remote file is too large" });
+      }
+
+      res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      if (contentLength > 0) {
+        res.setHeader("Content-Length", String(contentLength));
+      }
+
+      let streamedBytes = 0;
+      const stream = Readable.fromWeb(response.body as any);
+      stream.on("data", (chunk: Buffer) => {
+        streamedBytes += chunk.length;
+        if (streamedBytes > PROXY_MAX_BYTES) {
+          stream.destroy(new Error("Remote file is too large"));
+        }
+      });
+      stream.on("error", (error) => {
+        if (!res.headersSent) {
+          res.status(502).json({ error: error.message || "Remote file proxy failed" });
+        } else {
+          res.destroy(error);
+        }
+      });
+      stream.pipe(res);
+    } catch (err: any) {
+      const message = err?.name === "AbortError" ? "Remote file request timed out" : err?.message || "Remote file proxy failed";
+      const status = message.includes("Private") || message.includes("Invalid") || message.includes("Only")
+        ? 400
+        : 502;
+      return res.status(status).json({ error: message });
+    } finally {
+      clearTimeout(timeout);
+    }
   });
 
   // OAuth callback under /api/oauth/callback

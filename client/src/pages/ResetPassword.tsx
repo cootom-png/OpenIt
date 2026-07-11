@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
+import { AuthShell } from "@/components/SiteChrome";
 
 function PasswordStrengthIndicator({ password }: { password: string }) {
   const checks = [
@@ -28,7 +29,7 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
           <div
             key={i}
             className={`h-1 flex-1 rounded-full transition-colors ${
-              i <= strength ? strengthColors[strength] : "bg-slate-600"
+              i <= strength ? strengthColors[strength] : "bg-slate-200"
             }`}
           />
         ))}
@@ -40,8 +41,8 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
       </div>
       <div className="grid grid-cols-2 gap-1">
         {checks.map((c) => (
-          <div key={c.label} className={`flex items-center gap-1 text-xs ${c.pass ? "text-green-400" : "text-slate-500"}`}>
-            {c.pass ? <CheckCircle2 className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-slate-600" />}
+          <div key={c.label} className={`flex items-center gap-1 text-xs ${c.pass ? "text-green-600" : "text-slate-500"}`}>
+            {c.pass ? <CheckCircle2 className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-slate-300" />}
             {c.label}
           </div>
         ))}
@@ -100,24 +101,14 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/login" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6">
-            <ArrowLeft className="w-4 h-4" />
-            返回登录
-          </Link>
-          <h1 className="text-3xl font-bold text-white tracking-tight">零件云图</h1>
-          <p className="text-slate-400 mt-1">在线预览、分享CAD和3D文件</p>
-        </div>
-
-        <Card className="border-slate-700/50 bg-slate-800/60 backdrop-blur-sm shadow-2xl">
+    <AuthShell title="重置密码" subtitle="输入重置码并设置新密码">
+        <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-xl text-white flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-400" />
+            <CardTitle className="text-xl text-slate-950 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
               重置密码
             </CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-slate-500">
               输入管理员提供的重置码和您的新密码
             </CardDescription>
           </CardHeader>
@@ -148,7 +139,7 @@ export default function ResetPassword() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-slate-300">注册邮箱</Label>
+                  <Label htmlFor="email" className="text-slate-700">注册邮箱</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
@@ -158,13 +149,13 @@ export default function ResetPassword() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="resetCode" className="text-slate-300">重置码</Label>
+                  <Label htmlFor="resetCode" className="text-slate-700">重置码</Label>
                   <div className="relative">
                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
@@ -175,13 +166,13 @@ export default function ResetPassword() {
                       onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                       required
                       maxLength={6}
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 tracking-widest text-center text-lg font-mono"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white tracking-widest text-center text-lg font-mono"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="newPassword" className="text-slate-300">新密码</Label>
+                  <Label htmlFor="newPassword" className="text-slate-700">新密码</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
@@ -191,12 +182,12 @@ export default function ResetPassword() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       required
-                      className="pl-10 pr-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 pr-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -205,7 +196,7 @@ export default function ResetPassword() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-slate-300">确认新密码</Label>
+                  <Label htmlFor="confirmPassword" className="text-slate-700">确认新密码</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
@@ -215,7 +206,7 @@ export default function ResetPassword() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                   {confirmPassword && newPassword !== confirmPassword && (
@@ -241,17 +232,16 @@ export default function ResetPassword() {
             )}
           </CardContent>
           {!success && (
-            <CardFooter className="flex flex-col gap-2 border-t border-slate-700/50 pt-4">
-              <p className="text-sm text-slate-400">
+            <CardFooter className="flex flex-col gap-2 border-t border-slate-100 pt-4">
+              <p className="text-sm text-slate-500">
                 还没有重置码？{" "}
-                <Link href="/forgot-password" className="text-blue-400 hover:text-blue-300 font-medium">
+                <Link href="/forgot-password" className="text-blue-600 hover:text-blue-700 font-medium">
                   申请重置
                 </Link>
               </p>
             </CardFooter>
           )}
         </Card>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

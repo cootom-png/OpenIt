@@ -161,10 +161,12 @@ const plugins = [
 export default defineConfig({
   plugins,
   resolve: {
+    dedupe: ["three"],
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      three: path.resolve(import.meta.dirname, "node_modules", "three"),
     },
   },
   envDir: path.resolve(import.meta.dirname),
@@ -178,14 +180,10 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
 
-          if (
-            id.includes("three") ||
-            id.includes("occt-import-js") ||
-            id.includes("dxf-viewer") ||
-            id.includes("@mlightcad")
-          ) {
-            return "viewer-3d-cad";
-          }
+          if (id.includes("three")) return "three-core";
+          if (id.includes("occt-import-js")) return "viewer-step";
+          if (id.includes("dxf-viewer") || id.includes("dxf-parser")) return "viewer-dxf";
+          if (id.includes("@mlightcad")) return "viewer-dwg";
           if (id.includes("pdfjs-dist")) return "viewer-pdf";
           if (id.includes("xlsx")) return "viewer-excel";
           if (id.includes("mammoth")) return "viewer-word";

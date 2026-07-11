@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { validatePasswordStrength } from "./emailAuth";
@@ -243,28 +243,36 @@ describe("partsGallery", () => {
   });
 
   describe("partsGallery.getFileUrl", () => {
-    it("denies access when not logged in", async () => {
+    it("returns preview data without requiring login", async () => {
+      const mockFile = {
+        id: 1,
+        s3Url: "https://cdn.example.com/part.stp",
+        fileName: "part.stp",
+        fileExt: "stp",
+        category: "3d",
+      };
+      const dbModule = await import("./db");
+      const getDbSpy = vi.spyOn(dbModule, "getDb").mockResolvedValue({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [mockFile],
+            }),
+          }),
+        }),
+      } as any);
+
       const { ctx } = createPublicContext();
       const caller = appRouter.createCaller(ctx);
-      await expect(
-        caller.partsGallery.getFileUrl({ fileId: 1 })
-      ).rejects.toThrow("请先登录");
-    });
+      const result = await caller.partsGallery.getFileUrl({ fileId: 1 });
 
-    it("denies access for pending users", async () => {
-      const { ctx } = createEmailUserContext({ status: "pending" });
-      const caller = appRouter.createCaller(ctx);
-      await expect(
-        caller.partsGallery.getFileUrl({ fileId: 1 })
-      ).rejects.toThrow("账号尚未通过审核");
-    });
+      expect(result).toEqual({
+        s3Url: mockFile.s3Url,
+        fileName: mockFile.fileName,
+        fileExt: mockFile.fileExt,
+      });
 
-    it("denies access for rejected users", async () => {
-      const { ctx } = createEmailUserContext({ status: "rejected" });
-      const caller = appRouter.createCaller(ctx);
-      await expect(
-        caller.partsGallery.getFileUrl({ fileId: 1 })
-      ).rejects.toThrow("账号尚未通过审核");
+      getDbSpy.mockRestore();
     });
   });
 });

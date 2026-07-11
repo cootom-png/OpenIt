@@ -26,7 +26,6 @@ import {
   Share2,
   Copy,
   Check,
-  ArrowLeft,
   Edit2,
   Save,
   X,
@@ -66,6 +65,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/useMobile";
+import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -463,24 +463,10 @@ export default function Profile() {
   ) : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                返回首页
-              </Button>
-            </Link>
-            <Separator orientation="vertical" className="h-5" />
-            <h1 className="text-base font-semibold">个人中心</h1>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      <SiteHeader title="个人中心" backLabel="返回首页" icon={<User className="h-5 w-5 text-blue-600" />} />
 
-      <main className="container py-6 max-w-6xl mx-auto px-4">
+      <main className="mx-auto max-w-6xl px-4 py-5 sm:py-6">
         <div className="flex flex-col md:flex-row gap-6">
           {/* Main Content Area */}
           <div className="flex-1 min-w-0 space-y-6">
@@ -1192,11 +1178,7 @@ export default function Profile() {
         </div>
       </main>
 
-      <footer className="border-t mt-12 py-6 bg-muted/30">
-        <div className="container flex items-center justify-center">
-          <span className="text-xs text-muted-foreground/60">v1.4.0</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

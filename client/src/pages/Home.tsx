@@ -46,6 +46,7 @@ import { trpc } from "@/lib/trpc";
 import { captureViewerThumbnail } from "@/lib/captureThumb";
 import { chunkedUpload, type UploadProgress } from "@/lib/chunkedUpload";
 import { captureVideoThumbnail, captureVideoThumbnailFromUrl } from "@/lib/videoThumbnail";
+import { SiteFooter } from "@/components/SiteChrome";
 
 const ThreeViewer = lazy(() => import("@/components/ThreeViewer"));
 const DxfViewerComponent = lazy(() => import("@/components/DxfViewerComponent"));
@@ -69,6 +70,30 @@ function ViewerLoading() {
 async function parseMeshFile(file: File, quality: MeshQuality) {
   const { parseFile } = await import("@/lib/fileParser");
   return parseFile(file, quality);
+}
+
+function getRemotePreviewUrl(url: string): string {
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (parsed.origin === window.location.origin) {
+      return parsed.href;
+    }
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return `/api/proxy-file?url=${encodeURIComponent(parsed.href)}`;
+    }
+  } catch {
+    // Fall back to the original URL so the existing error handling can report it.
+  }
+  return url;
+}
+
+async function fetchPreviewBlob(url: string): Promise<Blob> {
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    throw new Error(detail || `Failed to fetch remote file (${resp.status})`);
+  }
+  return resp.blob();
 }
 
 /**
@@ -108,6 +133,7 @@ async function loadRemoteFile(
 ) {
   const ext = getFileExtension(name);
   const s = setters;
+  const previewUrl = getRemotePreviewUrl(url);
 
   // Reset all state
   s.setFileName(name);
@@ -135,70 +161,64 @@ async function loadRemoteFile(
   try {
     if (SUPPORTED_IMAGE.includes(ext)) {
       s.setViewerMode("image");
-      s.setImageUrl(url);
+      s.setImageUrl(previewUrl);
       s.setStatus("ready");
     } else if (SUPPORTED_VIDEO.includes(ext)) {
       s.setViewerMode("video");
-      s.setVideoUrl(url);
+      s.setVideoUrl(previewUrl);
       s.setStatus("ready");
     } else if (SUPPORTED_PDF.includes(ext)) {
       s.setViewerMode("pdf");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name, { type: "application/pdf" }));
       s.setStatus("ready");
     } else if (SUPPORTED_WORD.includes(ext)) {
       s.setViewerMode("word");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
     } else if (SUPPORTED_EXCEL.includes(ext)) {
       s.setViewerMode("excel");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
     } else if (SUPPORTED_CSV.includes(ext)) {
       s.setViewerMode("csv");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
     } else if (SUPPORTED_ARCHIVE.includes(ext)) {
       s.setViewerMode("archive");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
     } else if (SUPPORTED_2D_DXF.includes(ext)) {
       s.setViewerMode("2d-dxf");
       s.setStatus("parsing");
-      s.setDxfFileUrl(url);
+      s.setDxfFileUrl(previewUrl);
       s.setStatus("ready");
     } else if (SUPPORTED_2D_DWG.includes(ext)) {
       s.setViewerMode("2d-dwg");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const buffer = await resp.arrayBuffer();
+      const blob = await fetchPreviewBlob(previewUrl);
+      const buffer = await blob.arrayBuffer();
       s.setFileSize(buffer.byteLength);
       s.setDwgFileBuffer(buffer);
       s.setStatus("ready");
     } else if (SUPPORTED_3D.includes(ext)) {
       s.setViewerMode("3d");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       const file = new File([blob], name);
       s.setCurrentFileObj(file); // Store file obj so quality change can re-parse
@@ -213,24 +233,21 @@ async function loadRemoteFile(
     } else if (SUPPORTED_EMAIL.includes(ext)) {
       s.setViewerMode("email");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
     } else if (SUPPORTED_MARKDOWN.includes(ext)) {
       s.setViewerMode("markdown");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
     } else if (SUPPORTED_CODE.includes(ext)) {
       s.setViewerMode("code");
       s.setStatus("parsing");
-      const resp = await fetch(url);
-      const blob = await resp.blob();
+      const blob = await fetchPreviewBlob(previewUrl);
       s.setFileSize(blob.size);
       s.setDocFile(new File([blob], name));
       s.setStatus("ready");
@@ -259,7 +276,7 @@ const SUPPORTED_ARCHIVE = ["zip", "rar", "7z"];
 const SUPPORTED_CSV = ["csv"];
 const SUPPORTED_EMAIL = ["eml", "msg"];
 const SUPPORTED_MARKDOWN = ["md"];
-const SUPPORTED_CODE = ["css", "txt", "log"];
+const SUPPORTED_CODE = ["json", "css", "txt", "log"];
 const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL, ...SUPPORTED_MARKDOWN, ...SUPPORTED_CODE];
 // On iOS Safari, the accept attribute greys out files with unrecognized MIME types
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
@@ -415,7 +432,7 @@ export default function Home() {
 
   // Set page title for SEO
   useEffect(() => {
-    document.title = "零件云图 - 在线预览、分享CAD和3D文件 | STP/DWG/DXF查看器";
+    document.title = "零件云图 - CAD、3D模型、图纸和文档在线预览工具";
   }, []);
 
   // Listen for fullscreen change (e.g. user presses Esc)
@@ -1051,11 +1068,11 @@ export default function Home() {
                 <FileBox className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-foreground tracking-tight">
+                <div className="text-lg font-bold text-foreground tracking-tight">
                   零件云图
-                </h1>
+                </div>
                 <p className="text-xs text-muted-foreground -mt-0.5">
-                  3D / CAD / 文档 文件预览
+                  3D / CAD / 文件在线预览/解压
                 </p>
               </div>
             </div>
@@ -1073,7 +1090,70 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="container py-6">
+      <main className="container py-4 lg:py-5">
+        <section className="mb-3 overflow-hidden rounded-xl border border-blue-100 bg-white px-5 py-4 shadow-sm ring-1 ring-blue-50">
+          <div className="grid gap-3 lg:grid-cols-1 lg:items-center">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-blue-700 text-white hover:bg-blue-700">CAD / 3D 在线预览</Badge>
+                <Badge variant="outline" className="border-blue-200 bg-white text-blue-700">无需安装软件</Badge>
+                <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">支持分享协作</Badge>
+              </div>
+              <div className="space-y-2">
+                <h1 className="max-w-4xl text-2xl font-semibold tracking-tight text-slate-950 lg:text-[28px]">
+                  在线打开 CAD 图纸、3D 模型和工程文档
+                </h1>
+                <p className="hidden">
+                  面向工程师、制造企业、采购和销售团队，支持 STP、STEP、STL、OBJ、3MF、IGS、DWG、DXF、PDF、Word、Excel、ZIP、RAR、7Z 等文件在线预览、保存、分享和压缩包解压下载。
+                </p>
+                <p className="max-w-4xl text-sm leading-5 text-slate-600">
+                  支持 3D/CAD/文档/图片/视频/压缩包在线预览，ZIP、RAR、7Z 可查看内容并解压下载。
+                </p>
+                <div className="flex flex-wrap gap-1.5 text-xs text-slate-600">
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">STP / STEP / STL</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">DWG / DXF</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">PDF / Word / Excel</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">ZIP / RAR / 7Z</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">JSON / Markdown</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" className="gap-2" onClick={triggerFileInput}>
+                  <Upload className="h-4 w-4" />
+                  选择文件预览
+                </Button>
+                <Link href="/parts">
+                  <Button size="sm" variant="outline" className="gap-2 border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+                    <Box className="h-4 w-4" />
+                    浏览 3D 零件库
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <div className="hidden grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg border bg-white p-4 shadow-sm">
+                <FileBox className="mb-3 h-5 w-5 text-blue-700" />
+                <div className="font-medium text-slate-950">30+ 文件格式</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">覆盖 3D、CAD、图片、视频、文档和压缩包，可在线查看压缩包内容。</p>
+              </div>
+              <div className="rounded-lg border bg-white p-4 shadow-sm">
+                <Zap className="mb-3 h-5 w-5 text-blue-700" />
+                <div className="font-medium text-slate-950">浏览器即开</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">无需安装 CAD 软件，拖拽文件即可查看。</p>
+              </div>
+              <div className="rounded-lg border bg-white p-4 shadow-sm">
+                <Share2 className="mb-3 h-5 w-5 text-blue-700" />
+                <div className="font-medium text-slate-950">链接分享</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">保存文件后生成分享链接，便于客户查看。</p>
+              </div>
+              <div className="rounded-lg border bg-white p-4 shadow-sm">
+                <HardDrive className="mb-3 h-5 w-5 text-blue-700" />
+                <div className="font-medium text-slate-950">文件管理</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">个人文件、收藏和下载申请集中管理。</p>
+              </div>
+            </div>
+          </div>
+        </section>
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
           {/* Left: Viewer Area */}
           <div className="space-y-4 overflow-hidden">
@@ -1165,6 +1245,7 @@ export default function Home() {
                           文本:
                         </span>
                         <Badge variant="outline">.MD</Badge>
+                        <Badge variant="outline">.JSON</Badge>
                         <Badge variant="outline">.CSS</Badge>
                         <Badge variant="outline">.TXT</Badge>
                         <Badge variant="outline">.LOG</Badge>
@@ -2116,20 +2197,41 @@ export default function Home() {
             </Link>
           </div>
         </div>
+        <section className="mt-10 border-t pt-8" aria-labelledby="cloudparts-seo-title">
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <h2 id="cloudparts-seo-title" className="text-xl font-semibold tracking-tight text-slate-950">
+                CAD、3D 模型和工程文档在线预览
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                零件云图帮助团队快速打开客户、供应商和内部协作中常见的工程文件。用户可以在浏览器中预览 3D 模型、CAD 图纸、PDF、Word、Excel、图片、视频、压缩包和邮件附件，也可以查看 ZIP、RAR、7Z 内部文件并解压下载，减少本地安装软件、转换格式和反复传文件的时间。
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border bg-white p-4">
+                <h3 className="text-sm font-medium text-slate-950">支持格式</h3>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  STP、STEP、STL、OBJ、3MF、IGS、DWG、DXF、PDF、DOCX、XLSX、CSV、ZIP、RAR、7Z。
+                </p>
+              </div>
+              <div className="rounded-lg border bg-white p-4">
+                <h3 className="text-sm font-medium text-slate-950">典型场景</h3>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  图纸评审、零件展示、采购询价、客户发样、售后技术支持和跨部门协作。
+                </p>
+              </div>
+              <div className="rounded-lg border bg-white p-4">
+                <h3 className="text-sm font-medium text-slate-950">核心价值</h3>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  无需安装 CAD 或解压软件，在线查看、解压、保存和分享工程文件，让客户更快理解零件结构。
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* Footer with admin login */}
-      <footer className="border-t mt-12 py-6 bg-muted/30">
-        <div className="container flex items-center justify-center gap-4">
-          <a
-            href="/admin-login"
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            管理员登录
-          </a>
-          <span className="text-xs text-muted-foreground/60">v1.4.0</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

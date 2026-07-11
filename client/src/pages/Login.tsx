@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { AlertCircle, Loader2, Mail, Lock, ArrowLeft } from "lucide-react";
+import { AlertCircle, Loader2, Mail, Lock } from "lucide-react";
+import { AuthShell } from "@/components/SiteChrome";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -45,21 +46,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6">
-            <ArrowLeft className="w-4 h-4" />
-            返回首页
-          </Link>
-          <h1 className="text-3xl font-bold text-white tracking-tight">零件云图</h1>
-          <p className="text-slate-400 mt-1">在线预览、分享CAD和3D文件</p>
-        </div>
-
-        <Card className="border-slate-700/50 bg-slate-800/60 backdrop-blur-sm shadow-2xl">
+    <AuthShell title="登录" subtitle="在线预览、保存和分享 CAD、3D 与工程文件">
+        <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-xl text-white">登录</CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardTitle className="text-xl text-slate-950">登录</CardTitle>
+            <CardDescription className="text-slate-500">
               使用您的邮箱和密码登录
             </CardDescription>
           </CardHeader>
@@ -73,7 +64,7 @@ export default function Login() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-300">邮箱</Label>
+                <Label htmlFor="email" className="text-slate-700">邮箱</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <Input
@@ -83,15 +74,15 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-slate-300">密码</Label>
-                  <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
+                  <Label htmlFor="password" className="text-slate-700">密码</Label>
+                  <Link href="/forgot-password" className="text-xs text-blue-600 hover:text-blue-700">
                     忘记密码？
                   </Link>
                 </div>
@@ -104,7 +95,7 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                    className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                   />
                 </div>
               </div>
@@ -125,16 +116,15 @@ export default function Login() {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex justify-center border-t border-slate-700/50 pt-4">
-            <p className="text-sm text-slate-400">
+          <CardFooter className="flex justify-center border-t border-slate-100 pt-4">
+            <p className="text-sm text-slate-500">
               还没有账号？{" "}
-              <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium">
+              <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
                 注册
               </Link>
             </p>
           </CardFooter>
         </Card>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

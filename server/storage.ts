@@ -2,6 +2,8 @@
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
 import { ENV } from './_core/env';
+import fs from "fs/promises";
+import path from "path";
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
@@ -20,6 +22,30 @@ function getStorageConfig(): StorageConfig {
   }
 
   return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
+}
+
+function hasStorageProxyConfig(): boolean {
+  return Boolean(ENV.forgeApiUrl && ENV.forgeApiKey);
+}
+
+function getLocalUploadRoot(): string {
+  return path.resolve(process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads"));
+}
+
+function getLocalPublicUrl(key: string): string {
+  return `/uploads/${normalizeKey(key)}`;
+}
+
+function resolveLocalUploadPath(relKey: string): string {
+  const root = getLocalUploadRoot();
+  const key = normalizeKey(relKey);
+  const filePath = path.resolve(root, key);
+
+  if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Invalid storage path");
+  }
+
+  return filePath;
 }
 
 function buildUploadUrl(baseUrl: string, relKey: string): URL {
@@ -85,8 +111,21 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
-  const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
+
+  if (!hasStorageProxyConfig()) {
+    const filePath = resolveLocalUploadPath(key);
+    const payload =
+      typeof data === "string"
+        ? Buffer.from(data)
+        : Buffer.from(data);
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, payload);
+    return { key, url: getLocalPublicUrl(key) };
+  }
+
+  const { baseUrl, apiKey } = getStorageConfig();
   const uploadUrl = buildUploadUrl(baseUrl, key);
   const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
 
@@ -115,8 +154,13 @@ export async function storagePut(
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
-  const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
+
+  if (!hasStorageProxyConfig()) {
+    return { key, url: getLocalPublicUrl(key) };
+  }
+
+  const { baseUrl, apiKey } = getStorageConfig();
   return {
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),

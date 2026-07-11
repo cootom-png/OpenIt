@@ -1,11 +1,12 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "wouter";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { AlertCircle, Loader2, Mail, Lock, User, ArrowLeft, CheckCircle2, Building2, Phone, Info } from "lucide-react";
+import { AlertCircle, Loader2, Mail, Lock, User, CheckCircle2, Building2, Phone, Info } from "lucide-react";
+import { AuthShell } from "@/components/SiteChrome";
 
 function PasswordStrengthIndicator({ password }: { password: string }) {
   const checks = [
@@ -18,7 +19,7 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
       {checks.map((c) => (
-        <span key={c.label} className={`text-xs ${c.ok ? "text-green-400" : "text-slate-500"}`}>
+        <span key={c.label} className={`text-xs ${c.ok ? "text-green-600" : "text-slate-400"}`}>
           {c.ok ? "✓" : "○"} {c.label}
         </span>
       ))}
@@ -63,15 +64,14 @@ export default function Register() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <Card className="border-slate-700/50 bg-slate-800/60 backdrop-blur-sm shadow-2xl">
+      <AuthShell title="注册成功" subtitle="管理员审核通过后即可使用完整功能">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardContent className="pt-8 pb-8 text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-8 h-8 text-green-400" />
+                <CheckCircle2 className="w-8 h-8 text-green-600" />
               </div>
-              <h2 className="text-xl font-bold text-white">注册成功</h2>
-              <p className="text-slate-400 text-sm leading-relaxed">
+              <h2 className="text-xl font-bold text-slate-950">注册成功</h2>
+              <p className="text-slate-500 text-sm leading-relaxed">
                 您的注册申请已提交，请等待管理员审核。<br />
                 审核通过后您将可以使用完整功能。
               </p>
@@ -82,40 +82,29 @@ export default function Register() {
                   </Button>
                 </Link>
                 <Link href="/">
-                  <Button variant="outline" className="w-full border-slate-600 text-slate-300 hover:bg-slate-700">
+                  <Button variant="outline" className="w-full">
                     返回首页
                   </Button>
                 </Link>
               </div>
             </CardContent>
           </Card>
-        </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6">
-            <ArrowLeft className="w-4 h-4" />
-            返回首页
-          </Link>
-          <h1 className="text-3xl font-bold text-white tracking-tight">零件云图</h1>
-          <p className="text-slate-400 mt-1">在线预览、分享CAD和3D文件</p>
-        </div>
-
-        <Card className="border-slate-700/50 bg-slate-800/60 backdrop-blur-sm shadow-2xl">
+    <AuthShell title="注册账号" subtitle="填写真实资料，审核通过后即可保存和分享文件">
+        <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-xl text-white">注册账号</CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardTitle className="text-xl text-slate-950">注册账号</CardTitle>
+            <CardDescription className="text-slate-500">
               注册后需管理员审核通过才能使用完整功能
             </CardDescription>
           </CardHeader>
           <CardContent>
             {/* Important notice */}
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm mb-4">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm mb-4">
               <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>请填写真实的公司名称、姓名和电话，否则将无法使用文件保存和分享功能。管理员将根据您提供的信息进行审核。</span>
             </div>
@@ -133,7 +122,7 @@ export default function Register() {
                 <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">个人信息</p>
 
                 <div className="space-y-2">
-                  <Label htmlFor="realName" className="text-slate-300">
+                  <Label htmlFor="realName" className="text-slate-700">
                     姓名 <span className="text-red-400">*</span>
                   </Label>
                   <div className="relative">
@@ -146,13 +135,13 @@ export default function Register() {
                       onChange={(e) => setRealName(e.target.value)}
                       required
                       maxLength={50}
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="company" className="text-slate-300">
+                  <Label htmlFor="company" className="text-slate-700">
                     公司名称 <span className="text-red-400">*</span>
                   </Label>
                   <div className="relative">
@@ -165,13 +154,13 @@ export default function Register() {
                       onChange={(e) => setCompany(e.target.value)}
                       required
                       maxLength={100}
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-slate-300">
+                  <Label htmlFor="phone" className="text-slate-700">
                     电话 <span className="text-red-400">*</span>
                   </Label>
                   <div className="relative">
@@ -184,18 +173,18 @@ export default function Register() {
                       onChange={(e) => setPhone(e.target.value)}
                       required
                       maxLength={20}
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Section: Account Info */}
-              <div className="space-y-3 pt-2 border-t border-slate-700/50">
+              <div className="space-y-3 pt-2 border-t border-slate-100">
                 <p className="text-xs text-slate-500 font-medium uppercase tracking-wider pt-2">账号信息</p>
 
                 <div className="space-y-2">
-                  <Label htmlFor="nickname" className="text-slate-300">昵称</Label>
+                  <Label htmlFor="nickname" className="text-slate-700">昵称</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
@@ -206,13 +195,13 @@ export default function Register() {
                       onChange={(e) => setNickname(e.target.value)}
                       required
                       maxLength={50}
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-slate-300">
+                  <Label htmlFor="email" className="text-slate-700">
                     邮箱 <span className="text-red-400">*</span>
                   </Label>
                   <div className="relative">
@@ -224,13 +213,13 @@ export default function Register() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-slate-300">
+                  <Label htmlFor="password" className="text-slate-700">
                     密码 <span className="text-red-400">*</span>
                   </Label>
                   <div className="relative">
@@ -243,14 +232,14 @@ export default function Register() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={8}
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                   <PasswordStrengthIndicator password={password} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-slate-300">确认密码</Label>
+                  <Label htmlFor="confirmPassword" className="text-slate-700">确认密码</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
@@ -260,7 +249,7 @@ export default function Register() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
-                      className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                      className="pl-10 border-slate-200 bg-slate-50 placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                   {confirmPassword && password !== confirmPassword && (
@@ -285,16 +274,16 @@ export default function Register() {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex justify-center border-t border-slate-700/50 pt-4">
-            <p className="text-sm text-slate-400">
+          <CardFooter className="flex justify-center border-t border-slate-100 pt-4">
+            <p className="text-sm text-slate-500">
               已有账号？{" "}
-              <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
+              <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
                 登录
               </Link>
             </p>
           </CardFooter>
         </Card>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
+

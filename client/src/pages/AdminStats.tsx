@@ -79,7 +79,7 @@ export default function AdminStats() {
   // Auth loading state
   if (authLoading || emailAuthLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
           <p className="text-gray-500">加载中...</p>
@@ -91,7 +91,7 @@ export default function AdminStats() {
   // Not admin (neither OAuth admin nor email admin)
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Card className="w-[400px]">
           <CardContent className="pt-6 text-center">
             <Shield className="w-12 h-12 mx-auto mb-4 text-red-400" />
@@ -111,7 +111,7 @@ export default function AdminStats() {
   const totalPages = list ? Math.ceil(list.total / pageSize) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <AdminNav onLogout={logout} />
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">

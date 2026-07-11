@@ -6,7 +6,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   FileBox,
   Info,
-  ArrowLeft,
   User,
   Clock,
   Layers,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import { Link, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import ThreeViewer, { type ParsedMeshData } from "@/components/ThreeViewer";
 import DxfViewerComponent from "@/components/DxfViewerComponent";
 import DwgViewerComponent from "@/components/DwgViewerComponent";
@@ -43,7 +43,7 @@ const SUPPORTED_WORD = ["doc", "docx"];
 const SUPPORTED_EXCEL = ["xls", "xlsx"];
 const SUPPORTED_ARCHIVE = ["zip", "rar"];
 const SUPPORTED_CSV = ["csv"];
-const SUPPORTED_CODE = ["css", "txt", "log"];
+const SUPPORTED_CODE = ["json", "css", "txt", "log"];
 
 type ViewerMode = "3d" | "2d-dxf" | "2d-dwg" | "image" | "video" | "pdf" | "word" | "excel" | "csv" | "archive" | "code" | null;
 type FileStatus = "idle" | "loading" | "parsing" | "ready" | "error";
@@ -287,28 +287,10 @@ export default function ShareView() {
   const isCsv = SUPPORTED_CSV.includes(fileExt);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                首页
-              </Button>
-            </Link>
-            <Separator orientation="vertical" className="h-5" />
-            <div className="flex items-center gap-2">
-              <Share2 className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">文件分享</span>
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      <SiteHeader title="文件分享" icon={<Share2 className="h-5 w-5 text-blue-600" />} />
 
-        </div>
-      </header>
-
-      <main className="container py-6">
+      <main className="mx-auto max-w-7xl px-4 py-5 sm:py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
           {/* Left: Viewer */}
           <div className="space-y-4">
@@ -578,7 +560,7 @@ export default function ShareView() {
             )}
 
             {/* Branding */}
-            <Card className="bg-muted/30">
+            <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
               <CardContent className="pt-4 text-center">
                 <p className="text-xs text-muted-foreground">
                   由 <span className="font-medium text-foreground">零件云图</span> 提供文件预览服务
@@ -593,6 +575,7 @@ export default function ShareView() {
           </div>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

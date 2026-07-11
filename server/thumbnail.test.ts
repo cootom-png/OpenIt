@@ -1,4 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("./db", () => ({
+  getDb: vi.fn(),
+}));
 
 describe("thumbnail upload endpoint", () => {
   it("updateFileThumbnail function should be importable", async () => {
@@ -8,13 +12,10 @@ describe("thumbnail upload endpoint", () => {
 
   it("should reject when file not found (no DB)", async () => {
     const { updateFileThumbnail } = await import("./fileManager");
-    // With no real DB connection in test, it should throw
-    try {
-      await updateFileThumbnail(999, 999, "dGVzdA==");
-      // If it doesn't throw, the function returned null (no file found)
-    } catch (e: any) {
-      expect(e.message).toContain("Database");
-    }
+    const { getDb } = await import("./db");
+    (getDb as any).mockResolvedValue(null);
+
+    await expect(updateFileThumbnail(999, 999, "dGVzdA==")).rejects.toThrow("Database not available");
   });
 
   it("thumbnail base64 encoding/decoding works correctly", () => {

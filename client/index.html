@@ -1,28 +1,92 @@
 <!doctype html>
-<html lang="en">
-
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="theme-color" content="#1d4ed8" />
+
+    <title>零件云图 - CAD、3D模型、图纸、文档和压缩包在线预览工具</title>
     <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>零件云图 - 在线预览、分享CAD和3D文件 | STP/DWG/DXF查看器</title>
-    <meta name="description" content="零件云图提供免费在线预览和分享CAD、3D文件服务，支持STP、STEP、DWG、DXF、STL、OBJ、PDF、Excel等格式，无需安装任何软件，打开浏览器即可查看3D模型和CAD图纸" />
-    <meta name="keywords" content="CAD在线预览,3D文件查看器,STP预览,STEP文件打开,DWG在线查看,DXF预览,STL查看器,零件云图,3D模型在线预览,CAD图纸分享" />    
-    <!-- THIS IS THE START OF A COMMENT BLOCK, BLOCK TO BE DELETED: Google Fonts here, example:
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    THIS IS THE END OF A COMMENT BLOCK, BLOCK TO BE DELETED -->
+      name="description"
+      content="零件云图是面向工程师、采购、制造和销售团队的在线文件预览与分享平台，支持 STP、STEP、STL、OBJ、3MF、IGS、DWG、DXF、PDF、Word、Excel、图片、视频、ZIP、RAR、7Z 压缩包和邮件文件，无需安装 CAD 或解压软件即可在浏览器查看 3D 模型、工程图纸和压缩包内容。" />
+    <meta
+      name="keywords"
+      content="CAD在线预览,3D模型查看器,STP预览,STEP文件查看,DWG在线查看,DXF在线预览,STL查看器,OBJ查看器,3MF查看器,IGS预览,工程图纸分享,零件云图,CAD图纸在线打开,3D文件在线预览,ZIP在线解压,RAR在线预览,7Z在线解压,压缩包在线查看" />
+    <link rel="canonical" href="http://openit.coriton.cn/" />
+    <link rel="robots" href="/robots.txt" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="零件云图 AI 摘要" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content="零件云图" />
+    <meta property="og:title" content="零件云图 - CAD、3D模型、图纸、文档和压缩包在线预览工具" />
+    <meta
+      property="og:description"
+      content="在线打开 STP、STEP、STL、DWG、DXF、PDF、Excel、ZIP、RAR、7Z 等工程文件，支持预览、保存、分享、压缩包在线查看和解压下载。" />
+    <meta property="og:url" content="http://openit.coriton.cn/" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="零件云图 - CAD、3D模型、图纸、文档和压缩包在线预览工具" />
+    <meta
+      name="twitter:description"
+      content="无需安装 CAD 或解压软件，在浏览器在线预览和分享 3D 模型、CAD 图纸、常用办公文件和 ZIP/RAR/7Z 压缩包。" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "http://openit.coriton.cn/#website",
+            "name": "零件云图",
+            "url": "http://openit.coriton.cn/",
+            "inLanguage": "zh-CN",
+            "description": "CAD、3D模型、工程图纸、文档和压缩包在线预览与分享平台。",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "http://openit.coriton.cn/parts?search={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "http://openit.coriton.cn/#app",
+            "name": "零件云图",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "url": "http://openit.coriton.cn/",
+            "inLanguage": "zh-CN",
+            "description": "在线预览 STP、STEP、STL、OBJ、3MF、IGS、DWG、DXF、PDF、Word、Excel、图片、视频、ZIP、RAR、7Z 压缩包和邮件文件。",
+            "featureList": [
+              "3D模型在线预览",
+              "CAD图纸在线查看",
+              "PDF、Word、Excel文档预览",
+              "ZIP、RAR、7Z压缩包在线查看、搜索和解压下载",
+              "文件保存与分享链接",
+              "下载申请管理"
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "CNY"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "http://openit.coriton.cn/#organization",
+            "name": "CORITON",
+            "url": "http://openit.coriton.cn/",
+            "productSupported": "CAD、3D 工程文件和压缩包在线预览"
+          }
+        ]
+      }
+    </script>
   </head>
 
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
-
 </html>

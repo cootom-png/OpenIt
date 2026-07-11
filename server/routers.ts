@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+﻿import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -28,7 +28,7 @@ import { initTRPC } from "@trpc/server";
 import type { TrpcContext } from "./_core/context";
 import { archiveRouter } from "./routers/archive";
 
-// ─── Email user middleware (approved users only) ───
+// --- Email user middleware (approved users only) ---
 const t = initTRPC.context<TrpcContext>().create();
 
 const requireApprovedEmailUser = t.middleware(async ({ ctx, next }) => {
@@ -58,16 +58,16 @@ export const appRouter = router({
     }),
   }),
 
-  // ─── Email Auth ───
+  // --- Email Auth ---
   emailAuth: router({
     register: publicProcedure
       .input(z.object({
         email: z.string().email("请输入有效的邮箱地址"),
-        password: z.string().min(8, "密码至少8位").max(64, "密码最长64位"),
-        nickname: z.string().min(1, "请输入昵称").max(50, "昵称最长50个字符"),
-        realName: z.string().min(1, "请输入姓名").max(50, "姓名最长50个字符").optional(),
-        company: z.string().min(1, "请输入公司名称").max(100, "公司名称最长100个字符").optional(),
-        phone: z.string().min(1, "请输入电话号码").max(20, "电话号码最长20位").optional(),
+        password: z.string().min(8, "密码至少 8 位").max(64, "密码最长 64 位"),
+        nickname: z.string().min(1, "请输入昵称").max(50, "昵称最长 50 个字符"),
+        realName: z.string().min(1, "请输入姓名").max(50, "姓名最长 50 个字符").optional(),
+        company: z.string().min(1, "请输入公司名称").max(100, "公司名称最长 100 个字符").optional(),
+        phone: z.string().min(1, "请输入电话号码").max(20, "电话号码最长 20 位").optional(),
       }))
       .mutation(async ({ input }) => {
         // Validate password strength
@@ -145,7 +145,7 @@ export const appRouter = router({
     changePassword: publicProcedure
       .input(z.object({
         oldPassword: z.string().min(1, "请输入原密码"),
-        newPassword: z.string().min(8, "新密码至少8位").max(64),
+        newPassword: z.string().min(8, "新密码至少 8 位").max(64),
       }))
       .mutation(async ({ input, ctx }) => {
         if (!ctx.emailUser) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
@@ -184,7 +184,7 @@ export const appRouter = router({
       .input(z.object({
         email: z.string().email("请输入有效的邮箱地址"),
         resetCode: z.string().min(1, "请输入重置码"),
-        newPassword: z.string().min(8, "新密码至少8位").max(64),
+        newPassword: z.string().min(8, "新密码至少 8 位").max(64),
       }))
       .mutation(async ({ input }) => {
         try {
@@ -196,7 +196,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── User Files (requires approved email user) ───
+  // --- User Files (requires approved email user) ---
   userFiles: router({
     /** Get current user's quota */
     quota: publicProcedure.query(async ({ ctx }) => {
@@ -228,7 +228,7 @@ export const appRouter = router({
         // Decode base64
         const fileBuffer = Buffer.from(input.fileBase64, "base64");
 
-        // 服务端二次验证：检查文件头是否被加密软件破坏
+        // 服务端二次验证，防止绕过前端检测。
         const { validateFileHeader } = await import("./encryptionValidator");
         const validation = validateFileHeader(fileBuffer, input.fileExt);
         if (!validation.isValid) {
@@ -298,7 +298,7 @@ export const appRouter = router({
         return { success: true, file };
       }),
 
-    /** Renew share — reset expiry to 7 days from now */
+    /** Renew share - reset expiry to 7 days from now */
     renewShare: publicProcedure
       .input(z.object({ fileId: z.number() }))
       .mutation(async ({ input, ctx }) => {
@@ -321,7 +321,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Share (public access) ───
+  // --- Share (public access) ---
   share: router({
     /** Get shared file by token */
     getByToken: publicProcedure
@@ -333,7 +333,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Public 3D Parts Gallery ───
+  // --- Public 3D Parts Gallery ---
   partsGallery: router({
     /** Public list of 3D parts with thumbnails */
     list: publicProcedure
@@ -355,7 +355,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Submit a download request (public, no login required) */
+    /** Submit a download request (registered users only) */
     requestDownload: publicProcedure
       .input(z.object({
         fileId: z.number(),
@@ -365,7 +365,10 @@ export const appRouter = router({
         realName: z.string().min(1, "请输入姓名").max(128),
         message: z.string().max(500).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.emailUser) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "请先注册或登录后再申请下载" });
+        }
         const request = await submitDownloadRequest(input);
         return { success: true, request };
       }),
@@ -393,17 +396,10 @@ export const appRouter = router({
         return listDownloadRequestsByFile(input.fileId, { page: input.page, pageSize: input.pageSize });
       }),
 
-    /** Get 3D file URL for preview (requires approved email user) */
+    /** Get 3D file URL for preview (public) */
     getFileUrl: publicProcedure
       .input(z.object({ fileId: z.number() }))
-      .query(async ({ input, ctx }) => {
-        // Check if user is an approved email user
-        if (!ctx.emailUser) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
-        }
-        if (ctx.emailUser.status !== "approved") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "账号尚未通过审核" });
-        }
+      .query(async ({ input }) => {
         const db = (await import("./db")).getDb;
         const dbInstance = await db();
         if (!dbInstance) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
@@ -421,7 +417,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Favorites ───
+  // --- Favorites ---
   favorites: router({
     /** Toggle favorite on a 3D part (requires approved email user) */
     toggle: publicProcedure
@@ -463,7 +459,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Admin: User Management ───
+  // --- Admin: User Management ---
   adminUsers: router({
     list: adminProcedure
       .input(z.object({
@@ -555,7 +551,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Admin: File Management ───
+  // --- Admin: File Management ---
   adminFiles: router({
     list: adminProcedure
       .input(z.object({
@@ -582,7 +578,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── File Upload Tracking ───
+  // --- File Upload Tracking ---
   fileUpload: router({
     record: publicProcedure
       .input(z.object({
@@ -636,7 +632,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Admin: Download Requests ───
+  // --- Admin: Download Requests ---
   adminDownloadRequests: router({
     list: adminProcedure
       .input(z.object({
@@ -664,7 +660,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Admin: Cleanup ───
+  // --- Admin: Cleanup ---
   adminCleanup: router({
     /** Manually trigger guest upload records cleanup */
     runGuestCleanup: adminProcedure
@@ -679,3 +675,5 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
+
+

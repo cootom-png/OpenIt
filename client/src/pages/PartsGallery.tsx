@@ -1,44 +1,43 @@
-import { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
+import { BrandMark, SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  ArrowLeft,
-  Box,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Lock,
-  Eye,
-  User,
-  Calendar,
-  FileText,
-  Search,
-  X,
-  Download,
-  Mail,
-  Phone,
-  Building2,
-  UserCircle,
-  MessageSquare,
-  Maximize2,
-  Minimize2,
-  Heart,
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Box,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  Heart,
+  Loader2,
+  LogIn,
+  Mail,
+  Maximize2,
+  MessageSquare,
+  Minimize2,
+  Phone,
+  Search,
+  User,
+  UserCircle,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const StepPreview = lazy(() => import("@/components/StepPreview"));
@@ -51,8 +50,11 @@ const formatFileSize = (bytes: number) => {
 
 const formatDate = (d: Date | string | null) => {
   if (!d) return "-";
-  const date = new Date(d);
-  return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return new Date(d).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 };
 
 export default function PartsGallery() {
@@ -62,34 +64,45 @@ export default function PartsGallery() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterExt, setFilterExt] = useState("");
   const pageSize = 20;
-  const queryInput = useMemo(() => ({ page, pageSize, search: searchQuery || undefined, fileExt: filterExt || undefined }), [page, searchQuery, filterExt]);
 
+  const queryInput = useMemo(
+    () => ({ page, pageSize, search: searchQuery || undefined, fileExt: filterExt || undefined }),
+    [page, searchQuery, filterExt]
+  );
   const { data, isLoading } = trpc.partsGallery.list.useQuery(queryInput);
+  const totalPages = Math.ceil((data?.total || 0) / pageSize);
+  const hasActiveFilter = Boolean(searchQuery || filterExt);
 
-  const handleSearch = () => {
-    setSearchQuery(searchText.trim());
-    setPage(1);
-  };
-
-  const handleClearSearch = () => {
-    setSearchText("");
-    setSearchQuery("");
-    setPage(1);
-  };
-
-  // Preview dialog state
   const [previewFileId, setPreviewFileId] = useState<number | null>(null);
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Download request dialog state
+  const [showRegisterPrompt, setShowRegisterPrompt] = useState(false);
   const [downloadRequestFileId, setDownloadRequestFileId] = useState<number | null>(null);
   const [downloadRequestFileName, setDownloadRequestFileName] = useState("");
   const [drForm, setDrForm] = useState({ email: "", phone: "", company: "", realName: "", message: "" });
   const [drSubmitting, setDrSubmitting] = useState(false);
 
-  // Fullscreen state for 3D preview
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const { data: fileUrlData, isLoading: fileUrlLoading, error: fileUrlError } =
+    trpc.partsGallery.getFileUrl.useQuery(
+      { fileId: previewFileId! },
+      { enabled: previewFileId !== null }
+    );
+
+  const recordView = trpc.partsGallery.recordView.useMutation();
+  useEffect(() => {
+    if (previewFileId !== null) {
+      recordView.mutate({ fileId: previewFileId });
+    }
+  }, [previewFileId]);
+
+  const submitRequest = trpc.partsGallery.requestDownload.useMutation();
+  const { data: favData } = trpc.favorites.myIds.useQuery(undefined, { enabled: isLoggedIn && isApproved });
+  const favIds = useMemo(() => new Set(favData?.ids || []), [favData?.ids]);
+  const utils = trpc.useUtils();
+  const toggleFavorite = trpc.favorites.toggle.useMutation({
+    onSuccess: () => utils.favorites.myIds.invalidate(),
+  });
 
   const toggleFullscreen = useCallback(() => {
     const container = previewContainerRef.current;
@@ -107,80 +120,53 @@ export default function PartsGallery() {
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  // Fetch file URL when preview is requested
-  const { data: fileUrlData, isLoading: fileUrlLoading, error: fileUrlError } = trpc.partsGallery.getFileUrl.useQuery(
-    { fileId: previewFileId! },
-    { enabled: previewFileId !== null && isApproved }
-  );
-
-  // Keyboard shortcut: F to toggle fullscreen in preview
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "f" || e.key === "F") {
+      if ((e.key === "f" || e.key === "F") && previewFileId !== null && fileUrlData) {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        if (previewFileId !== null && isApproved && fileUrlData) {
-          toggleFullscreen();
-        }
+        toggleFullscreen();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [previewFileId, isApproved, fileUrlData, toggleFullscreen]);
+  }, [previewFileId, fileUrlData, toggleFullscreen]);
 
-  // Record view when preview opens
-  const recordView = trpc.partsGallery.recordView.useMutation();
-  useEffect(() => {
-    if (previewFileId !== null && isApproved) {
-      recordView.mutate({ fileId: previewFileId });
-    }
-  }, [previewFileId]);
-
-  // Submit download request mutation
-  const submitRequest = trpc.partsGallery.requestDownload.useMutation();
-
-  // Favorites
-  const { data: favData } = trpc.favorites.myIds.useQuery(undefined, { enabled: isLoggedIn && isApproved });
-  const favIds = useMemo(() => new Set(favData?.ids || []), [favData?.ids]);
-  const utils = trpc.useUtils();
-  const toggleFavorite = trpc.favorites.toggle.useMutation({
-    onSuccess: () => {
-      utils.favorites.myIds.invalidate();
-    },
-  });
-
-  const totalPages = Math.ceil((data?.total || 0) / pageSize);
-
-  const handleCardClick = (fileId: number) => {
-    if (!isLoggedIn || !isApproved) {
-      setShowLoginPrompt(true);
-      return;
-    }
-    setPreviewFileId(fileId);
+  const handleSearch = () => {
+    setSearchQuery(searchText.trim());
+    setPage(1);
   };
 
-  const handleRequestDownload = (fileId: number, fileName: string) => {
+  const handleClearSearch = () => {
+    setSearchText("");
+    setSearchQuery("");
+    setPage(1);
+  };
+
+  const openDownloadRequest = (fileId: number, fileName: string) => {
+    if (!isLoggedIn || !emailUser) {
+      setDownloadRequestFileName(fileName);
+      setShowRegisterPrompt(true);
+      return;
+    }
+
     setDownloadRequestFileId(fileId);
     setDownloadRequestFileName(fileName);
-    // Pre-fill if logged in
-    if (emailUser) {
-      setDrForm({
-        email: emailUser.email || "",
-        phone: emailUser.phone || "",
-        company: emailUser.company || "",
-        realName: emailUser.realName || emailUser.nickname || "",
-        message: "",
-      });
-    } else {
-      setDrForm({ email: "", phone: "", company: "", realName: "", message: "" });
-    }
+    setDrForm({
+      email: emailUser.email || "",
+      phone: emailUser.phone || "",
+      company: emailUser.company || "",
+      realName: emailUser.realName || emailUser.nickname || "",
+      message: "",
+    });
   };
 
   const handleSubmitDownloadRequest = async () => {
     if (!downloadRequestFileId) return;
     if (!drForm.email || !drForm.phone || !drForm.company || !drForm.realName) {
-      toast.error("请填写所有必填信息");
+      toast.error("请填写姓名、邮箱、电话和公司名称");
       return;
     }
+
     setDrSubmitting(true);
     try {
       await submitRequest.mutateAsync({
@@ -191,7 +177,7 @@ export default function PartsGallery() {
         realName: drForm.realName,
         message: drForm.message || undefined,
       });
-      toast.success("下载申请已提交，文件上传者将审核您的请求");
+      toast.success("下载申请已提交，文件拥有者会看到您的申请");
       setDownloadRequestFileId(null);
     } catch (e: any) {
       toast.error(e.message || "提交失败，请稍后重试");
@@ -201,237 +187,234 @@ export default function PartsGallery() {
   };
 
   const placeholderThumb = (
-    <div className="w-full h-full bg-gradient-to-br from-blue-50 to-slate-100 flex flex-col items-center justify-center gap-2">
-      <Box className="w-10 h-10 text-blue-300" />
-      <span className="text-xs text-slate-400">3D 模型</span>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_30%_20%,#dbeafe,transparent_35%),linear-gradient(135deg,#f8fafc,#e2e8f0)]">
+      <div className="rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
+        <Box className="h-9 w-9 text-blue-500" />
+      </div>
+      <span className="text-xs font-medium text-slate-500">3D 模型</span>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                首页
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      <SiteHeader
+        title="3D 零件库"
+        icon={<BrandMark />}
+        right={isLoggedIn ? (
+            <Link href="/profile">
+              <Button variant="ghost" size="sm" className="gap-1.5">
+                <User className="h-4 w-4" />
+                {emailUser?.nickname || "个人中心"}
               </Button>
             </Link>
-            <div className="h-5 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <Box className="w-5 h-5 text-blue-600" />
-              <h1 className="text-base font-semibold">3D 零件库</h1>
+          ) : (
+            <Link href="/login">
+              <Button size="sm" className="gap-1.5 bg-slate-950 hover:bg-slate-800">
+                <LogIn className="h-4 w-4" />
+                登录
+              </Button>
+            </Link>
+          )
+        }
+      />
+
+      <main className="mx-auto max-w-7xl px-4 py-4 sm:py-5">
+        <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[1fr_440px]">
+            <div className="relative p-4 sm:p-5">
+              <div className="absolute inset-y-0 right-0 hidden w-32 bg-gradient-to-l from-blue-50 to-transparent lg:block" />
+              <div className="relative max-w-3xl">
+                <Badge className="mb-2 border-blue-200 bg-blue-50 px-2 py-0 text-blue-700 hover:bg-blue-50">
+                  访客可在线预览
+                </Badge>
+                <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                  3D / CAD 零件在线预览与下载申请
+                </h2>
+                <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-600">
+                  客户无需登录即可查看公开零件预览；申请下载时会引导注册或登录，申请信息自动发送给文件拥有者审核。
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 border-t border-slate-200 bg-slate-50/70 lg:border-l lg:border-t-0">
+              <div className="p-3 sm:p-4">
+                <div className="text-base font-semibold sm:text-lg">{data?.total ?? "--"}</div>
+                <div className="text-xs text-slate-500">公开零件</div>
+              </div>
+              <div className="border-l border-slate-200 p-3 sm:p-4">
+                <div className="text-base font-semibold sm:text-lg">STEP</div>
+                <div className="text-xs text-slate-500">主流 CAD 格式</div>
+              </div>
+              <div className="border-l border-slate-200 p-3 sm:p-4">
+                <div className="text-base font-semibold sm:text-lg">审核制</div>
+                <div className="text-xs text-slate-500">下载更可控</div>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {isLoggedIn ? (
-              <Link href="/profile">
-                <Button variant="ghost" size="sm" className="gap-1.5">
-                  <User className="w-4 h-4" />
-                  {emailUser?.nickname || "个人中心"}
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/login">
-                <Button size="sm" className="gap-1.5">
-                  <User className="w-4 h-4" />
-                  登录
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
+        </section>
 
-      <main className="container py-6 max-w-6xl mx-auto px-4">
-        {/* Title & Description */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold tracking-tight">3D 零件展示</h2>
-          <p className="text-muted-foreground mt-1">
-            浏览和收藏 3D 零件模型。
-            {!isApproved && (
-              <span className="text-amber-600"> 注册并通过审核后可查看 3D 预览。</span>
-            )}
-          </p>
-        </div>
-
-        {/* Search Bar + Format Filter */}
-        <div className="flex items-center gap-2 mb-6 flex-wrap">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="搜索零件名称..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-              className="pl-9 pr-9 h-10"
-            />
-            {searchText && (
-              <button
-                onClick={handleClearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <select
-            value={filterExt}
-            onChange={(e) => { setFilterExt(e.target.value); setPage(1); }}
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">全部格式</option>
-            <option value="stp">STP / STEP</option>
-            <option value="stl">STL</option>
-            <option value="obj">OBJ</option>
-            <option value="3mf">3MF</option>
-            <option value="igs">IGS / IGES</option>
-          </select>
-          <Button onClick={handleSearch} size="sm" className="h-10 px-4">
-            <Search className="w-4 h-4 mr-1.5" />
-            搜索
-          </Button>
-        </div>
-
-        {/* Stats */}
-        {data && (
-          <div className="flex items-center gap-4 mb-4 flex-wrap">
-            <Badge variant="secondary" className="gap-1">
-              <Box className="w-3.5 h-3.5" />
-              {(searchQuery || filterExt) ? `找到 ${data.total} 个零件` : `共 ${data.total} 个零件`}
-            </Badge>
-            {searchQuery && (
-              <Badge variant="outline" className="gap-1 text-xs">
-                搜索：{searchQuery}
-                <button onClick={handleClearSearch} className="ml-1 hover:text-foreground">
-                  <X className="w-3 h-3" />
+        <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="搜索零件名称、图号或关键词..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                className="h-11 rounded-xl border-slate-200 bg-slate-50 pl-9 pr-9 shadow-none focus-visible:bg-white"
+              />
+              {searchText && (
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700"
+                  aria-label="清除搜索"
+                >
+                  <X className="h-4 w-4" />
                 </button>
-              </Badge>
-            )}
-            {filterExt && (
-              <Badge variant="outline" className="gap-1 text-xs">
-                格式：{filterExt.toUpperCase()}
-                <button onClick={() => { setFilterExt(""); setPage(1); }} className="ml-1 hover:text-foreground">
-                  <X className="w-3 h-3" />
-                </button>
-              </Badge>
-            )}
+              )}
+            </div>
+            <select
+              value={filterExt}
+              onChange={(e) => { setFilterExt(e.target.value); setPage(1); }}
+              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 lg:w-44"
+            >
+              <option value="">全部格式</option>
+              <option value="stp">STP / STEP</option>
+              <option value="stl">STL</option>
+              <option value="obj">OBJ</option>
+              <option value="3mf">3MF</option>
+              <option value="igs">IGS / IGES</option>
+            </select>
+            <Button onClick={handleSearch} className="h-11 rounded-xl bg-blue-600 px-5 hover:bg-blue-700">
+              <Search className="h-4 w-4" />
+              搜索
+            </Button>
           </div>
-        )}
 
-        {/* Loading */}
+          {data && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="gap-1 rounded-lg bg-slate-100 text-slate-700">
+                <Box className="h-3.5 w-3.5" />
+                {hasActiveFilter ? `找到 ${data.total} 个零件` : `共 ${data.total} 个零件`}
+              </Badge>
+              {searchQuery && (
+                <Badge variant="outline" className="gap-1 rounded-lg border-blue-200 bg-blue-50 text-xs text-blue-700">
+                  搜索：{searchQuery}
+                  <button onClick={handleClearSearch} className="ml-1 hover:text-blue-950" aria-label="清除搜索条件">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterExt && (
+                <Badge variant="outline" className="gap-1 rounded-lg border-blue-200 bg-blue-50 text-xs text-blue-700">
+                  格式：{filterExt.toUpperCase()}
+                  <button onClick={() => { setFilterExt(""); setPage(1); }} className="ml-1 hover:text-blue-950" aria-label="清除格式筛选">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
+        </section>
+
         {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
           </div>
         )}
 
-        {/* Empty state */}
         {!isLoading && data?.records.length === 0 && (
-          <div className="text-center py-20">
-            <Box className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-            <h3 className="text-lg font-medium text-slate-600">暂无 3D 零件</h3>
-            <p className="text-muted-foreground mt-1">管理员上传 3D 模型后将在此展示</p>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-20 text-center">
+            <Box className="mx-auto mb-4 h-16 w-16 text-slate-300" />
+            <h3 className="text-lg font-medium text-slate-700">暂无公开 3D 零件</h3>
+            <p className="mt-1 text-sm text-slate-500">上传并公开模型后，会在这里展示给访客预览。</p>
           </div>
         )}
 
-        {/* Cards Grid */}
         {data && data.records.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5">
             {data.records.map((part) => (
               <Card
                 key={part.id}
-                className="group cursor-pointer hover:shadow-lg hover:border-blue-300 transition-all duration-200 overflow-hidden"
+                className="group overflow-hidden rounded-2xl border-slate-200 bg-white py-0 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
               >
-                {/* Thumbnail */}
-                <div
-                  className="aspect-square relative overflow-hidden bg-slate-50"
-                  onClick={() => handleCardClick(part.id)}
+                <button
+                  type="button"
+                  className="relative block aspect-[4/3] w-full overflow-hidden bg-slate-100 text-left"
+                  onClick={() => setPreviewFileId(part.id)}
                 >
                   {part.thumbnailUrl ? (
                     <img
                       src={part.thumbnailUrl}
                       alt={part.fileName}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
                   ) : (
                     placeholderThumb
                   )}
-                  {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      {isApproved ? (
-                        <div className="bg-white/90 backdrop-blur-sm rounded-full p-2.5 shadow-lg">
-                          <Eye className="w-5 h-5 text-blue-600" />
-                        </div>
-                      ) : (
-                        <div className="bg-white/90 backdrop-blur-sm rounded-full p-2.5 shadow-lg">
-                          <Lock className="w-5 h-5 text-amber-600" />
-                        </div>
-                      )}
-                    </div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/0 transition-colors duration-200 group-hover:bg-slate-950/20">
+                    <span className="flex translate-y-1 items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-900 opacity-0 shadow-lg backdrop-blur transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+                      <Eye className="h-3.5 w-3.5 text-blue-600" />
+                      在线预览
+                    </span>
                   </div>
-                  {/* File extension badge */}
-                  <div className="absolute top-2 right-2">
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-white/80 backdrop-blur-sm">
+                  <div className="absolute right-2 top-2">
+                    <Badge className="rounded-md bg-slate-950/80 px-1.5 py-0 text-[10px] text-white hover:bg-slate-950/80">
                       {part.fileExt.toUpperCase()}
                     </Badge>
                   </div>
-                  {/* View count badge */}
-                  {part.viewCount > 0 && (
-                    <div className="absolute top-2 left-2">
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-white/80 backdrop-blur-sm gap-0.5">
-                        <Eye className="w-3 h-3" />
-                        {part.viewCount}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <CardContent className="p-3 space-y-1.5">
-                  <p className="text-sm font-medium truncate" title={part.fileName}>
-                    {part.fileName}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{formatFileSize(part.fileSize)}</span>
-                    <span>{formatDate(part.createdAt)}</span>
+                  <div className="absolute left-2 top-2">
+                    <Badge variant="secondary" className="gap-0.5 rounded-md bg-white/90 px-1.5 py-0 text-[10px] text-slate-700 backdrop-blur">
+                      <Eye className="h-3 w-3" />
+                      {part.viewCount || 0}
+                    </Badge>
                   </div>
-                  <div className="flex items-center text-xs text-muted-foreground">
-                    <User className="w-3 h-3 mr-1 flex-shrink-0" />
+                </button>
+
+                <CardContent className="space-y-3 p-3">
+                  <div className="min-h-[44px]">
+                    <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900" title={part.fileName}>
+                      {part.fileName}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+                    <div className="rounded-lg bg-slate-50 px-2 py-1">
+                      <div className="truncate">{formatFileSize(part.fileSize)}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 px-2 py-1 text-right">
+                      <div className="truncate">{formatDate(part.createdAt)}</div>
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 items-center text-xs text-slate-500">
+                    <User className="mr-1 h-3.5 w-3.5 flex-shrink-0" />
                     <span className="truncate">{part.ownerNickname}</span>
                   </div>
-                  {/* Action buttons row */}
-                  <div className="flex items-center gap-1.5 mt-1">
-                    {/* Favorite Button */}
+                  <div className="flex items-center gap-1.5">
                     {isApproved && (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className={`h-7 w-7 p-0 flex-shrink-0 ${favIds.has(part.id) ? "text-red-500 hover:text-red-600" : "text-muted-foreground hover:text-red-500"}`}
+                        size="icon-sm"
+                        className={`h-8 w-8 rounded-lg ${favIds.has(part.id) ? "text-red-500 hover:text-red-600" : "text-slate-400 hover:text-red-500"}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleFavorite.mutate({ fileId: part.id });
                         }}
                         title={favIds.has(part.id) ? "取消收藏" : "收藏"}
                       >
-                        <Heart className={`w-3.5 h-3.5 ${favIds.has(part.id) ? "fill-current" : ""}`} />
+                        <Heart className={`h-4 w-4 ${favIds.has(part.id) ? "fill-current" : ""}`} />
                       </Button>
                     )}
-                    {/* Request Download Button */}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1 h-7 text-xs gap-1 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      className="h-8 flex-1 rounded-lg border-blue-200 text-xs text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleRequestDownload(part.id, part.fileName);
+                        openDownloadRequest(part.id, part.fileName);
                       }}
                     >
-                      <Download className="w-3 h-3" />
+                      <Download className="h-3.5 w-3.5" />
                       申请下载
                     </Button>
                   </div>
@@ -441,95 +424,68 @@ export default function PartsGallery() {
           </div>
         )}
 
-        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-8">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              <ChevronLeft className="w-4 h-4" />
+          <div className="mt-8 flex items-center justify-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm text-muted-foreground px-3">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              <ChevronRight className="w-4 h-4" />
+            <span className="rounded-lg bg-white px-3 py-1 text-sm text-slate-600 shadow-sm">{page} / {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         )}
       </main>
 
-      {/* Login Prompt Dialog */}
-      <Dialog open={showLoginPrompt} onOpenChange={setShowLoginPrompt}>
-        <DialogContent className="sm:max-w-[400px]">
+      <Dialog open={showRegisterPrompt} onOpenChange={setShowRegisterPrompt}>
+        <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Lock className="w-5 h-5 text-amber-500" />
-              需要注册登录
+              <UserPlus className="h-5 w-5 text-blue-600" />
+              下载需要注册或登录
             </DialogTitle>
             <DialogDescription>
-              查看 3D 零件预览需要注册账号并通过管理员审核。请先注册或登录您的账号。
+              访客可以直接预览零件。申请下载“{downloadRequestFileName}”需要先注册或登录账号，登录后申请会发送给文件拥有者审核。
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-2">
-            {!isLoggedIn ? (
-              <>
-                <Link href="/register">
-                  <Button className="w-full">注册账号</Button>
-                </Link>
-                <Link href="/login">
-                  <Button variant="outline" className="w-full">已有账号，去登录</Button>
-                </Link>
-              </>
-            ) : (
-              <div className="text-center space-y-3">
-                <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
-                  <Lock className="w-4 h-4 flex-shrink-0" />
-                  <span>您的账号正在等待管理员审核，审核通过后即可查看 3D 预览。</span>
-                </div>
-                <Button variant="outline" onClick={() => setShowLoginPrompt(false)} className="w-full">
-                  知道了
-                </Button>
-              </div>
-            )}
+            <Link href="/register">
+              <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700">
+                <UserPlus className="h-4 w-4" />
+                注册账号
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button variant="outline" className="w-full gap-2">
+                <LogIn className="h-4 w-4" />
+                已有账号，去登录
+              </Button>
+            </Link>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* 3D Preview Dialog */}
-      <Dialog open={previewFileId !== null && isApproved} onOpenChange={(open) => { if (!open) setPreviewFileId(null); }}>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-2">
+      <Dialog open={previewFileId !== null} onOpenChange={(open) => { if (!open) setPreviewFileId(null); }}>
+        <DialogContent className="flex h-[82vh] max-w-5xl flex-col p-0">
+          <DialogHeader className="border-b px-5 py-4">
             <DialogTitle className="flex items-center gap-2">
-              <Box className="w-5 h-5 text-blue-600" />
-              {fileUrlData?.fileName || "3D 预览"}
+              <Box className="h-5 w-5 text-blue-600" />
+              {fileUrlData?.fileName || "3D 在线预览"}
             </DialogTitle>
           </DialogHeader>
-          <div ref={previewContainerRef} className={`flex-1 min-h-0 px-2 pb-2 relative bg-background ${isFullscreen ? "!p-0 h-screen w-screen" : ""}`}>
+          <div ref={previewContainerRef} className={`relative min-h-0 flex-1 bg-background px-2 pb-2 ${isFullscreen ? "!p-0 h-screen w-screen" : ""}`}>
             {fileUrlLoading && (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             )}
             {fileUrlError && (
-              <div className="flex items-center justify-center h-full text-red-500">
+              <div className="flex h-full items-center justify-center text-red-500">
                 加载失败：{fileUrlError.message}
               </div>
             )}
             {fileUrlData && !fileUrlLoading && (
-              <Suspense fallback={
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                </div>
-              }>
+              <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
                 <StepPreview
                   fileUrl={fileUrlData.s3Url}
                   fileName={fileUrlData.fileName}
@@ -537,48 +493,29 @@ export default function PartsGallery() {
                 />
               </Suspense>
             )}
-            {/* Fullscreen toggle button */}
             {fileUrlData && !fileUrlLoading && (
               <button
                 onClick={toggleFullscreen}
-                className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
+                className="absolute right-3 top-3 z-50 rounded-lg border border-border bg-background/80 p-2 shadow-md backdrop-blur-sm transition-colors hover:bg-accent"
                 title={isFullscreen ? "退出全屏 (Esc)" : "全屏预览 (F)"}
               >
-                {isFullscreen ? (
-                  <Minimize2 className="w-5 h-5 text-foreground" />
-                ) : (
-                  <Maximize2 className="w-5 h-5 text-foreground" />
-                )}
+                {isFullscreen ? <Minimize2 className="h-5 w-5 text-foreground" /> : <Maximize2 className="h-5 w-5 text-foreground" />}
               </button>
             )}
-            {/* Fullscreen overlay: filename + controls hint */}
-            {isFullscreen && fileUrlData && (
-              <div className="absolute bottom-0 left-0 right-0 z-40 pointer-events-none">
-                <div className="bg-gradient-to-t from-black/60 to-transparent px-6 py-4">
-                  <p className="text-white text-sm font-medium truncate mb-1">{fileUrlData.fileName}</p>
-                  <div className="flex items-center gap-4 text-white/70 text-xs">
-                    <span>左键拖拽旋转</span>
-                    <span>滚轮缩放</span>
-                    <span>右键拖拽平移</span>
-                    <span className="ml-auto text-white/50">按 Esc 退出全屏</span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-          {/* Request download from preview */}
           {fileUrlData && (
-            <div className="px-6 pb-4 flex justify-end">
+            <div className="flex justify-end border-t px-5 py-3">
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50"
+                className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
                 onClick={() => {
+                  const id = previewFileId;
                   setPreviewFileId(null);
-                  handleRequestDownload(previewFileId!, fileUrlData.fileName);
+                  if (id) openDownloadRequest(id, fileUrlData.fileName);
                 }}
               >
-                <Download className="w-4 h-4" />
+                <Download className="h-4 w-4" />
                 申请下载此零件
               </Button>
             </div>
@@ -586,94 +523,62 @@ export default function PartsGallery() {
         </DialogContent>
       </Dialog>
 
-      {/* Download Request Dialog */}
       <Dialog open={downloadRequestFileId !== null} onOpenChange={(open) => { if (!open) setDownloadRequestFileId(null); }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Download className="w-5 h-5 text-blue-600" />
+              <Download className="h-5 w-5 text-blue-600" />
               申请下载
             </DialogTitle>
             <DialogDescription>
-              请填写您的联系信息，文件上传者将审核您的下载请求。
+              请确认联系信息，申请提交后文件拥有者会在后台看到并审核。
             </DialogDescription>
           </DialogHeader>
 
-          {/* File name display */}
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-sm">
-            <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-            <span className="font-medium truncate">{downloadRequestFileName}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm">
+            <Box className="h-4 w-4 flex-shrink-0 text-blue-500" />
+            <span className="truncate font-medium">{downloadRequestFileName}</span>
           </div>
 
           <div className="space-y-4 pt-2">
-            {/* Real Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="dr-name" className="text-sm font-medium flex items-center gap-1.5">
-                <UserCircle className="w-3.5 h-3.5" />
+              <Label htmlFor="dr-name" className="flex items-center gap-1.5 text-sm font-medium">
+                <UserCircle className="h-3.5 w-3.5" />
                 姓名 <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="dr-name"
-                placeholder="请输入您的姓名"
-                value={drForm.realName}
-                onChange={(e) => setDrForm(f => ({ ...f, realName: e.target.value }))}
-              />
+              <Input id="dr-name" value={drForm.realName} onChange={(e) => setDrForm((f) => ({ ...f, realName: e.target.value }))} />
             </div>
-
-            {/* Email */}
             <div className="space-y-1.5">
-              <Label htmlFor="dr-email" className="text-sm font-medium flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5" />
+              <Label htmlFor="dr-email" className="flex items-center gap-1.5 text-sm font-medium">
+                <Mail className="h-3.5 w-3.5" />
                 邮箱 <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="dr-email"
-                type="email"
-                placeholder="请输入您的邮箱地址"
-                value={drForm.email}
-                onChange={(e) => setDrForm(f => ({ ...f, email: e.target.value }))}
-              />
+              <Input id="dr-email" type="email" value={drForm.email} onChange={(e) => setDrForm((f) => ({ ...f, email: e.target.value }))} />
             </div>
-
-            {/* Phone */}
             <div className="space-y-1.5">
-              <Label htmlFor="dr-phone" className="text-sm font-medium flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5" />
+              <Label htmlFor="dr-phone" className="flex items-center gap-1.5 text-sm font-medium">
+                <Phone className="h-3.5 w-3.5" />
                 电话 <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="dr-phone"
-                placeholder="请输入您的电话号码"
-                value={drForm.phone}
-                onChange={(e) => setDrForm(f => ({ ...f, phone: e.target.value }))}
-              />
+              <Input id="dr-phone" value={drForm.phone} onChange={(e) => setDrForm((f) => ({ ...f, phone: e.target.value }))} />
             </div>
-
-            {/* Company */}
             <div className="space-y-1.5">
-              <Label htmlFor="dr-company" className="text-sm font-medium flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" />
+              <Label htmlFor="dr-company" className="flex items-center gap-1.5 text-sm font-medium">
+                <Building2 className="h-3.5 w-3.5" />
                 公司名称 <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="dr-company"
-                placeholder="请输入您的公司名称"
-                value={drForm.company}
-                onChange={(e) => setDrForm(f => ({ ...f, company: e.target.value }))}
-              />
+              <Input id="dr-company" value={drForm.company} onChange={(e) => setDrForm((f) => ({ ...f, company: e.target.value }))} />
             </div>
-
-            {/* Message (optional) */}
             <div className="space-y-1.5">
-              <Label htmlFor="dr-message" className="text-sm font-medium flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5" />
-                留言 <span className="text-muted-foreground text-xs">（选填）</span>
+              <Label htmlFor="dr-message" className="flex items-center gap-1.5 text-sm font-medium">
+                <MessageSquare className="h-3.5 w-3.5" />
+                留言 <span className="text-xs text-muted-foreground">（选填）</span>
               </Label>
               <Textarea
                 id="dr-message"
                 placeholder="请简要说明下载用途..."
                 value={drForm.message}
-                onChange={(e) => setDrForm(f => ({ ...f, message: e.target.value }))}
+                onChange={(e) => setDrForm((f) => ({ ...f, message: e.target.value }))}
                 rows={3}
                 className="resize-none"
               />
@@ -684,19 +589,15 @@ export default function PartsGallery() {
             <Button variant="outline" onClick={() => setDownloadRequestFileId(null)}>
               取消
             </Button>
-            <Button
-              onClick={handleSubmitDownloadRequest}
-              disabled={drSubmitting}
-              className="gap-1.5"
-            >
+            <Button onClick={handleSubmitDownloadRequest} disabled={drSubmitting} className="gap-1.5 bg-blue-600 hover:bg-blue-700">
               {drSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   提交中...
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                   提交申请
                 </>
               )}
@@ -705,11 +606,7 @@ export default function PartsGallery() {
         </DialogContent>
       </Dialog>
 
-      <footer className="border-t mt-12 py-6 bg-muted/30">
-        <div className="container flex items-center justify-center">
-          <span className="text-xs text-muted-foreground/60">v1.4.0</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

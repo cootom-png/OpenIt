@@ -58,7 +58,23 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(
+    "/assets",
+    express.static(path.resolve(distPath, "assets"), {
+      immutable: true,
+      maxAge: "1y",
+    })
+  );
+
+  app.use(
+    "/uploads",
+    express.static(path.resolve(process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads")), {
+      maxAge: "7d",
+      fallthrough: false,
+    })
+  );
+
+  app.use(express.static(distPath, { maxAge: 0 }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {

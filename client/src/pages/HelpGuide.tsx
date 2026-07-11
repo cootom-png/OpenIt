@@ -2,487 +2,276 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import {
+  Archive,
   ArrowLeft,
   Box,
-  FileText,
-  Image,
-  Video,
+  Clock,
+  Download,
+  FileCode2,
   FileSpreadsheet,
-  Upload,
+  FileText,
+  FolderOpen,
+  HelpCircle,
+  Image,
+  Lock,
+  Mail,
+  Monitor,
+  MousePointer,
+  Search,
   Share2,
   Shield,
-  MousePointer,
-  HelpCircle,
-  Monitor,
+  Upload,
   Users,
-  Clock,
-  FolderOpen,
-  Lock,
+  Video,
   Zap,
-  Archive,
-  Mail,
-  FileCode2,
-  Search,
-  Download,
 } from "lucide-react";
+
+const supportedFormats = [
+  {
+    icon: Box,
+    title: "3D 模型文件",
+    color: "text-blue-500",
+    text: "STP / STEP / STL / OBJ / 3MF / IGS / IGES，支持浏览器在线解析和 WebGL 预览。",
+  },
+  {
+    icon: FileText,
+    title: "CAD 图纸",
+    color: "text-green-500",
+    text: "DWG / DXF 图纸可在线打开，适合工程图、加工图和报价图纸快速核对。",
+  },
+  {
+    icon: Archive,
+    title: "压缩包",
+    color: "text-yellow-600",
+    text: "ZIP / RAR / 7Z 支持在线查看文件树、搜索文件名、展开文件夹，并可解压打包下载。",
+  },
+  {
+    icon: FileText,
+    title: "PDF 与文档",
+    color: "text-red-600",
+    text: "PDF / Word / Excel / CSV / Markdown / 文本文件支持在线预览，CSV 支持常见编码识别。",
+  },
+  {
+    icon: Image,
+    title: "图片",
+    color: "text-orange-500",
+    text: "JPG / PNG / GIF / SVG / WebP / BMP / TIFF，可缩放、平移、旋转和下载。",
+  },
+  {
+    icon: Video,
+    title: "视频",
+    color: "text-red-500",
+    text: "MP4 / MOV / WebM 支持播放、暂停、进度跳转和全屏查看。",
+  },
+  {
+    icon: Mail,
+    title: "邮件文件",
+    color: "text-blue-400",
+    text: "EML / MSG 可查看发件人、收件人、主题、日期、正文和附件列表。",
+  },
+  {
+    icon: FileCode2,
+    title: "Markdown",
+    color: "text-purple-500",
+    text: "支持标题、列表、代码块、表格、粗体、斜体等 GitHub 风格 Markdown 语法。",
+  },
+];
+
+const previewActions = [
+  ["3D 模型", "左键拖动旋转，滚轮缩放，右键拖动平移；可根据文件大小选择快速、标准或高精度模式。"],
+  ["CAD 图纸", "左键拖动平移，滚轮缩放，适合快速检查 DWG / DXF 图纸细节。"],
+  ["PDF / Word / Excel", "滚动浏览、翻页、缩放查看；Excel 可切换工作表。"],
+  ["压缩包", "打开 ZIP / RAR / 7Z 后可浏览目录树、搜索文件名、展开或折叠文件夹，并点击“解压下载”。"],
+  ["图片 / 视频", "图片支持缩放、平移、旋转；视频支持播放控制、进度跳转和全屏。"],
+];
 
 export default function HelpGuide() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                首页
-              </Button>
-            </Link>
-            <div className="h-5 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <HelpCircle className="w-5 h-5 text-blue-600" />
-              <h1 className="text-base font-semibold">操作说明</h1>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      <SiteHeader title="操作介绍" icon={<HelpCircle className="h-5 w-5 text-blue-600" />} />
 
-      <main className="container py-8 max-w-4xl">
+      <main className="mx-auto max-w-4xl px-4 py-5 sm:py-6">
         <div className="space-y-6">
-
-          {/* 平台简介 */}
-          <Card>
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Monitor className="w-5 h-5 text-blue-600" />
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Monitor className="h-5 w-5 text-blue-600" />
                 平台简介
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-2">
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>
-                零件云图是一款在线文件预览与分享工具，支持 3D 模型、CAD 图纸、图片、视频、文档、邮件、Markdown、压缩包等多种格式的上传、在线预览和分享。
+                零件云图是一款面向工程师、采购、制造、销售和技术支持团队的在线文件预览与分享平台。
+                无需安装 CAD、3D 查看器或解压软件，浏览器即可打开 3D 模型、CAD 图纸、PDF、Office 文档、图片、视频、邮件和压缩包。
               </p>
               <p>
-                注册用户可将文件保存到个人账户，生成分享链接发送给客户或同事查看。无需安装任何软件，浏览器即可打开 STP、DWG 等专业格式文件。
+                平台支持文件临时预览、登录后保存到个人文件、生成分享链接、客户在线查看，以及 ZIP / RAR / 7Z 压缩包在线查看和解压下载。
               </p>
             </CardContent>
           </Card>
 
-          {/* 支持的文件格式 */}
-          <Card>
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileText className="h-5 w-5 text-blue-600" />
                 支持的文件格式
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Box className="w-4 h-4 text-blue-500" />
-                    3D 模型文件
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    STP / STEP / STL / OBJ / 3MF / IGS 格式，使用 WASM 引擎在浏览器端解析渲染
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <FileText className="w-4 h-4 text-green-500" />
-                    CAD 图纸
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    DXF 使用 WebGL 引擎渲染；DWG 使用 CAD Viewer WebGL 引擎渲染
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Image className="w-4 h-4 text-orange-500" />
-                    图片
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    JPG / JFIF / PNG / GIF / SVG / WebP / BMP / TIFF 格式，支持缩放、平移、旋转、下载
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Video className="w-4 h-4 text-red-500" />
-                    视频
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    MP4 / MOV / WebM 格式，支持播放、暂停、进度跳转、全屏
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <FileText className="w-4 h-4 text-red-600" />
-                    PDF 文档
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    支持翻页、缩放、旋转、下载
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    Office 文档
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    Word (DOCX)、Excel (XLSX)、CSV 支持在线预览；CSV 支持编码自动检测（GBK/UTF-8 等）
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Archive className="w-4 h-4 text-yellow-600" />
-                    压缩包
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    ZIP / RAR / 7z 格式，支持在线浏览文件树、关键字搜索文件名、解压下载（ZIP 格式）
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Mail className="w-4 h-4 text-blue-400" />
-                    邮件文件
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    EML / MSG 格式，在线预览邮件头（发件人、收件人、主题、日期）、正文及附件列表，仅预览不保存
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <FileCode2 className="w-4 h-4 text-purple-500" />
-                    Markdown 文档
-                  </div>
-                  <p className="text-muted-foreground pl-6">
-                    .md 格式，支持 GitHub 风格 Markdown 渲染（标题、列表、代码块、表格等），可保存到我的文件
-                  </p>
-                </div>
+              <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                {supportedFormats.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.title} className="space-y-2">
+                      <div className="flex items-center gap-2 font-medium text-foreground">
+                        <Icon className={`h-4 w-4 ${item.color}`} />
+                        {item.title}
+                      </div>
+                      <p className="pl-6 text-muted-foreground">{item.text}</p>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
 
-          {/* 操作方式 */}
-          <Card>
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <MousePointer className="w-5 h-5 text-blue-600" />
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <MousePointer className="h-5 w-5 text-blue-600" />
                 预览操作方式
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <Box className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">3D 模型</div>
-                    <p className="text-muted-foreground">左键拖拽旋转 / 滚轮缩放 / 右键拖拽平移 / 双击全屏</p>
+                {previewActions.map(([title, text]) => (
+                  <div key={title} className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
+                    <MousePointer className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
+                    <div>
+                      <div className="mb-1 font-medium text-foreground">{title}</div>
+                      <p className="text-muted-foreground">{text}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <FileText className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">2D 图纸 (DXF / DWG)</div>
-                    <p className="text-muted-foreground">左键拖拽平移 / 按住滚轮左右移动 / 滚轮缩放</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <Image className="w-5 h-5 text-orange-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">图片</div>
-                    <p className="text-muted-foreground">拖拽平移 / 滚轮缩放 / 工具栏旋转和下载</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <Video className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">视频</div>
-                    <p className="text-muted-foreground">点击播放/暂停 / 拖动进度条跳转 / 全屏播放</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <FileText className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">PDF / Word / Excel</div>
-                    <p className="text-muted-foreground">滚动浏览 / 翻页 / 缩放查看 / 切换工作表（Excel）</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <Archive className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">压缩包 (ZIP / RAR / 7z)</div>
-                    <p className="text-muted-foreground">展开/折叠文件夹 / 搜索框过滤文件名 / 点击"解压下载"将压缩包解压为带根文件夹的新 ZIP 下载</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <Mail className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">邮件 (EML / MSG)</div>
-                    <p className="text-muted-foreground">查看邮件头信息（发件人、收件人、主题、日期）、正文内容（HTML 或纯文本）及附件列表；邮件文件仅供预览，不支持保存</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40">
-                  <FileCode2 className="w-5 h-5 text-purple-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-medium text-foreground mb-1">Markdown (.md)</div>
-                    <p className="text-muted-foreground">渲染为格式化文档，支持标题、列表、代码块、表格、粗体、斜体等 GitHub 风格语法</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* 压缩包搜索与解压 */}
-          <Card>
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Archive className="w-5 h-5 text-blue-600" />
-                压缩包搜索与解压下载
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Archive className="h-5 w-5 text-blue-600" />
+                压缩包在线查看与解压下载
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-2">
-                <Search className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-medium text-foreground">文件搜索：</span>
-                  <span className="ml-1">打开压缩包后，顶部搜索框可输入关键字实时过滤文件树。匹配的文件名会高亮显示，包含匹配文件的文件夹会自动展开。搜索结果统计显示"匹配数 / 总文件数"。</span>
-                </div>
+                <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                <span>
+                  <strong className="text-foreground">在线浏览：</strong>
+                  上传 ZIP、RAR 或 7Z 后，系统会展示压缩包内的文件树，可展开或折叠文件夹，适合先确认客户发来的资料是否完整。
+                </span>
               </div>
               <Separator />
               <div className="flex items-start gap-2">
-                <Download className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-medium text-foreground">解压下载：</span>
-                  <span className="ml-1">点击右上角"解压下载"按钮，系统会将压缩包内所有文件解压并自动创建以原文件名命名的根文件夹，重新打包为新的 ZIP 文件后下载到本地。此功能需要登录账户。</span>
-                </div>
+                <Search className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                <span>
+                  <strong className="text-foreground">文件搜索：</strong>
+                  在搜索框输入零件号、图纸名或后缀名即可过滤文件名，匹配项会高亮显示，包含匹配文件的文件夹会自动展开。
+                </span>
+              </div>
+              <Separator />
+              <div className="flex items-start gap-2">
+                <Download className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                <span>
+                  <strong className="text-foreground">解压下载：</strong>
+                  点击“解压下载”后，平台会把压缩包内容解出，并重新打包成一个带原文件名根目录的新 ZIP 文件下载到本地。此功能需要登录账户。
+                </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* 渲染精度设置 */}
-          <Card>
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Zap className="w-5 h-5 text-blue-600" />
-                3D 渲染精度设置
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Zap className="h-5 w-5 text-blue-600" />
+                3D 渲染精度
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
-              <p>
-                打开 STP / STEP / IGS / IGES 格式的 3D 文件后，预览框下方会显示模型统计信息（零件数量、顶点数、解析耗时）以及精度选择器。
-              </p>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>打开 STP / STEP / IGS / IGES 等 3D 文件后，预览区下方会显示模型统计信息，并提供渲染精度选择。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">快速模式：</span>
-                <span>解析速度快，适合大型文件快速预览，网格较粗。</span>
-              </div>
+              <p><strong className="text-foreground">快速模式：</strong>解析速度更快，适合大型文件快速查看。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">标准模式：</span>
-                <span>平衡精度与速度，推荐日常使用。</span>
-              </div>
+              <p><strong className="text-foreground">标准模式：</strong>平衡速度和细节，适合日常预览。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">高精度模式：</span>
-                <span>曲面最光滑，适合精密零件查看，解析时间较长。</span>
-              </div>
-              <Separator />
-              <p>
-                切换精度后系统会自动重新解析文件，解析完成后 3D 视图自动更新。图片和 CAD 文件的信息也会显示在预览框正下方。
-              </p>
+              <p><strong className="text-foreground">高精度模式：</strong>曲面更细腻，适合精密零件核对，但解析时间会更长。</p>
             </CardContent>
           </Card>
 
-          {/* 文件上传与保存 */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Upload className="w-5 h-5 text-blue-600" />
-                文件上传与保存
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Upload className="h-5 w-5 text-blue-600" />
+                上传、保存与分享
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">访客上传：</span>
-                <span>无需登录即可上传文件进行在线预览，但文件不会保存，关闭页面后丢失。</span>
-              </div>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p><strong className="text-foreground">访客预览：</strong>无需登录即可上传文件进行在线预览，关闭页面后文件不会保存。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">注册用户：</span>
-                <span>上传文件后可点击"保存到我的文件"将文件持久化存储到个人账户，支持后续管理和分享。</span>
-              </div>
+              <p><strong className="text-foreground">保存文件：</strong>注册并审核通过后，可将文件保存到个人账号，便于后续管理和再次分享。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">仅预览格式：</span>
-                <span>邮件文件（EML / MSG）仅供在线预览，不支持保存到账户。</span>
-              </div>
+              <p><strong className="text-foreground">分享链接：</strong>保存文件后可生成分享链接，发送给客户或同事后即可在线查看。分享链接默认有效期为 7 天。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">上传其他文件：</span>
-                <span>预览文件后，点击蓝色的"上传其他文件"按钮可快速切换到新文件。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">存储配额：</span>
-                <span>每个用户最多保存 50 个文件，总空间 500MB，单文件不超过 100MB。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">大文件提示：</span>
-                <span>STEP 等 3D 文件首次加载需要初始化 WASM 引擎，可能需要几秒钟，请耐心等待。</span>
-              </div>
+              <p><strong className="text-foreground">存储额度：</strong>每个用户最多保存 50 个文件，总空间 500MB，单文件不超过 100MB。</p>
             </CardContent>
           </Card>
 
-          {/* 文件分享 */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Share2 className="w-5 h-5 text-blue-600" />
-                文件分享
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Users className="h-5 w-5 text-blue-600" />
+                账号与零件库
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">生成链接：</span>
-                <span>保存文件后，点击"生成分享链接"即可获得一个可分享的 URL，发送给他人即可查看文件预览。</span>
-              </div>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>注册时需填写公司名称、电话、姓名、邮箱和密码。账号通过管理员审核后，可使用保存文件、生成分享链接、收藏零件等完整功能。</p>
               <Separator />
-              <div className="flex items-start gap-2">
-                <Clock className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
-                <span>分享链接默认有效期为 <strong className="text-foreground">7 天</strong>，过期后链接自动失效。可在"我的文件"中续期或重新开启分享。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <Lock className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
-                <span>分享页面仅供在线预览，不提供源文件下载功能，保护文件安全。</span>
-              </div>
+              <p>3D 零件库展示平台上的公开模型，支持按名称搜索和按格式筛选。审核通过的用户可打开模型预览并收藏到个人中心。</p>
             </CardContent>
           </Card>
 
-          {/* 注册与账户 */}
-          <Card>
+          <Card className="rounded-2xl border-amber-200 bg-amber-50/70 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-600" />
-                注册与账户
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">注册信息：</span>
-                <span>注册时需填写公司名称、电话、姓名、邮箱和密码。信息不完整将无法使用文件保存和分享功能。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">审核流程：</span>
-                <span>注册后需等待管理员审核通过，审核通过后方可使用完整功能（保存文件、生成分享链接等）。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">密码要求：</span>
-                <span>密码至少 8 位，需包含大写字母、小写字母和数字。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">忘记密码：</span>
-                <span>在登录页点击"忘记密码"，提交重置请求后联系管理员获取重置码，凭重置码设置新密码。</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 3D零件库 */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Box className="w-5 h-5 text-blue-600" />
-                3D 零件库
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
-              <p>
-                3D 零件库展示平台上所有用户上传的 3D 模型文件（STP/STEP/STL），以卡片缩略图形式呈现，支持按名称搜索和按格式筛选。
-              </p>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <Shield className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
-                <span>注册并审核通过的用户可点击缩略图查看 3D 在线预览；未注册或未审核用户仅可浏览缩略图。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <FolderOpen className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
-                <span>审核通过的用户还可以收藏感兴趣的零件，在个人中心"收藏零件"标签页中统一管理。</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 页面布局说明 */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Monitor className="w-5 h-5 text-blue-600" />
-                页面布局
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-3">
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">左侧区域：</span>
-                <span>文件预览区，包括 3D 模型、CAD 图纸、图片、视频等的可视化展示。预览框下方显示对应的文件统计信息（模型统计、图片信息、图纸信息等）。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">右侧区域：</span>
-                <span>文件信息面板和操作按钮。包括文件名、大小、格式等基本信息，以及"上传其他文件"、"保存到我的文件"、"我的文件"等操作入口。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">顶部导航：</span>
-                <span>点击左上角 Logo 或"零件云图"标题可随时返回首页。右侧提供 3D 零件库、登录/注册入口。</span>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <span className="font-medium text-foreground shrink-0">个人中心：</span>
-                <span>登录后点击用户名进入个人中心，包含三个标签页：我的文件（文件管理与配额）、收藏零件（收藏的 3D 零件）、个人信息（修改昵称和密码）。</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 注意事项 */}
-          <Card className="border-amber-200 bg-amber-50/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2 text-amber-700">
-                <Shield className="w-5 h-5" />
+              <CardTitle className="flex items-center gap-2 text-lg text-amber-700">
+                <Shield className="h-5 w-5" />
                 注意事项
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-amber-800/80 space-y-2">
-              <ul className="space-y-2 list-disc pl-4">
-                <li>请使用现代浏览器（Chrome、Edge、Firefox）访问本平台，以获得最佳预览体验。</li>
-                <li>3D 模型和 CAD 图纸依赖 WebGL 渲染，请确保浏览器已启用硬件加速。</li>
-                <li>大文件（如复杂 STEP 模型）解析可能需要较长时间，可先使用"快速模式"预览再切换到高精度。</li>
-                <li>分享链接有效期为 7 天，过期后需在"我的文件"中手动续期。</li>
-                <li>邮件文件（EML / MSG）仅供在线预览，不会保存到账户，关闭页面后不可恢复。</li>
-                <li>压缩包"解压下载"功能需要登录账户后才能使用。</li>
-                <li>上传的文件请勿包含敏感或机密信息，平台管理员可查看所有文件。</li>
-                <li>如遇到问题，请联系管理员获取帮助。</li>
+            <CardContent className="text-sm text-amber-800/80">
+              <ul className="space-y-2 pl-4 list-disc">
+                <li>建议使用 Chrome、Edge 或 Firefox，并开启硬件加速，以获得更稳定的 3D 和 CAD 预览体验。</li>
+                <li>大型 STEP、DWG 或压缩包首次解析可能需要等待，请先使用快速模式或先查看压缩包目录。</li>
+                <li>邮件文件仅供在线预览，不会保存到个人账号。</li>
+                <li>压缩包“解压下载”需要登录账户；分享页主要用于在线查看，不提供源文件直接下载。</li>
+                <li>上传文件请避免包含敏感或机密信息，平台管理员可进行必要的文件管理和问题排查。</li>
               </ul>
             </CardContent>
           </Card>
 
-          {/* 返回首页 */}
-          <div className="flex justify-center pt-4 pb-8">
+          <div className="flex justify-center pb-8 pt-4">
             <Link href="/">
               <Button variant="outline" className="gap-2">
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="h-4 w-4" />
                 返回首页
               </Button>
             </Link>
           </div>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

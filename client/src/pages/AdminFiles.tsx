@@ -143,7 +143,7 @@ export default function AdminFiles() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <Card className="max-w-md w-full mx-4">
           <CardContent className="pt-6 text-center">
             <FileBox className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" />
@@ -161,7 +161,7 @@ export default function AdminFiles() {
   const totalPages = Math.ceil((filesData?.total || 0) / pageSize);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-50">
       <AdminNav onLogout={logout} />
       {/* Sub header with actions */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
