@@ -1,6 +1,8 @@
-# Cloudparts
+# OpenIt
 
-Cloudparts is a web-based CAD, 3D model, and document preview platform for uploading, previewing, saving, and sharing engineering files from a browser.
+OpenIt is a browser-based file preview and sharing platform for CAD, 3D models, drawings, documents, archives, and email files.
+
+Try it at [openit.cc](https://openit.cc), or self-host it on your own server if you want a private deployment.
 
 ## Features
 
@@ -11,6 +13,12 @@ Cloudparts is a web-based CAD, 3D model, and document preview platform for uploa
 - User registration, admin review, personal file library, favorites, and share links.
 - Chunked upload with cancellation, retry handling, and resumable upload support.
 - PM2 and ops scripts for production deployment.
+
+## What Should OpenIt Open Next?
+
+Tell us which file types you still want to open in the browser.
+
+Open an issue or pull request, share your use case, and help shape the next release.
 
 ## Tech Stack
 
