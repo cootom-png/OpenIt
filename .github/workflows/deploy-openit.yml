@@ -162,7 +162,14 @@ jobs:
           PATH="$NODE_DIR:$PATH" "$PM2" restart openit --update-env
           PATH="$NODE_DIR:$PATH" "$PM2" save
           printf '%s\n' "$RELEASE_SHA" > "$OPENIT_WEB_ROOT/.deploy-sha"
-          curl -fsS http://127.0.0.1:3000/healthz
+          for attempt in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          PATH="$NODE_DIR:$PATH" "$PM2" logs openit --lines 80 --nostream
+          exit 1
           REMOTE
 
       - name: Verify production
