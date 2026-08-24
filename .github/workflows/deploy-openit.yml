@@ -83,6 +83,7 @@ jobs:
           cp -a scripts release/
           cp package.json pnpm-lock.yaml pnpm-workspace.yaml ecosystem.config.cjs README.md LICENSE DEPLOYMENT.md release/
           if [[ -d patches ]]; then cp -a patches release/; fi
+          if [[ -d cargo ]]; then cp -a cargo release/; fi
           tar -C release -czf "openit-${{ inputs.release_sha }}.tar.gz" .
           sha256sum "openit-${{ inputs.release_sha }}.tar.gz" > "openit-${{ inputs.release_sha }}.tar.gz.sha256"
 
@@ -150,7 +151,7 @@ jobs:
 
           if [[ -d "$OPENIT_WEB_ROOT/dist" ]]; then
             tar -C "$OPENIT_WEB_ROOT" -czf "$BACKUP_BASE/openit-${RELEASE_SHA}-before.tar.gz" \
-              dist package.json pnpm-lock.yaml pnpm-workspace.yaml ecosystem.config.cjs scripts 2>/dev/null || true
+              dist package.json pnpm-lock.yaml pnpm-workspace.yaml ecosystem.config.cjs scripts cargo 2>/dev/null || true
           fi
 
           mkdir -p "$OPENIT_WEB_ROOT"
@@ -177,4 +178,4 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS https://www.openit.cc/healthz | grep '"service":"openit"'
-          curl -fsSI https://www.openit.cc/cargo/ | head -20
+          curl -fsS https://www.openit.cc/cargo/ | grep '返回主页'
