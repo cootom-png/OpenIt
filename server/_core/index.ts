@@ -7,6 +7,7 @@ import { Readable } from "stream";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { createChunkedUploadRouter } from "../chunkedUpload";
+import { createOfficePreviewRouter } from "../officePreview";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -221,6 +222,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Chunked file upload routes
   app.use(createChunkedUploadRouter());
+  app.use(createOfficePreviewRouter());
 
   // ─── RAR/7z 文件解析 API（使用缓存的 WASM 单例）───
   app.post("/api/parse-archive", async (req, res) => {

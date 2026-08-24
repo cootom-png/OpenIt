@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { I18nProvider, useI18n } from "./i18n";
 import Home from "./pages/Home";
 import AdminStats from "./pages/AdminStats";
 import Login from "./pages/Login";
@@ -20,9 +21,12 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const HelpGuide = lazy(() => import("./pages/HelpGuide"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 
-const LazyFallback = (
-  <div className="min-h-screen flex items-center justify-center text-slate-400">加载中...</div>
-);
+function LazyFallback() {
+  const { t } = useI18n();
+  return (
+    <div className="min-h-screen flex items-center justify-center text-slate-400">{t("common.loading")}</div>
+  );
+}
 
 function Router() {
   return (
@@ -32,29 +36,29 @@ function Router() {
       <Route path={"/register"} component={Register} />
       <Route path={"/forgot-password"} component={ForgotPassword} />
       <Route path={"/reset-password"}>
-        <Suspense fallback={LazyFallback}><ResetPassword /></Suspense>
+        <Suspense fallback={<LazyFallback />}><ResetPassword /></Suspense>
       </Route>
       <Route path={"/parts"}>
-        <Suspense fallback={LazyFallback}><PartsGallery /></Suspense>
+        <Suspense fallback={<LazyFallback />}><PartsGallery /></Suspense>
       </Route>
       <Route path={"/help"}>
-        <Suspense fallback={LazyFallback}><HelpGuide /></Suspense>
+        <Suspense fallback={<LazyFallback />}><HelpGuide /></Suspense>
       </Route>
       <Route path={"/profile"}>
-        <Suspense fallback={LazyFallback}><Profile /></Suspense>
+        <Suspense fallback={<LazyFallback />}><Profile /></Suspense>
       </Route>
       <Route path={"/share/:token"}>
-        <Suspense fallback={LazyFallback}><ShareView /></Suspense>
+        <Suspense fallback={<LazyFallback />}><ShareView /></Suspense>
       </Route>
       <Route path={"/admin-login"}>
-        <Suspense fallback={LazyFallback}><AdminLogin /></Suspense>
+        <Suspense fallback={<LazyFallback />}><AdminLogin /></Suspense>
       </Route>
       <Route path={"/admin/stats"} component={AdminStats} />
       <Route path={"/admin/users"}>
-        <Suspense fallback={LazyFallback}><AdminUsers /></Suspense>
+        <Suspense fallback={<LazyFallback />}><AdminUsers /></Suspense>
       </Route>
       <Route path={"/admin/files"}>
-        <Suspense fallback={LazyFallback}><AdminFiles /></Suspense>
+        <Suspense fallback={<LazyFallback />}><AdminFiles /></Suspense>
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
@@ -65,14 +69,16 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
+      <I18nProvider>
+        <ThemeProvider
+          defaultTheme="light"
+        >
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </ThemeProvider>
+      </I18nProvider>
     </ErrorBoundary>
   );
 }

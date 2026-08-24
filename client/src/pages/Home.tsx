@@ -35,6 +35,8 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { useEmailAuth } from "@/hooks/useEmailAuth";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useI18n } from "@/i18n";
 import type { ParsedMeshData, ThreeViewerHandle } from "@/components/ThreeViewer";
 import type { DwgViewerHandle } from "@/components/DwgViewerComponent";
 import ImageViewer from "@/components/ImageViewer";
@@ -59,11 +61,13 @@ const ArchiveViewer = lazy(() =>
   import("@/components/ArchiveViewer").then((module) => ({ default: module.ArchiveViewer }))
 );
 const EmailViewer = lazy(() => import("@/components/EmailViewer"));
+const SUPPORTED_PPT = ["ppt", "pptx"];
 
 function ViewerLoading() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full min-h-[500px] items-center justify-center bg-muted/30 text-sm text-muted-foreground">
-      加载预览器...
+      {t("home.viewerLoading")}
     </div>
   );
 }
@@ -97,6 +101,37 @@ async function fetchPreviewBlob(url: string): Promise<Blob> {
   return resp.blob();
 }
 
+async function convertOfficePreview(file: File): Promise<File> {
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  formData.append("fileName", file.name);
+
+  const resp = await fetch("/api/convert-office", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    throw new Error(detail || "Office conversion failed");
+  }
+
+  const data = await resp.json();
+  const pdfBase64 = data.pdfBase64 as string;
+  const binary = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
+  return new File([binary], data.fileName || file.name.replace(/\.[^.]+$/, ".pdf"), { type: "application/pdf" });
+}
+
+async function convertOfficePreviewFromUrl(url: string): Promise<File> {
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    throw new Error(detail || "Office source file fetch failed");
+  }
+  const blob = await resp.blob();
+  return convertOfficePreview(new File([blob], "preview.pptx"));
+}
+
 /**
  * Load a remote file from S3 URL into the viewer.
  * Used when navigating from Profile with ?preview=<url>&name=<filename> params.
@@ -105,6 +140,11 @@ async function loadRemoteFile(
   url: string,
   name: string,
   quality: MeshQuality,
+  messages: {
+    unsupported: string;
+    remoteFailed: string;
+    pptFailed: string;
+  },
   setters: {
     setFileName: (v: string) => void;
     setFileSize: (v: number) => void;
@@ -231,6 +271,18 @@ async function loadRemoteFile(
       data.meshes.forEach((m) => { totalVerts += m.attributes.position.array.length / 3; });
       s.setVertexCount(totalVerts);
       s.setStatus("ready");
+    } else if (SUPPORTED_PPT.includes(ext)) {
+      s.setViewerMode("pdf");
+      s.setStatus("parsing");
+      try {
+        const pdfFile = await convertOfficePreviewFromUrl(previewUrl);
+        s.setDocFile(pdfFile);
+        s.setFileSize(pdfFile.size);
+        s.setStatus("ready");
+      } catch (err: any) {
+        s.setStatus("error");
+        s.setErrorMsg(err.message || messages.pptFailed);
+      }
     } else if (SUPPORTED_EMAIL.includes(ext)) {
       s.setViewerMode("email");
       s.setStatus("parsing");
@@ -254,11 +306,11 @@ async function loadRemoteFile(
       s.setStatus("ready");
     } else {
       s.setStatus("error");
-      s.setErrorMsg("不支持预览此文件格式");
+      s.setErrorMsg(messages.unsupported);
     }
   } catch (err: any) {
     s.setStatus("error");
-    s.setErrorMsg(err.message || "加载远程文件失败");
+    s.setErrorMsg(err.message || messages.remoteFailed);
   }
 }
 
@@ -278,20 +330,15 @@ const SUPPORTED_CSV = ["csv"];
 const SUPPORTED_EMAIL = ["eml", "msg"];
 const SUPPORTED_MARKDOWN = ["md"];
 const SUPPORTED_CODE = ["json", "css", "txt", "log"];
-const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL, ...SUPPORTED_MARKDOWN, ...SUPPORTED_CODE];
+const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG, ...SUPPORTED_IMAGE, ...SUPPORTED_VIDEO, ...SUPPORTED_PDF, ...SUPPORTED_WORD, ...SUPPORTED_EXCEL, ...SUPPORTED_CSV, ...SUPPORTED_ARCHIVE, ...SUPPORTED_EMAIL, ...SUPPORTED_MARKDOWN, ...SUPPORTED_CODE, ...SUPPORTED_PPT];
 // On iOS Safari, the accept attribute greys out files with unrecognized MIME types
 // (e.g. .stp, .dwg, .dxf). We use a broad accept to allow all files, then validate
 // the extension in handleFile() instead.
 const ACCEPT_STRING = "*/*";
 
-function isEnglishLocale() {
-  if (typeof document === "undefined") return false;
-  const lang = document.documentElement.lang || navigator.language || "";
-  return lang.toLowerCase().startsWith("en");
-}
-
 /** Header auth buttons — shows login/register or user dropdown */
 function HeaderAuth() {
+  const { t } = useI18n();
   const { user: oauthUser, logout: oauthLogout } = useAuth();
   const { emailUser, isLoggedIn, isAdmin: isEmailAdmin, logout, isPending } = useEmailAuth();
 
@@ -307,14 +354,14 @@ function HeaderAuth() {
           <User className="w-3.5 h-3.5" />
           <span className="max-w-[120px] truncate">{emailUser?.nickname}</span>
           {isPending && (
-            <Badge variant="outline" className="text-[10px] py-0 px-1 text-yellow-600 border-yellow-300">待审核</Badge>
+            <Badge variant="outline" className="text-[10px] py-0 px-1 text-yellow-600 border-yellow-300">{t("common.pendingReview")}</Badge>
           )}
         </div>
         {isApproved && (
           <Link href="/profile">
             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
               <FolderOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">我的文件</span>
+                  <span className="hidden sm:inline">{t("home.myFiles")}</span>
             </Button>
           </Link>
         )}
@@ -322,13 +369,13 @@ function HeaderAuth() {
           <Link href="/admin/users">
             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
               <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">管理</span>
+              <span className="hidden sm:inline">{t("common.profile")}</span>
             </Button>
           </Link>
         )}
         <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-muted-foreground" onClick={logout}>
           <LogOut className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">退出</span>
+          <span className="hidden sm:inline">{t("common.logout")}</span>
         </Button>
       </div>
     );
@@ -346,7 +393,7 @@ function HeaderAuth() {
           <Link href="/admin/users">
             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
               <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">管理</span>
+              <span className="hidden sm:inline">{t("common.profile")}</span>
             </Button>
           </Link>
         )}
@@ -360,7 +407,7 @@ function HeaderAuth() {
           }}
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">退出</span>
+          <span className="hidden sm:inline">{t("common.logout")}</span>
         </Button>
       </div>
     );
@@ -371,13 +418,13 @@ function HeaderAuth() {
       <Link href="/login">
         <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
           <LogIn className="w-3.5 h-3.5" />
-          登录
+          {t("common.login")}
         </Button>
       </Link>
       <Link href="/register">
         <Button size="sm" className="h-8 gap-1 text-xs">
           <UserPlus className="w-3.5 h-3.5" />
-          注册
+          {t("common.register")}
         </Button>
       </Link>
     </div>
@@ -385,6 +432,7 @@ function HeaderAuth() {
 }
 
 export default function Home() {
+  const { t } = useI18n();
   const [meshData, setMeshData] = useState<ParsedMeshData | null>(null);
   const [dxfFileUrl, setDxfFileUrl] = useState<string | null>(null);
   const [dwgFileBuffer, setDwgFileBuffer] = useState<ArrayBuffer | null>(null);
@@ -415,7 +463,6 @@ export default function Home() {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isEnglish, setIsEnglish] = useState(isEnglishLocale);
 
   const [meshQuality, setMeshQuality] = useState<MeshQuality>("standard");
   const [isReparsing, setIsReparsing] = useState(false);
@@ -426,19 +473,6 @@ export default function Home() {
   const dwgViewerRef = useRef<DwgViewerHandle>(null);
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
-  const cargoPlannerLabel = isEnglish ? "Cargo Planner" : "装柜助手";
-
-  useEffect(() => {
-    const updateLanguage = () => setIsEnglish(isEnglishLocale());
-    updateLanguage();
-    const observer = new MutationObserver(updateLanguage);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
-    window.addEventListener("languagechange", updateLanguage);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("languagechange", updateLanguage);
-    };
-  }, []);
 
   // Fullscreen toggle for viewer container
   const toggleFullscreen = useCallback(() => {
@@ -453,8 +487,8 @@ export default function Home() {
 
   // Set page title for SEO
   useEffect(() => {
-    document.title = "零件云图 - CAD、3D模型、图纸和文档在线预览工具";
-  }, []);
+    document.title = `${t("brand.name")} - ${t("home.heroTitle")}`;
+  }, [t]);
 
   // Listen for fullscreen change (e.g. user presses Esc)
   useEffect(() => {
@@ -506,6 +540,10 @@ export default function Home() {
       }
       setStatus("loading");
       loadRemoteFile(previewUrl, previewName, meshQuality, {
+        unsupported: t("home.unsupported"),
+        remoteFailed: t("home.remoteFailed"),
+        pptFailed: t("home.pptFailed"),
+      }, {
         setFileName, setFileSize, setStatus, setViewerMode,
         setMeshData, setDxfFileUrl, setDwgFileBuffer,
         setImageUrl, setVideoUrl, setDocFile,
@@ -516,7 +554,7 @@ export default function Home() {
         setWordInfo, setExcelInfo,
       });
     }
-  }, []);
+  }, [meshQuality, t]);
 
   /**
    * Convert a data URL to a resized thumbnail base64 string.
@@ -625,13 +663,13 @@ export default function Home() {
               fileId,
               thumbnailBase64: thumbBase64,
             });
-            toast.success("缩略图已生成");
+            toast.success(t("home.thumbGenerated"));
           } else {
-            toast.error("缩略图截取失败，请重试");
+            toast.error(t("home.thumbCaptureFailed"));
           }
         } catch (err) {
           console.warn("Auto thumbnail generation failed:", err);
-          toast.error("缩略图生成失败");
+          toast.error(t("home.thumbFailed"));
         }
       })();
     }
@@ -653,7 +691,7 @@ export default function Home() {
       if (SUPPORTED_MARKDOWN.includes(ext)) return "markdown";
       if (SUPPORTED_IMAGE.includes(ext)) return "image";
       if (SUPPORTED_VIDEO.includes(ext)) return "video";
-      if (SUPPORTED_PDF.includes(ext) || SUPPORTED_WORD.includes(ext) || SUPPORTED_EXCEL.includes(ext) || SUPPORTED_CSV.includes(ext)) return "document";
+      if (SUPPORTED_PDF.includes(ext) || SUPPORTED_WORD.includes(ext) || SUPPORTED_EXCEL.includes(ext) || SUPPORTED_PPT.includes(ext) || SUPPORTED_CSV.includes(ext)) return "document";
       if (SUPPORTED_ARCHIVE.includes(ext)) return "archive";
       if (SUPPORTED_EMAIL.includes(ext)) return "email";
       if (SUPPORTED_CODE.includes(ext)) return "code";
@@ -672,7 +710,9 @@ export default function Home() {
       });
       setStatus("error");
       setErrorMsg(
-        `不支持的文件格式: .${ext}，请上传 ${ALL_SUPPORTED.map((e) => `.${e}`).join("、")} 文件`
+        t("home.unsupportedWithFormats")
+          .replace("{ext}", ext)
+          .replace("{formats}", ALL_SUPPORTED.map((e) => `.${e}`).join(", "))
       );
       return;
     }
@@ -720,7 +760,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 PDF 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadPdfFailed"));
       }
     } else if (SUPPORTED_WORD.includes(ext)) {
       // Word file - use WordViewer
@@ -734,7 +774,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 Word 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadWordFailed"));
       }
     } else if (SUPPORTED_EXCEL.includes(ext)) {
       // Excel file - use ExcelViewer
@@ -748,7 +788,22 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 Excel 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadExcelFailed"));
+      }
+    } else if (SUPPORTED_PPT.includes(ext)) {
+      setViewerMode("pdf");
+      setStatus("parsing");
+      try {
+        const pdfFile = await convertOfficePreview(file);
+        setDocFile(pdfFile);
+        setFileSize(pdfFile.size);
+        setParseTime(0);
+        setMeshCount(0);
+        setVertexCount(0);
+        setStatus("ready");
+      } catch (err: any) {
+        setStatus("error");
+        setErrorMsg(err.message || t("home.pptFailed"));
       }
     } else if (SUPPORTED_CSV.includes(ext)) {
       // CSV file - use CsvViewer
@@ -762,7 +817,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 CSV 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadCsvFailed"));
       }
     } else if (SUPPORTED_ARCHIVE.includes(ext)) {
       // Archive file - use ArchiveViewer
@@ -776,7 +831,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载压缩文件时发生错误");
+        setErrorMsg(err.message || t("home.loadArchiveFailed"));
       }
     } else if (SUPPORTED_EMAIL.includes(ext)) {
       // Email file (.eml, .msg) - use EmailViewer (preview only, no save)
@@ -790,7 +845,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载邮件文件时发生错误");
+        setErrorMsg(err.message || t("home.loadEmailFailed"));
       }
     } else if (SUPPORTED_MARKDOWN.includes(ext)) {
       // Markdown file (.md) - use MarkdownViewer
@@ -804,7 +859,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 Markdown 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadMarkdownFailed"));
       }
     } else if (SUPPORTED_CODE.includes(ext)) {
       // Code file (.css) - use CodeViewer
@@ -818,7 +873,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载代码文件时发生错误");
+        setErrorMsg(err.message || t("home.loadCodeFailed"));
       }
     } else if (SUPPORTED_VIDEO.includes(ext)) {
       // Video file - use VideoViewer
@@ -834,7 +889,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载视频文件时发生错误");
+        setErrorMsg(err.message || t("home.loadVideoFailed"));
       }
     } else if (SUPPORTED_IMAGE.includes(ext)) {
       // Image file - use ImageViewer
@@ -850,7 +905,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载图片文件时发生错误");
+        setErrorMsg(err.message || t("home.loadImageFailed"));
       }
     } else if (SUPPORTED_2D_DWG.includes(ext)) {
       // DWG file - use DwgViewer (libredwg-web WASM → SVG)
@@ -866,7 +921,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 DWG 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadDwgFailed"));
       }
     } else if (SUPPORTED_2D_DXF.includes(ext)) {
       // DXF file - use DxfViewer
@@ -882,7 +937,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "加载 DXF 文件时发生错误");
+        setErrorMsg(err.message || t("home.loadDxfFailed"));
       }
     } else {
       // 3D file - use ThreeViewer
@@ -904,7 +959,7 @@ export default function Home() {
         setStatus("ready");
       } catch (err: any) {
         setStatus("error");
-        setErrorMsg(err.message || "解析文件时发生错误");
+        setErrorMsg(err.message || t("home.parseFailed"));
       }
     }
   }, [meshQuality]);
@@ -931,10 +986,10 @@ export default function Home() {
           });
           setVertexCount(totalVerts);
           setStatus("ready");
-          toast.success(`已切换为${QUALITY_PRESETS[newQuality].label}模式`);
+          toast.success(t("home.qualityChanged").replace("{quality}", t(`quality.${newQuality}`)));
         } catch (err: any) {
           setStatus("error");
-          setErrorMsg(err.message || "重新解析文件时发生错误");
+          setErrorMsg(err.message || t("home.reparseFailed"));
         } finally {
           setIsReparsing(false);
         }
@@ -1000,6 +1055,10 @@ export default function Home() {
     () => SUPPORTED_EXCEL.includes(fileExt),
     [fileExt]
   );
+  const isPptFile = useMemo(
+    () => SUPPORTED_PPT.includes(fileExt),
+    [fileExt]
+  );
   const isArchiveFile = useMemo(
     () => SUPPORTED_ARCHIVE.includes(fileExt),
     [fileExt]
@@ -1016,7 +1075,7 @@ export default function Home() {
     () => SUPPORTED_CODE.includes(fileExt),
     [fileExt]
   );
-  const isDocFile = isPdfFile || isWordFile || isExcelFile || isMarkdownFile || isCodeFile;
+  const isDocFile = isPdfFile || isWordFile || isExcelFile || isPptFile || isMarkdownFile || isCodeFile;
 
   // Reset file input value so the same file can be re-selected
   const triggerFileInput = useCallback(() => {
@@ -1090,25 +1149,26 @@ export default function Home() {
               </div>
               <div>
                 <div className="text-lg font-bold text-foreground tracking-tight">
-                  零件云图
+                  {t("brand.name")}
                 </div>
                 <p className="text-xs text-muted-foreground -mt-0.5">
-                  3D / CAD / 文件在线预览/解压
+                  {t("brand.tagline")}
                 </p>
               </div>
             </div>
           </Link>
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             <a href="https://openit.cc/cargo/">
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50">
                 <Truck className="w-3.5 h-3.5" />
-                {cargoPlannerLabel}
+                {t("home.cargoPlanner")}
               </Button>
             </a>
             <Link href="/parts">
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
                 <Box className="w-3.5 h-3.5" />
-                3D零件库
+                {t("home.parts")}
               </Button>
             </Link>
 
@@ -1122,19 +1182,19 @@ export default function Home() {
           <div className="grid gap-3 lg:grid-cols-1 lg:items-center">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="bg-blue-700 text-white hover:bg-blue-700">CAD / 3D 在线预览</Badge>
-                <Badge variant="outline" className="border-blue-200 bg-white text-blue-700">无需安装软件</Badge>
-                <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">支持分享协作</Badge>
+                <Badge className="bg-blue-700 text-white hover:bg-blue-700">{t("home.badge.preview")}</Badge>
+                <Badge variant="outline" className="border-blue-200 bg-white text-blue-700">{t("home.badge.noInstall")}</Badge>
+                <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">{t("home.badge.share")}</Badge>
               </div>
               <div className="space-y-2">
                 <h1 className="max-w-4xl text-2xl font-semibold tracking-tight text-slate-950 lg:text-[28px]">
-                  在线打开 CAD 图纸、3D 模型和工程文档
+                  {t("home.heroTitle")}
                 </h1>
                 <p className="hidden">
-                  面向工程师、制造企业、采购和销售团队，支持 STP、STEP、STL、OBJ、3MF、IGS、DWG、DXF、PDF、Word、Excel、ZIP、RAR、7Z 等文件在线预览、保存、分享和压缩包解压下载。
+                  {t("home.heroHidden")}
                 </p>
                 <p className="max-w-4xl text-sm leading-5 text-slate-600">
-                  支持 3D/CAD/文档/图片/视频/压缩包在线预览，ZIP、RAR、7Z 可查看内容并解压下载。
+                  {t("home.heroBody")}
                 </p>
                 <div className="flex flex-wrap gap-1.5 text-xs text-slate-600">
                   <span className="rounded-full bg-slate-100 px-2.5 py-1">STP / STEP / STL</span>
@@ -1147,18 +1207,18 @@ export default function Home() {
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" className="gap-2" onClick={triggerFileInput}>
                   <Upload className="h-4 w-4" />
-                  选择文件预览
+                  {t("home.pickFile")}
                 </Button>
                 <Link href="/parts">
                   <Button size="sm" variant="outline" className="gap-2 border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
                     <Box className="h-4 w-4" />
-                    浏览 3D 零件库
+                  {t("home.browseParts")}
                   </Button>
                 </Link>
                 <a href="https://openit.cc/cargo/">
                   <Button size="sm" variant="outline" className="gap-2 border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50">
                     <Truck className="h-4 w-4" />
-                    {cargoPlannerLabel}
+                    {t("home.cargoPlanner")}
                   </Button>
                 </a>
               </div>
@@ -1166,23 +1226,23 @@ export default function Home() {
             <div className="hidden grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <FileBox className="mb-3 h-5 w-5 text-blue-700" />
-                <div className="font-medium text-slate-950">30+ 文件格式</div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">覆盖 3D、CAD、图片、视频、文档和压缩包，可在线查看压缩包内容。</p>
+                <div className="font-medium text-slate-950">30+ File Formats</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">3D, CAD, images, video, documents, and archives.</p>
               </div>
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <Zap className="mb-3 h-5 w-5 text-blue-700" />
-                <div className="font-medium text-slate-950">浏览器即开</div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">无需安装 CAD 软件，拖拽文件即可查看。</p>
+                <div className="font-medium text-slate-950">Open in Browser</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">No CAD software needed.</p>
               </div>
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <Share2 className="mb-3 h-5 w-5 text-blue-700" />
-                <div className="font-medium text-slate-950">链接分享</div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">保存文件后生成分享链接，便于客户查看。</p>
+                <div className="font-medium text-slate-950">Share Links</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Generate share links for customers.</p>
               </div>
               <div className="rounded-lg border bg-white p-4 shadow-sm">
                 <HardDrive className="mb-3 h-5 w-5 text-blue-700" />
-                <div className="font-medium text-slate-950">文件管理</div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">个人文件、收藏和下载申请集中管理。</p>
+                <div className="font-medium text-slate-950">File Management</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Manage files, favorites, and requests.</p>
               </div>
             </div>
           </div>
@@ -1219,10 +1279,10 @@ export default function Home() {
                       <Upload className="w-10 h-10 text-primary" />
                     </div>
                     <h2 className="text-xl font-semibold text-foreground mb-2">
-                      在线预览CAD和3D文件
+                      {t("home.dropTitle")}
                     </h2>
                     <p className="text-muted-foreground text-center max-w-md mb-4">
-                      将文件拖拽到此处，或点击选择文件
+                      {t("home.dropBody")}
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
                       <div className="flex flex-wrap gap-1.5 items-center">
@@ -1245,7 +1305,7 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
-                          图片:
+                          {t("home.format.image")}
                         </span>
                         <Badge variant="outline">.JPG</Badge>
                         <Badge variant="outline">.JFIF</Badge>
@@ -1258,7 +1318,7 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
-                          视频:
+                          {t("home.format.video")}
                         </span>
                         <Badge variant="outline">.MP4</Badge>
                         <Badge variant="outline">.MOV</Badge>
@@ -1266,16 +1326,18 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
-                          文档:
+                          {t("home.format.doc")}
                         </span>
                         <Badge variant="outline">.PDF</Badge>
                         <Badge variant="outline">.DOCX</Badge>
                         <Badge variant="outline">.XLSX</Badge>
+                        <Badge variant="outline">.PPTX</Badge>
+                        <Badge variant="outline">.PPT</Badge>
                         <Badge variant="outline">.CSV</Badge>
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
-                          文本:
+                          {t("home.format.text")}
                         </span>
                         <Badge variant="outline">.MD</Badge>
                         <Badge variant="outline">.JSON</Badge>
@@ -1285,7 +1347,7 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
-                          压缩包:
+                          {t("home.format.archive")}
                         </span>
                         <Badge variant="outline">.ZIP</Badge>
                         <Badge variant="outline">.RAR</Badge>
@@ -1293,7 +1355,7 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-xs text-primary font-medium shrink-0">
-                          邮件:
+                          {t("home.format.email")}
                         </span>
                         <Badge variant="outline">.EML</Badge>
                         <Badge variant="outline">.MSG</Badge>
@@ -1314,13 +1376,13 @@ export default function Home() {
                       <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
                     </div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">
-                      正在解析文件...
+                      {t("home.parsingFile")}
                     </h3>
                     <p className="text-muted-foreground text-sm">
                       {fileName} ({formatFileSize(fileSize)})
                     </p>
                     <p className="text-muted-foreground text-xs mt-2">
-                      首次加载 STEP 文件需要初始化 WASM 引擎，可能需要几秒钟
+                      {t("home.stepWasmHint")}
                     </p>
                   </div>
                 ) : viewerMode === "pdf" && docFile ? (
@@ -1396,7 +1458,7 @@ export default function Home() {
                   <button
                     onClick={toggleFullscreen}
                     className="absolute top-3 right-3 z-50 p-2 rounded-lg bg-background/80 backdrop-blur-sm border border-border shadow-md hover:bg-accent transition-colors"
-                    title={isFullscreen ? "退出全屏 (Esc)" : "全屏预览 (F)"}
+                    title={isFullscreen ? t("home.fullscreenOff") : t("home.fullscreenOn")}
                   >
                     {isFullscreen ? (
                       <Minimize2 className="w-5 h-5 text-foreground" />
@@ -1413,32 +1475,32 @@ export default function Home() {
                       <div className="flex items-center gap-4 text-white/70 text-xs">
                         {viewerMode === "3d" ? (
                           <>
-                            <span>左键拖拽旋转</span>
-                            <span>滚轮缩放</span>
-                            <span>右键拖拽平移</span>
+                            <span>{t("home.leftRotate")}</span>
+                            <span>{t("home.wheelZoom")}</span>
+                            <span>{t("home.rightPan")}</span>
                           </>
                         ) : viewerMode === "image" ? (
                           <>
-                            <span>滚轮缩放</span>
-                            <span>拖拽平移</span>
+                            <span>{t("home.wheelZoom")}</span>
+                            <span>{t("home.dragPan")}</span>
                           </>
                         ) : viewerMode === "2d-dxf" || viewerMode === "2d-dwg" ? (
                           <>
-                            <span>滚轮缩放</span>
-                            <span>拖拽平移</span>
+                            <span>{t("home.wheelZoom")}</span>
+                            <span>{t("home.dragPan")}</span>
                           </>
                         ) : viewerMode === "video" ? (
                           <>
-                            <span>点击播放/暂停</span>
-                            <span>拖动进度条</span>
+                            <span>{t("home.playPause")}</span>
+                            <span>{t("home.dragProgress")}</span>
                           </>
                         ) : viewerMode === "pdf" ? (
                           <>
-                            <span>翻页浏览</span>
-                            <span>缩放查看</span>
+                            <span>{t("home.pageBrowse")}</span>
+                            <span>{t("home.zoomView")}</span>
                           </>
                         ) : null}
-                        <span className="ml-auto text-white/50">按 Esc 退出全屏</span>
+                        <span className="ml-auto text-white/50">{t("home.exitFsHint")}</span>
                       </div>
                     </div>
                   </div>
@@ -1453,97 +1515,97 @@ export default function Home() {
                   <>
                     <span className="flex items-center gap-1.5">
                       <RotateCcw className="w-3.5 h-3.5" />
-                      左键拖拽旋转
+                      {t("home.leftRotate")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      滚轮缩放
+                      {t("home.wheelZoom")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      右键拖拽平移
+                      {t("home.rightPan")}
                     </span>
                   </>
                 ) : viewerMode === "video" ? (
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      点击播放/暂停
+                      {t("home.playPause")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      全屏播放
+                      {t("home.fullscreenPlay")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <RotateCcw className="w-3.5 h-3.5" />
-                      拖动进度条跳转
+                      {t("home.dragProgress")}
                     </span>
                   </>
                 ) : viewerMode === "pdf" ? (
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      翻页浏览
+                      {t("home.pageBrowse")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      缩放查看
+                      {t("home.zoomView")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <RotateCcw className="w-3.5 h-3.5" />
-                      旋转页面
+                      {t("home.rotatePage")}
                     </span>
                   </>
                 ) : viewerMode === "word" ? (
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      滚动浏览
+                      {t("home.scrollBrowse")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      缩放查看
+                      {t("home.zoomView")}
                     </span>
                   </>
                 ) : viewerMode === "excel" ? (
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      滚动浏览
+                      {t("home.scrollBrowse")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      缩放查看
+                      {t("home.zoomView")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5" />
-                      切换工作表
+                      {t("home.switchSheet")}
                     </span>
                   </>
                 ) : viewerMode === "image" ? (
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      拖拽平移
+                      {t("home.dragPan")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      滚轮缩放
+                      {t("home.wheelZoom")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <RotateCcw className="w-3.5 h-3.5" />
-                      工具栏旋转
+                      {t("home.toolbarRotate")}
                     </span>
                   </>
                 ) : (
                   <>
                     <span className="flex items-center gap-1.5">
                       <Move className="w-3.5 h-3.5" />
-                      按住滚轮拖动平移
+                      {t("home.middlePan")}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Maximize2 className="w-3.5 h-3.5" />
-                      滚轮缩放
+                      {t("home.wheelZoom")}
                     </span>
                   </>
                 )}
@@ -1557,22 +1619,22 @@ export default function Home() {
                   <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
                     <span className="flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">零件:</span>
+                      <span className="text-muted-foreground">{t("home.part")}</span>
                       <span className="font-medium">{meshCount}</span>
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">顶点:</span>
+                      <span className="text-muted-foreground">{t("home.vertex")}</span>
                       <span className="font-medium">{vertexCount.toLocaleString()}</span>
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">解析:</span>
+                      <span className="text-muted-foreground">{t("home.parse")}</span>
                       <span className="font-medium">{(parseTime / 1000).toFixed(2)}s</span>
                     </span>
                     {["stp", "step", "igs", "iges"].includes(fileExt) && (
                       <span className="flex items-center gap-1.5 ml-auto">
                         <Zap className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-muted-foreground">精度:</span>
+                        <span className="text-muted-foreground">{t("home.quality")}</span>
                         {(["fast", "standard", "high"] as MeshQuality[]).map((q) => (
                           <Button
                             key={q}
@@ -1582,7 +1644,7 @@ export default function Home() {
                             disabled={isReparsing}
                             onClick={() => handleQualityChange(q)}
                           >
-                            {QUALITY_PRESETS[q].label}
+                            {t(`quality.${q}`)}
                           </Button>
                         ))}
                         {isReparsing && (
@@ -1604,27 +1666,27 @@ export default function Home() {
                       <>
                         <span className="flex items-center gap-1.5">
                           <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="text-muted-foreground">分辨率:</span>
+                          <span className="text-muted-foreground">{t("home.resolution")}</span>
                           <span className="font-medium">{imageInfo.width} × {imageInfo.height}</span>
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">像素:</span>
+                          <span className="text-muted-foreground">{t("home.pixels")}</span>
                           <span className="font-medium">{(imageInfo.width * imageInfo.height).toLocaleString()}</span>
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">宽高比:</span>
+                          <span className="text-muted-foreground">{t("home.aspectRatio")}</span>
                           <span className="font-medium">{(imageInfo.width / imageInfo.height).toFixed(2)}</span>
                         </span>
                       </>
                     )}
                     <span className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">透明通道:</span>
-                      <span className="font-medium">{fileExt === "png" || fileExt === "gif" ? "支持" : "不支持"}</span>
+                      <span className="text-muted-foreground">{t("home.alphaChannel")}</span>
+                      <span className="font-medium">{fileExt === "png" || fileExt === "gif" ? t("home.supported") : t("home.notSupported")}</span>
                     </span>
                     {fileExt === "gif" && (
                       <span className="flex items-center gap-1.5">
-                        <span className="text-muted-foreground">动画:</span>
-                        <span className="font-medium">支持</span>
+                        <span className="text-muted-foreground">{t("home.animation")}</span>
+                        <span className="font-medium">{t("home.supported")}</span>
                       </span>
                     )}
                   </div>
@@ -1639,12 +1701,12 @@ export default function Home() {
                   <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
                     <span className="flex items-center gap-1.5">
                       <FileType className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">渲染引擎:</span>
+                      <span className="text-muted-foreground">{t("home.renderEngine")}</span>
                       <span className="font-medium">DXF Viewer (WebGL)</span>
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">视图类型:</span>
-                      <span className="font-medium">2D 正交投影</span>
+                      <span className="text-muted-foreground">{t("home.viewType")}</span>
+                      <span className="font-medium">{t("home.orthographic2d")}</span>
                     </span>
                   </div>
                 </CardContent>
@@ -1658,21 +1720,21 @@ export default function Home() {
                   <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
                     <span className="flex items-center gap-1.5">
                       <FileType className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">渲染引擎:</span>
+                      <span className="text-muted-foreground">{t("home.renderEngine")}</span>
                       <span className="font-medium">CAD Viewer (WebGL)</span>
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">视图:</span>
+                      <span className="text-muted-foreground">{t("home.view")}</span>
                       <span className="font-medium">2D WebGL</span>
                     </span>
                     {dwgInfo && (
                       <>
                         <span className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">实体:</span>
+                          <span className="text-muted-foreground">{t("home.entity")}</span>
                           <span className="font-medium">{dwgInfo.entityCount.toLocaleString()}</span>
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">图层:</span>
+                          <span className="text-muted-foreground">{t("home.layer")}</span>
                           <span className="font-medium">{dwgInfo.layerCount}</span>
                         </span>
                       </>
@@ -1690,14 +1752,14 @@ export default function Home() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <Info className="w-4 h-4" />
-                  文件信息
+                  {t("home.fileInfo")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {status === "ready" ? (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">文件名</span>
+                      <span className="text-muted-foreground">{t("home.fileName")}</span>
                       <span
                         className="font-medium truncate ml-2 max-w-[180px]"
                         title={fileName}
@@ -1707,21 +1769,21 @@ export default function Home() {
                     </div>
                     <Separator />
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">文件大小</span>
+                      <span className="text-muted-foreground">{t("home.fileSize")}</span>
                       <span className="font-medium">
                         {formatFileSize(fileSize)}
                       </span>
                     </div>
                     <Separator />
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">格式</span>
+                      <span className="text-muted-foreground">{t("home.format")}</span>
                       <Badge variant="secondary" className="text-xs">
                         {fileExt.toUpperCase()}
                       </Badge>
                     </div>
                     <Separator />
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">类型</span>
+                      <span className="text-muted-foreground">{t("home.type")}</span>
                       <Badge
                         variant={is2DFile ? "outline" : isDocFile ? "default" : isImageFile ? "default" : isVideoFile ? "default" : "secondary"}
                         className="text-xs"
@@ -1729,50 +1791,55 @@ export default function Home() {
                         {isPdfFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
-                            PDF 文档
+                            {t("home.typePdf")}
                           </span>
                         ) : isWordFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
-                            Word 文档
+                            {t("home.typeWord")}
                           </span>
                         ) : isExcelFile ? (
                           <span className="flex items-center gap-1">
                             <Layers className="w-3 h-3" />
-                            Excel 表格
+                            {t("home.typeExcel")}
+                          </span>
+                        ) : isPptFile ? (
+                          <span className="flex items-center gap-1">
+                            <FileType className="w-3 h-3" />
+                            PowerPoint
                           </span>
                         ) : isVideoFile ? (
                           <span className="flex items-center gap-1">
-                            视频文件
+                            {t("home.typeVideo")}
                           </span>
                         ) : isImageFile ? (
                           <span className="flex items-center gap-1">
-                            图片文件
+                            {t("home.typeImage")}
                           </span>
                         ) : is2DFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
-                            2D CAD 图纸
+                            {t("home.typeCad")}
                           </span>
                         ) : isEmailFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
-                            邮件文件
+                            {t("home.typeEmail")}
                           </span>
                         ) : isMarkdownFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
-                            Markdown 文本
+                            {t("home.typeMarkdown")}
                           </span>
                         ) : isCodeFile ? (
                           <span className="flex items-center gap-1">
                             <FileType className="w-3 h-3" />
-                            代码文件
+                            {t("home.typeCode")}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1">
                             <Layers className="w-3 h-3" />
-                            3D 模型
+                            {t("home.type3d")}
                           </span>
                         )}
                       </Badge>
@@ -1780,7 +1847,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    请先上传文件（支持 3D、CAD、图片、视频、PDF、Word、Excel、邮件）
+                    {t("home.uploadPrompt")}
                   </p>
                 )}
               </CardContent>
@@ -1794,7 +1861,7 @@ export default function Home() {
                 onClick={triggerFileInput}
               >
                 <Upload className="w-4 h-4" />
-                上传其他文件
+                {t("home.uploadAnother")}
               </Button>
             )}
 
@@ -1807,7 +1874,7 @@ export default function Home() {
                   onClick={async () => {
                     if (!currentFileObj || !emailUser) return;
                     if (currentFileObj.size > 100 * 1024 * 1024) {
-                      toast.error("文件大小超过 100MB 限制");
+                      toast.error(t("home.fileTooLarge"));
                       return;
                     }
                     setIsSaving(true);
@@ -1831,12 +1898,12 @@ export default function Home() {
                         abortController.signal
                       );
                       if (result.cancelled) {
-                        toast.info("上传已取消");
+                        toast.info(t("home.uploadCancelled"));
                         setUploadProgress(null);
                         return;
                       }
                       if (!result.success) {
-                        throw new Error(result.error || "上传失败");
+                        throw new Error(result.error || t("home.uploadFailed"));
                       }
                       setSavedFileId(result.file.id);
                       if (viewerMode === "archive" && result.file.s3Url) {
@@ -1844,7 +1911,7 @@ export default function Home() {
                       }
                       refetchQuota();
                       setUploadProgress(null);
-                      toast.success("文件已保存到您的账户");
+                      toast.success(t("home.fileSaved"));
 
                       // Auto-capture thumbnail from preview area
                       const isImageFile = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
@@ -1863,7 +1930,7 @@ export default function Home() {
                               fileId: result.file.id,
                               thumbnailBase64: thumbBase64,
                             });
-                            toast.success("视频缩略图已生成");
+                            toast.success(t("home.videoThumbGenerated"));
                           }
                         } catch (thumbErr) {
                           console.warn("Video thumbnail generation failed:", thumbErr);
@@ -1885,9 +1952,9 @@ export default function Home() {
                       }
                     } catch (err: any) {
                       if (err.name === "AbortError") {
-                        toast.info("上传已取消");
+                        toast.info(t("home.uploadCancelled"));
                       } else {
-                        toast.error(err.message || "保存失败");
+                        toast.error(err.message || t("home.saveFailed"));
                       }
                       setUploadProgress(null);
                     } finally {
@@ -1901,16 +1968,16 @@ export default function Home() {
                   {isSaving
                     ? uploadProgress
                       ? uploadProgress.phase === "compressing"
-                        ? "正在压缩图片..."
+                        ? t("home.compressingImage")
                         : uploadProgress.phase === "completing"
-                          ? "正在合并文件..."
+                          ? t("home.completingUpload")
                           : uploadProgress.phase === "waiting"
-                            ? "等待中..."
+                            ? t("home.waiting")
                             : uploadProgress.phase === "resuming"
-                              ? "恢复上传中..."
-                              : `上传中 ${uploadProgress.percent}%`
-                      : "正在保存..."
-                    : "保存到我的文件"}
+                              ? t("home.resumingUpload")
+                              : `${t("home.uploading")} ${uploadProgress.percent}%`
+                      : t("home.saving")
+                    : t("home.saveToFiles")}
                 </Button>
                 {isSaving && uploadProgress && uploadProgress.phase === "resuming" && (
                   <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1919,7 +1986,7 @@ export default function Home() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      <span>{uploadProgress.waitMessage || "检测到上次未完成的上传，正在继续..."}</span>
+                      <span>{uploadProgress.waitMessage || t("home.resumeUpload")}</span>
                     </div>
                   </div>
                 )}
@@ -1927,7 +1994,7 @@ export default function Home() {
                   <div className="space-y-1">
                     <Progress value={uploadProgress.percent} className="h-2" />
                     <div className="flex justify-between text-[11px] text-muted-foreground">
-                      <span>{uploadProgress.uploadedChunks}/{uploadProgress.totalChunks} 分片</span>
+                      <span>{uploadProgress.uploadedChunks}/{uploadProgress.totalChunks} {t("home.chunk")}</span>
                       <span>{uploadProgress.speed || ""}</span>
                     </div>
                   </div>
@@ -1939,7 +2006,7 @@ export default function Home() {
                         <svg className="w-4 h-4 animate-pulse flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
-                        <span>{uploadProgress.waitMessage || "服务器繁忙，请稍候..."}</span>
+                        <span>{uploadProgress.waitMessage || t("home.serverBusy")}</span>
                       </div>
                       <button
                         type="button"
@@ -1948,7 +2015,7 @@ export default function Home() {
                         }}
                         className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors flex-shrink-0"
                       >
-                        取消上传
+                        {t("home.cancelUpload")}
                       </button>
                     </div>
                   </div>
@@ -1962,7 +2029,7 @@ export default function Home() {
               <Link href="/profile">
                 <Button variant="outline" className="w-full gap-2">
                   <FolderOpen className="w-4 h-4" />
-                  我的文件
+                  {t("home.myFiles")}
                 </Button>
               </Link>
             )}
@@ -1977,26 +2044,26 @@ export default function Home() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <FileType className="w-4 h-4" />
-                    PDF 信息
+                    {t("home.pdfInfo")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {pdfInfo && (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">页数</span>
+                        <span className="text-muted-foreground">{t("home.pages")}</span>
                         <span className="font-medium">{pdfInfo.pages}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">页面尺寸</span>
+                        <span className="text-muted-foreground">{t("home.pageSize")}</span>
                         <span className="font-medium">{pdfInfo.width} × {pdfInfo.height} pt</span>
                       </div>
                       {pdfInfo.title && (
                         <>
                           <Separator />
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">标题</span>
+                            <span className="text-muted-foreground">{t("home.title")}</span>
                             <span className="font-medium truncate ml-2 max-w-[150px]" title={pdfInfo.title}>{pdfInfo.title}</span>
                           </div>
                         </>
@@ -2005,7 +2072,7 @@ export default function Home() {
                         <>
                           <Separator />
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">作者</span>
+                            <span className="text-muted-foreground">{t("home.author")}</span>
                             <span className="font-medium">{pdfInfo.author}</span>
                           </div>
                         </>
@@ -2022,24 +2089,24 @@ export default function Home() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <FileType className="w-4 h-4" />
-                    Word 信息
+                    {t("home.wordInfo")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {wordInfo && (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">段落数</span>
+                        <span className="text-muted-foreground">{t("home.paragraphs")}</span>
                         <span className="font-medium">{wordInfo.paragraphs}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">图片数</span>
+                        <span className="text-muted-foreground">{t("home.images")}</span>
                         <span className="font-medium">{wordInfo.images}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">表格数</span>
+                        <span className="text-muted-foreground">{t("home.tables")}</span>
                         <span className="font-medium">{wordInfo.tables}</span>
                       </div>
                     </>
@@ -2054,31 +2121,31 @@ export default function Home() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <Layers className="w-4 h-4" />
-                    Excel 信息
+                    {t("home.excelInfo")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {excelInfo && (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">工作表</span>
-                        <span className="font-medium">{excelInfo.sheets} 个</span>
+                        <span className="text-muted-foreground">{t("home.sheets")}</span>
+                        <span className="font-medium">{excelInfo.sheets}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">行数</span>
+                        <span className="text-muted-foreground">{t("home.rows")}</span>
                         <span className="font-medium">{excelInfo.rows}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">列数</span>
+                        <span className="text-muted-foreground">{t("home.cols")}</span>
                         <span className="font-medium">{excelInfo.cols}</span>
                       </div>
                       {excelInfo.sheetNames.length > 1 && (
                         <>
                           <Separator />
                           <div className="text-sm">
-                            <span className="text-muted-foreground">工作表名称</span>
+                            <span className="text-muted-foreground">{t("home.sheetNames")}</span>
                             <div className="mt-1 flex flex-wrap gap-1">
                               {excelInfo.sheetNames.map((name) => (
                                 <Badge key={name} variant="outline" className="text-xs">{name}</Badge>
@@ -2099,35 +2166,35 @@ export default function Home() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <Info className="w-4 h-4" />
-                    视频信息
+                    {t("home.videoInfo")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {videoInfo && (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">分辨率</span>
+                        <span className="text-muted-foreground">{t("home.resolution")}</span>
                         <span className="font-medium">
                           {videoInfo.width} × {videoInfo.height}
                         </span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">时长</span>
+                        <span className="text-muted-foreground">{t("home.duration")}</span>
                         <span className="font-medium">
                           {Math.floor(videoInfo.duration / 60)}:{Math.floor(videoInfo.duration % 60).toString().padStart(2, '0')}
                         </span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">宽高比</span>
+                        <span className="text-muted-foreground">{t("home.aspectRatio")}</span>
                         <span className="font-medium">
                           {(videoInfo.width / videoInfo.height).toFixed(2)}
                         </span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">画质</span>
+                        <span className="text-muted-foreground">{t("home.qualityLabel")}</span>
                         <span className="font-medium">
                           {videoInfo.height >= 2160 ? '4K' : videoInfo.height >= 1080 ? '1080p' : videoInfo.height >= 720 ? '720p' : videoInfo.height >= 480 ? '480p' : `${videoInfo.height}p`}
                         </span>
@@ -2144,24 +2211,24 @@ export default function Home() {
                 <CardContent className="pt-4 pb-3 space-y-3">
                   <div className="flex items-center gap-2 mb-1">
                     <HardDrive className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium">存储配额</span>
+                    <span className="text-sm font-medium">{t("home.storageQuota")}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>文件数量</span>
+                      <span>{t("home.fileCount")}</span>
                       <span>{quota.fileCount} / {quota.maxFiles}</span>
                     </div>
                     <Progress value={quota.maxFiles > 0 ? (quota.fileCount / quota.maxFiles) * 100 : 0} className="h-2" />
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>已用空间</span>
+                      <span>{t("home.usedSpace")}</span>
                       <span>{(quota.totalSize / 1024 / 1024).toFixed(1)} MB / {(quota.maxTotalSize / 1024 / 1024).toFixed(0)} MB</span>
                     </div>
                     <Progress value={quota.maxTotalSize > 0 ? (quota.totalSize / quota.maxTotalSize) * 100 : 0} className="h-2" />
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    单文件限制: {(quota.maxSingleFile / 1024 / 1024).toFixed(0)} MB
+                    {t("home.singleFileLimit")} {(quota.maxSingleFile / 1024 / 1024).toFixed(0)} MB
                   </div>
                 </CardContent>
               </Card>
@@ -2177,14 +2244,14 @@ export default function Home() {
                     const result = await toggleShareMut.mutateAsync({ fileId: savedFileId, enabled: true });
                     const link = `${window.location.origin}/share/${result.file.shareToken}`;
                     setShareLink(link);
-                    toast.success("分享链接已生成");
+                    toast.success(t("home.shareGenerated"));
                   } catch (err: any) {
-                    toast.error(err.message || "生成分享链接失败");
+                    toast.error(err.message || t("home.shareFailed"));
                   }
                 }}
               >
                 <Share2 className="w-4 h-4" />
-                生成分享链接
+                {t("home.generateShare")}
               </Button>
             )}
 
@@ -2194,7 +2261,7 @@ export default function Home() {
                 <CardContent className="pt-3 pb-3 space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium text-primary">
                     <Share2 className="w-4 h-4" />
-                    分享链接
+                    {t("home.shareLink")}
                   </div>
                   <div className="flex gap-2">
                     <input
@@ -2209,12 +2276,12 @@ export default function Home() {
                       onClick={() => {
                         navigator.clipboard.writeText(shareLink);
                         setLinkCopied(true);
-                        toast.success("链接已复制");
+                        toast.success(t("home.linkCopied"));
                         setTimeout(() => setLinkCopied(false), 2000);
                       }}
                     >
                       {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      {linkCopied ? "已复制" : "复制"}
+                      {linkCopied ? t("home.copied") : t("home.copy")}
                     </Button>
                   </div>
                 </CardContent>
@@ -2225,38 +2292,38 @@ export default function Home() {
             <Link href="/help">
               <Button variant="outline" className="w-full gap-2 text-muted-foreground hover:text-foreground">
                 <HelpCircle className="w-4 h-4" />
-                操作说明
+                {t("home.help")}
               </Button>
             </Link>
           </div>
         </div>
-        <section className="mt-10 border-t pt-8" aria-labelledby="openit-seo-title">
+        <section className="mt-10 border-t pt-8" aria-labelledby="cloudparts-seo-title">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
-              <h2 id="openit-seo-title" className="text-xl font-semibold tracking-tight text-slate-950">
-                CAD、3D 模型和工程文档在线预览
+              <h2 id="cloudparts-seo-title" className="text-xl font-semibold tracking-tight text-slate-950">
+                {t("home.seoTitle")}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                零件云图帮助团队快速打开客户、供应商和内部协作中常见的工程文件。用户可以在浏览器中预览 3D 模型、CAD 图纸、PDF、Word、Excel、图片、视频、压缩包和邮件附件，也可以查看 ZIP、RAR、7Z 内部文件并解压下载，减少本地安装软件、转换格式和反复传文件的时间。
+                {t("home.seoBody")}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border bg-white p-4">
-                <h3 className="text-sm font-medium text-slate-950">支持格式</h3>
+                <h3 className="text-sm font-medium text-slate-950">{t("home.supportedFormats")}</h3>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  STP、STEP、STL、OBJ、3MF、IGS、DWG、DXF、PDF、DOCX、XLSX、CSV、ZIP、RAR、7Z。
+                  STP, STEP, STL, OBJ, 3MF, IGS, DWG, DXF, PDF, DOCX, XLSX, PPTX, PPT, CSV, ZIP, RAR, 7Z.
                 </p>
               </div>
               <div className="rounded-lg border bg-white p-4">
-                <h3 className="text-sm font-medium text-slate-950">典型场景</h3>
+                <h3 className="text-sm font-medium text-slate-950">{t("home.scenarios")}</h3>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  图纸评审、零件展示、采购询价、客户发样、售后技术支持和跨部门协作。
+                  {t("home.scenariosBody")}
                 </p>
               </div>
               <div className="rounded-lg border bg-white p-4">
-                <h3 className="text-sm font-medium text-slate-950">核心价值</h3>
+                <h3 className="text-sm font-medium text-slate-950">{t("home.value")}</h3>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  无需安装 CAD 或解压软件，在线查看、解压、保存和分享工程文件，让客户更快理解零件结构。
+                  {t("home.valueBody")}
                 </p>
               </div>
             </div>
