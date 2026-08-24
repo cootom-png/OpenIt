@@ -2,7 +2,7 @@
 set -euo pipefail
 
 THRESHOLD="${THRESHOLD:-85}"
-LOG_FILE="${LOG_FILE:-/www/wwwlogs/nodejs/cloudparts-disk-monitor.log}"
+LOG_FILE="${LOG_FILE:-/www/wwwlogs/nodejs/openit-disk-monitor.log}"
 TARGET="${TARGET:-/}"
 
 mkdir -p "$(dirname "$LOG_FILE")"

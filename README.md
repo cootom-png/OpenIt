@@ -13,6 +13,7 @@ Try it at [openit.cc](https://openit.cc), or self-host it on your own server if 
 - User registration, admin review, personal file library, favorites, and share links.
 - Chunked upload with cancellation, retry handling, and resumable upload support.
 - PM2 and ops scripts for production deployment.
+- A documented production runtime using the `openit` PM2 process name.
 
 ## What Should OpenIt Open Next?
 
@@ -79,6 +80,10 @@ pnpm start
 - `pnpm test` runs the Vitest test suite.
 - `pnpm format` formats the repository with Prettier.
 - `pnpm db:push` generates and applies Drizzle migrations.
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the production process, PM2 naming, and historical aliases.
 
 ## Environment
 

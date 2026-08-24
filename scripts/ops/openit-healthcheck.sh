@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="${APP_NAME:-cloudparts}"
+APP_NAME="${APP_NAME:-openit}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/healthz}"
-LOG_FILE="${LOG_FILE:-/www/wwwlogs/nodejs/cloudparts-healthcheck.log}"
+LOG_FILE="${LOG_FILE:-/www/wwwlogs/nodejs/openit-healthcheck.log}"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 

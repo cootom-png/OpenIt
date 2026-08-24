@@ -150,7 +150,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
   app.get("/healthz", (_req, res) => {
-    res.status(200).json({ ok: true, service: "cloudparts" });
+    res.status(200).json({ ok: true, service: "openit" });
   });
 
   app.get("/api/proxy-file", async (req, res) => {
@@ -166,7 +166,7 @@ async function startServer() {
       const targetUrl = await validateProxyUrl(rawUrl);
       const response = await fetch(targetUrl, {
         headers: {
-          "User-Agent": "CloudpartsFileProxy/1.0",
+          "User-Agent": "OpenItFileProxy/1.0",
         },
         redirect: "follow",
         signal: controller.signal,

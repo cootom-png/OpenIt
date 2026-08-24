@@ -29,6 +29,7 @@ import {
   Box,
   HelpCircle,
   Zap,
+  Truck,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -283,6 +284,12 @@ const ALL_SUPPORTED = [...SUPPORTED_3D, ...SUPPORTED_2D_DXF, ...SUPPORTED_2D_DWG
 // the extension in handleFile() instead.
 const ACCEPT_STRING = "*/*";
 
+function isEnglishLocale() {
+  if (typeof document === "undefined") return false;
+  const lang = document.documentElement.lang || navigator.language || "";
+  return lang.toLowerCase().startsWith("en");
+}
+
 /** Header auth buttons — shows login/register or user dropdown */
 function HeaderAuth() {
   const { user: oauthUser, logout: oauthLogout } = useAuth();
@@ -408,6 +415,7 @@ export default function Home() {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isEnglish, setIsEnglish] = useState(isEnglishLocale);
 
   const [meshQuality, setMeshQuality] = useState<MeshQuality>("standard");
   const [isReparsing, setIsReparsing] = useState(false);
@@ -418,6 +426,19 @@ export default function Home() {
   const dwgViewerRef = useRef<DwgViewerHandle>(null);
 
   const { emailUser, isLoggedIn, isApproved } = useEmailAuth();
+  const cargoPlannerLabel = isEnglish ? "Cargo Planner" : "装柜助手";
+
+  useEffect(() => {
+    const updateLanguage = () => setIsEnglish(isEnglishLocale());
+    updateLanguage();
+    const observer = new MutationObserver(updateLanguage);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    window.addEventListener("languagechange", updateLanguage);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("languagechange", updateLanguage);
+    };
+  }, []);
 
   // Fullscreen toggle for viewer container
   const toggleFullscreen = useCallback(() => {
@@ -1078,6 +1099,12 @@ export default function Home() {
             </div>
           </Link>
           <div className="flex items-center gap-3">
+            <a href="https://openit.cc/cargo/">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                <Truck className="w-3.5 h-3.5" />
+                {cargoPlannerLabel}
+              </Button>
+            </a>
             <Link href="/parts">
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
                 <Box className="w-3.5 h-3.5" />
@@ -1128,6 +1155,12 @@ export default function Home() {
                     浏览 3D 零件库
                   </Button>
                 </Link>
+                <a href="https://openit.cc/cargo/">
+                  <Button size="sm" variant="outline" className="gap-2 border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50">
+                    <Truck className="h-4 w-4" />
+                    {cargoPlannerLabel}
+                  </Button>
+                </a>
               </div>
             </div>
             <div className="hidden grid-cols-2 gap-3 text-sm">
@@ -2197,10 +2230,10 @@ export default function Home() {
             </Link>
           </div>
         </div>
-        <section className="mt-10 border-t pt-8" aria-labelledby="cloudparts-seo-title">
+        <section className="mt-10 border-t pt-8" aria-labelledby="openit-seo-title">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
-              <h2 id="cloudparts-seo-title" className="text-xl font-semibold tracking-tight text-slate-950">
+              <h2 id="openit-seo-title" className="text-xl font-semibold tracking-tight text-slate-950">
                 CAD、3D 模型和工程文档在线预览
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">

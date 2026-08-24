@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: http://openit.coriton.cn/sitemap.xml
+Sitemap: https://openit.cc/sitemap.xml

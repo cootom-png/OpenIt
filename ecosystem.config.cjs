@@ -5,17 +5,17 @@
  *   1. 安装 PM2: npm install -g pm2
  *   2. 启动服务: pm2 start ecosystem.config.cjs
  *   3. 查看状态: pm2 status
- *   4. 查看日志: pm2 logs coriton-parts
+ *   4. 查看日志: pm2 logs openit
  *   5. 设置开机自启: pm2 startup && pm2 save
- *   6. 重启服务: pm2 restart coriton-parts
- *   7. 停止服务: pm2 stop coriton-parts
+ *   6. 重启服务: pm2 restart openit
+ *   7. 停止服务: pm2 stop openit
  */
 const logDir = process.env.PM2_LOG_DIR || "./logs";
 
 module.exports = {
   apps: [
     {
-      name: "cloudparts",
+      name: "openit",
       script: "dist/index.js",
       cwd: __dirname,
       interpreter: process.env.NODE_INTERPRETER || "node",

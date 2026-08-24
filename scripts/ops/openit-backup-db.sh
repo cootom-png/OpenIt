@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/www/wwwroot/openit.coriton.cn}"
-NODE_BIN="${NODE_BIN:-/www/server/nodejs/v22.23.1/bin/node}"
-BACKUP_DIR="${BACKUP_DIR:-/www/backup/cloudparts/openit_coriton_c}"
+APP_DIR="${APP_DIR:-/www/wwwroot/openit.cc}"
+NODE_BIN="${NODE_BIN:-/www/server/nodejs/v24.18.0/bin/node}"
+BACKUP_DIR="${BACKUP_DIR:-/www/backup/openit/openit_coriton_c}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 
 if [ ! -d "$APP_DIR" ]; then

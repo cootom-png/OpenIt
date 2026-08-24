@@ -1,0 +1,173 @@
+name: Deploy OpenIt
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "40-character commit SHA on main to deploy"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-openit-cc
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy exact OpenIt revision
+    runs-on: ubuntu-latest
+    environment: production-openit-cc
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate release SHA input
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${{ inputs.release_sha }}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release_sha must be a 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+
+      - name: Checkout exact release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Verify release is current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          current_main="$(git rev-parse origin/main)"
+          if [[ "$current_main" != "${{ inputs.release_sha }}" ]]; then
+            echo "Refusing deploy: release_sha is not current origin/main" >&2
+            echo "origin/main=$current_main" >&2
+            exit 1
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm build
+          test -f dist/index.js
+
+      - name: Create release package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp -a dist release/
+          cp -a scripts release/
+          cp package.json pnpm-lock.yaml pnpm-workspace.yaml ecosystem.config.cjs README.md LICENSE DEPLOYMENT.md release/
+          if [[ -d patches ]]; then cp -a patches release/; fi
+          tar -C release -czf "openit-${{ inputs.release_sha }}.tar.gz" .
+          sha256sum "openit-${{ inputs.release_sha }}.tar.gz" > "openit-${{ inputs.release_sha }}.tar.gz.sha256"
+
+      - name: Prepare SSH
+        shell: bash
+        env:
+          OPENIT_DEPLOY_SSH_KEY: ${{ secrets.OPENIT_DEPLOY_SSH_KEY }}
+          OPENIT_DEPLOY_KNOWN_HOSTS: ${{ secrets.OPENIT_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$OPENIT_DEPLOY_SSH_KEY" > ~/.ssh/openit_deploy
+          printf '%s\n' "$OPENIT_DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/openit_deploy ~/.ssh/known_hosts
+
+      - name: Upload release package
+        shell: bash
+        env:
+          OPENIT_DEPLOY_HOST: ${{ secrets.OPENIT_DEPLOY_HOST }}
+          OPENIT_DEPLOY_PORT: ${{ secrets.OPENIT_DEPLOY_PORT }}
+          OPENIT_DEPLOY_USER: ${{ secrets.OPENIT_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/openit_deploy -P "$OPENIT_DEPLOY_PORT" \
+            "openit-${{ inputs.release_sha }}.tar.gz" \
+            "openit-${{ inputs.release_sha }}.tar.gz.sha256" \
+            "$OPENIT_DEPLOY_USER@$OPENIT_DEPLOY_HOST:/tmp/"
+
+      - name: Install release and restart
+        shell: bash
+        env:
+          OPENIT_DEPLOY_HOST: ${{ secrets.OPENIT_DEPLOY_HOST }}
+          OPENIT_DEPLOY_PORT: ${{ secrets.OPENIT_DEPLOY_PORT }}
+          OPENIT_DEPLOY_USER: ${{ secrets.OPENIT_DEPLOY_USER }}
+          OPENIT_WEB_ROOT: ${{ secrets.OPENIT_WEB_ROOT }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/openit_deploy -p "$OPENIT_DEPLOY_PORT" "$OPENIT_DEPLOY_USER@$OPENIT_DEPLOY_HOST" \
+            "OPENIT_WEB_ROOT='$OPENIT_WEB_ROOT' RELEASE_SHA='$RELEASE_SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+          if [[ "$OPENIT_WEB_ROOT" != "/www/wwwroot/openit.cc" ]]; then
+            echo "Unexpected OPENIT_WEB_ROOT: $OPENIT_WEB_ROOT" >&2
+            exit 1
+          fi
+
+          NODE_DIR="/www/server/nodejs/v24.18.0/bin"
+          PM2="$NODE_DIR/pm2"
+          RELEASE_BASE="/www/deploy/openit/releases"
+          BACKUP_BASE="/www/backup/openit/releases"
+          PACKAGE="/tmp/openit-${RELEASE_SHA}.tar.gz"
+          CHECKSUM="/tmp/openit-${RELEASE_SHA}.tar.gz.sha256"
+          RELEASE_DIR="$RELEASE_BASE/$RELEASE_SHA"
+
+          test -f "$PACKAGE"
+          test -f "$CHECKSUM"
+          cd /tmp
+          sha256sum -c "$(basename "$CHECKSUM")"
+
+          mkdir -p "$RELEASE_DIR" "$BACKUP_BASE"
+          tar -xzf "$PACKAGE" -C "$RELEASE_DIR"
+          test -f "$RELEASE_DIR/dist/index.js"
+          test -f "$RELEASE_DIR/package.json"
+
+          if [[ -d "$OPENIT_WEB_ROOT/dist" ]]; then
+            tar -C "$OPENIT_WEB_ROOT" -czf "$BACKUP_BASE/openit-${RELEASE_SHA}-before.tar.gz" \
+              dist package.json pnpm-lock.yaml pnpm-workspace.yaml ecosystem.config.cjs scripts 2>/dev/null || true
+          fi
+
+          mkdir -p "$OPENIT_WEB_ROOT"
+          cp -a "$RELEASE_DIR"/. "$OPENIT_WEB_ROOT"/
+          cd "$OPENIT_WEB_ROOT"
+          PATH="$NODE_DIR:$PATH" corepack enable
+          PATH="$NODE_DIR:$PATH" corepack prepare pnpm@10.4.1 --activate
+          PATH="$NODE_DIR:$PATH" pnpm install --prod --frozen-lockfile
+          PATH="$NODE_DIR:$PATH" "$PM2" restart openit --update-env
+          PATH="$NODE_DIR:$PATH" "$PM2" save
+          printf '%s\n' "$RELEASE_SHA" > "$OPENIT_WEB_ROOT/.deploy-sha"
+          curl -fsS http://127.0.0.1:3000/healthz
+          REMOTE
+
+      - name: Verify production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://www.openit.cc/healthz | grep '"service":"openit"'
+          curl -fsSI https://www.openit.cc/cargo/ | head -20

@@ -1,7 +1,7 @@
 # 零件云图
 
 零件云图是一个面向工程师、制造企业、采购、销售和技术支持团队的在线 CAD、3D 模型、工程图纸、文档和压缩包预览平台。
-官网: http://openit.coriton.cn/
+官网: https://openit.cc/
 
 核心能力:
 - 在线预览 3D 模型文件: STP, STEP, STL, OBJ, 3MF, IGS, IGES
