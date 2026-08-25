@@ -17123,16 +17123,28 @@ function selectSceneItemsForRendering(i, t, e) {
         const o = Number.isInteger(a.containerIndex) && a.containerIndex >= 0 && a.containerIndex < n.length ? a.containerIndex : 0;
         n[o].push(a)
     }
-    let r = 0,
-        a = !0;
-    for (; s.length < e && a;) {
-        a = !1;
-        for (const o of n) {
-            if (r >= o.length || s.length >= e) continue;
-            s.push(o[r]), a = !0
-        }
-        r += 1
+    const r = n.map((a, o) => ({
+        items: a,
+        containerIndex: o,
+        ideal: a.length / i.length * e,
+        quota: a.length > 0 ? Math.min(a.length, Math.max(1, Math.floor(a.length / i.length * e))) : 0
+    })).filter(a => a.items.length > 0);
+    let a = r.reduce((o, c) => o + c.quota, 0);
+    for (; a > e;) {
+        const o = r.filter(c => c.quota > 1).sort((c, l) => l.quota - c.quota)[0];
+        if (!o) break;
+        o.quota -= 1, a -= 1
     }
+    for (; a < e;) {
+        const o = r.filter(c => c.quota < c.items.length).sort((c, l) => (l.ideal - l.quota) - (c.ideal - c.quota) || c.containerIndex - l.containerIndex)[0];
+        if (!o) break;
+        o.quota += 1, a += 1
+    }
+    for (const o of r)
+        for (let c = 0; c < o.quota; c += 1) {
+            const l = Math.min(o.items.length - 1, Math.floor((c + .5) * o.items.length / o.quota));
+            s.push(o.items[l])
+        }
     return s
 }
 class Mm {
@@ -17184,7 +17196,8 @@ class Mm {
             rendered: s.length,
             total: e.length,
             limited: s.length < e.length,
-            renderedByContainer: Array.from({ length: this.containerCount }, (_, a) => s.filter(o => o.containerIndex === a).length)
+            renderedByContainer: Array.from({ length: this.containerCount }, (_, a) => s.filter(o => o.containerIndex === a).length),
+            totalByContainer: Array.from({ length: this.containerCount }, (_, a) => e.filter(o => o.containerIndex === a).length)
         }
     }
     setView(t) {

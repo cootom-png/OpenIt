@@ -18,20 +18,20 @@ function items(containerIndex, quantity) {
   return Array.from({ length: quantity }, (_, index) => ({ containerIndex, index }));
 }
 
-test("600-item render cap samples both loaded containers", () => {
+test("render quota follows each container's actual carton share", () => {
   const selectItems = loadSelector();
   const selected = selectItems([...items(0, 1100), ...items(1, 656)], 2, 600);
   assert.equal(selected.length, 600);
-  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 300);
-  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 300);
+  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 376);
+  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 224);
 });
 
-test("unused quota from a small container is reassigned", () => {
+test("very uneven loads remain visible without overstating the small container", () => {
   const selectItems = loadSelector();
   const selected = selectItems([...items(0, 10), ...items(1, 1000)], 2, 600);
   assert.equal(selected.length, 600);
-  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 10);
-  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 590);
+  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 6);
+  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 594);
 });
 
 test("empty configured containers do not consume render quota", () => {
@@ -49,4 +49,17 @@ test("plans below the cap keep their original order", () => {
   const selected = selectItems(source, 2, 600);
   assert.equal(selected.length, source.length);
   selected.forEach((item, index) => assert.equal(item, source[index]));
+});
+
+test("sampling spans the full placement sequence inside every container", () => {
+  const selectItems = loadSelector();
+  const selected = selectItems([...items(0, 352), ...items(1, 388), ...items(2, 340)], 3, 600);
+  const byContainer = [0, 1, 2].map((containerIndex) =>
+    selected.filter((item) => item.containerIndex === containerIndex),
+  );
+  assert.deepEqual(byContainer.map((group) => group.length), [196, 215, 189]);
+  assert.ok(byContainer.every((group) => group[0].index <= 1));
+  assert.ok(byContainer[0].at(-1).index >= 350);
+  assert.ok(byContainer[1].at(-1).index >= 386);
+  assert.ok(byContainer[2].at(-1).index >= 338);
 });
