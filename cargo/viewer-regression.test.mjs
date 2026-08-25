@@ -10,7 +10,7 @@ function loadRenderingHelpers() {
   assert.ok(start >= 0 && end > start, "render compactor must exist in the production bundle");
   const context = {};
   vm.createContext(context);
-  vm.runInContext(`${bundle.slice(start, end)};globalThis.helpers={compact:compactSceneItemsForRendering,dividers:buildBatchDividerPositions}`, context);
+  vm.runInContext(`const Ee=.001;${bundle.slice(start, end)};globalThis.helpers={compact:compactSceneItemsForRendering,dividers:buildBatchDividerPositions}`, context);
   return context.helpers;
 }
 
@@ -87,6 +87,23 @@ test("one line-segment geometry contains every internal carton divider", () => {
   const [batch] = compact(Array.from({ length: 23 }, (_, x) => box({ x: x * 520, sequence: x + 1 })));
   const positions = dividers(batch);
   assert.equal(positions.length, 22 * 8 * 3);
-  assert.equal(Math.min(...positions.filter((_, index) => index % 3 === 0)), -5460);
-  assert.equal(Math.max(...positions.filter((_, index) => index % 3 === 0)), 5460);
+  assert.ok(Math.abs(Math.min(...positions.filter((_, index) => index % 3 === 0)) + 5.46) < 1e-9);
+  assert.ok(Math.abs(Math.max(...positions.filter((_, index) => index % 3 === 0)) - 5.46) < 1e-9);
+  assert.ok(positions.every((value, index) => Math.abs(value) <= [5.98, 0.155, 0.19][index % 3] + 1e-9));
+});
+
+test("CB-3012 row dividers stay inside a 14-carton render batch", () => {
+  const { compact, dividers } = loadRenderingHelpers();
+  const [batch] = compact(Array.from({ length: 14 }, (_, x) => box({
+    x: x * 680,
+    length: 680,
+    width: 420,
+    height: 760,
+    sku: "CB-3012",
+    sequence: x + 1,
+  })));
+  const positions = dividers(batch);
+  assert.equal(batch.dimensionsMm.length, 9520);
+  assert.equal(positions.length, 13 * 8 * 3);
+  assert.ok(positions.every((value, index) => Math.abs(value) <= [4.76, 0.38, 0.21][index % 3] + 1e-9));
 });
