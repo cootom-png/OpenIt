@@ -159,6 +159,9 @@ function Sl(i, t) {
     return e.filter(n => n.length > Vt && n.width > Vt && n.height > Vt)
 }
 
+function orientationCapacityScore(i, t) {
+    return Math.floor(i.length / t.lengthMm + Vt) * Math.floor(i.width / t.widthMm + Vt) * Math.floor(i.height / t.heightMm + Vt)
+}
 function El(i) {
     return {
         enforceSupport: i?.enforceSupport ?? !0,
@@ -264,7 +267,7 @@ class yl {
                                     z.x < E.box.x - Vt ||
                                     Math.abs(z.x - E.box.x) <= Vt && z.z < E.box.z - Vt ||
                                     Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && z.y < E.box.y - Vt ||
-                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && st > P);
+                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && (st > P || Math.abs(st - P) <= Vt && orientationCapacityScore(b, O) > orientationCapacityScore(b, E.orientation)));
                                 isEarlierLoadPosition && (P = st, E = {
                                     box: z,
                                     orientation: O,
@@ -1031,7 +1034,7 @@ function zl(i) {
         allowHorizontalRotation: t.rotate,
         allowSideLoading: t.side,
         allowUpsideDown: !1,
-        mustStayUpright: !0,
+        mustStayUpright: !t.side,
         stackable: !0,
         palletPolicy: i.mode === "pallet" ? "required" : "auto",
         priority: e

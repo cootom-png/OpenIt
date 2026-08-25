@@ -128,3 +128,40 @@ test("configured gap changes whether a 280 mm section remainder may be reused", 
   assert.equal(compactSmallStart, 4000);
   assert.equal(relaxedSmallStart, 0);
 });
+
+function solveScreenshotCase({ rotate, side }) {
+  return loadLooseCargoSolver()({
+    products: [
+      {
+        sku: "BX-1001",
+        lengthMm: 320,
+        widthMm: 900,
+        heightMm: 310,
+        weightG: 8500,
+        quantity: 600,
+        allowHorizontalRotation: rotate,
+        allowSideLoading: side,
+        allowUpsideDown: false,
+        mustStayUpright: !side,
+        stackable: true,
+      },
+    ],
+    containerTypes: [container],
+    minimumSupportRatio: 1,
+    looseCargoMaxGapMm: 50,
+  });
+}
+
+test("horizontal rotation fills the screenshot case side lane", () => {
+  const result = solveScreenshotCase({ rotate: true, side: false });
+  assert.equal(result.placements.length, 600);
+  assert.deepEqual(result.unloaded, []);
+  assert.ok(result.placements.some((placement) => placement.orientation.code === "WLH"));
+});
+
+test("side loading fills the screenshot case when horizontal rotation is disabled", () => {
+  const result = solveScreenshotCase({ rotate: false, side: true });
+  assert.equal(result.placements.length, 600);
+  assert.deepEqual(result.unloaded, []);
+  assert.ok(result.placements.some((placement) => placement.orientation.sideLoaded));
+});
