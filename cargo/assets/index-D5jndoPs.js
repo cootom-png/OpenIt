@@ -17104,36 +17104,58 @@ function xm(i) {
         capture: !0
     }))
 }
-const Ee = .001,
-    vm = 600;
+const Ee = .001;
 
 function Co(i) {
-    const t = i.dimensionsMm,
+    const t = i.unitDimensionsMm ?? i.dimensionsMm,
         e = i.originMm;
-    return `<strong>${i.sku}</strong><br>${i.loadSequence?`装载顺序：第 ${i.loadSequence} 箱<br>`:""}实际尺寸：${t.length} × ${t.width} × ${t.height} mm<br>坐标：(${e.x}, ${e.y}, ${e.z}) mm<br>朝向：${i.orientation}`
+    return `<strong>${i.sku}</strong><br>${i.batchCount>1?`批量渲染：${i.batchCount} 箱<br>装载顺序：第 ${i.loadSequenceStart}–${i.loadSequenceEnd} 箱<br>`:i.loadSequence?`装载顺序：第 ${i.loadSequence} 箱<br>`:""}单箱尺寸：${t.length} × ${t.width} × ${t.height} mm<br>坐标：(${e.x}, ${e.y}, ${e.z}) mm<br>朝向：${i.orientation}`
 }
 
-function selectSceneItemsForRendering(i, t, e) {
-    if (i.length <= e) return [...i];
-    const n = Array.from({
-            length: Math.max(1, t)
-        }, () => []),
-        s = [];
-    for (const a of i) {
-        const o = Number.isInteger(a.containerIndex) && a.containerIndex >= 0 && a.containerIndex < n.length ? a.containerIndex : 0;
-        n[o].push(a)
+function compactSceneItemsForRendering(i) {
+    const t = new Map;
+    for (const e of i) {
+        const n = e.dimensionsMm,
+            s = e.originMm,
+            r = [e.containerIndex, e.kind, e.sku, e.color, e.orientation, n.length, n.width, n.height, s.y, s.z].join("|");
+        t.has(r) || t.set(r, []), t.get(r).push(e)
     }
-    let r = 0,
-        a = !0;
-    for (; s.length < e && a;) {
-        a = !1;
-        for (const o of n) {
-            if (r >= o.length || s.length >= e) continue;
-            s.push(o[r]), a = !0
+    const e = [];
+    for (const n of t.values()) {
+        n.sort((r, a) => r.originMm.x - a.originMm.x || (r.loadSequence ?? 0) - (a.loadSequence ?? 0));
+        let s = null;
+        for (const r of n) {
+            const a = s && Math.abs(r.originMm.x - (s.originMm.x + s.dimensionsMm.length)) <= 1e-6;
+            if (a) {
+                s.dimensionsMm.length += r.dimensionsMm.length, s.centerMm.x = s.originMm.x + s.dimensionsMm.length / 2, s.batchCount += 1, s.loadSequenceEnd = r.loadSequence ?? s.loadSequenceEnd;
+                continue
+            }
+            s = {
+                ...r,
+                originMm: { ...r.originMm },
+                centerMm: { ...r.centerMm },
+                dimensionsMm: { ...r.dimensionsMm },
+                unitDimensionsMm: { ...r.dimensionsMm },
+                batchCount: 1,
+                loadSequenceStart: r.loadSequence,
+                loadSequenceEnd: r.loadSequence
+            }, e.push(s)
         }
-        r += 1
     }
-    return s
+    return e.sort((n, s) => n.containerIndex - s.containerIndex || (n.loadSequenceStart ?? 0) - (s.loadSequenceStart ?? 0))
+}
+
+function buildBatchDividerPositions(i) {
+    if (!i.unitDimensionsMm || i.batchCount <= 1) return [];
+    const t = [],
+        e = i.dimensionsMm.length / 2,
+        n = i.dimensionsMm.height / 2,
+        s = i.dimensionsMm.width / 2;
+    for (let r = 1; r < i.batchCount; r += 1) {
+        const a = -e + r * i.unitDimensionsMm.length;
+        t.push(a, -n, -s, a, n, -s, a, n, -s, a, n, s, a, n, s, a, -n, s, a, -n, s, a, -n, -s)
+    }
+    return t
 }
 class Mm {
     constructor(t) {
@@ -17176,15 +17198,16 @@ class Mm {
                 color: "#8794a1"
             }, o)),
             n = t.sceneItems ? [] : t.plan.pallets.map(Bl),
-            s = selectSceneItemsForRendering(e, this.containerCount, vm),
+            s = compactSceneItemsForRendering(e),
             r = [...n, ...s];
         for (let a = 0; a < this.containerCount; a += 1) this.addContainer(a);
         for (const a of r) this.addItem(a);
         return this.addGround(), this.setView("3d"), {
-            rendered: s.length,
+            rendered: e.length,
             total: e.length,
-            limited: s.length < e.length,
-            renderedByContainer: Array.from({ length: this.containerCount }, (_, a) => s.filter(o => o.containerIndex === a).length)
+            limited: !1,
+            renderPrimitives: s.length,
+            renderedByContainer: Array.from({ length: this.containerCount }, (_, a) => e.filter(o => o.containerIndex === a).length)
         }
     }
     setView(t) {
@@ -17230,7 +17253,16 @@ class Mm {
             transparent: !0,
             opacity: .72
         }));
-        a.position.copy(r.position), this.content.add(a)
+        if (a.position.copy(r.position), this.content.add(a), t.batchCount > 1) {
+            const o = new un;
+            o.setAttribute("position", new Ze(buildBatchDividerPositions(t), 3));
+            const c = new Ka(o, new Kr({
+                color: 2504776,
+                transparent: !0,
+                opacity: .72
+            }));
+            c.position.copy(r.position), this.content.add(c)
+        }
     }
     addGround() {
         const t = this.container.l * Ee,

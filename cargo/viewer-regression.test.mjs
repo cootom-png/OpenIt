@@ -3,50 +3,90 @@ import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-function loadSelector() {
+function loadRenderingHelpers() {
   const bundle = fs.readFileSync(new URL("./assets/index-D5jndoPs.js", import.meta.url), "utf8");
-  const start = bundle.indexOf("function selectSceneItemsForRendering");
+  const start = bundle.indexOf("function compactSceneItemsForRendering");
   const end = bundle.indexOf("class Mm", start);
-  assert.ok(start >= 0 && end > start, "render selector must exist in the production bundle");
+  assert.ok(start >= 0 && end > start, "render compactor must exist in the production bundle");
   const context = {};
   vm.createContext(context);
-  vm.runInContext(`${bundle.slice(start, end)};globalThis.selectItems=selectSceneItemsForRendering`, context);
-  return context.selectItems;
+  vm.runInContext(`${bundle.slice(start, end)};globalThis.helpers={compact:compactSceneItemsForRendering,dividers:buildBatchDividerPositions}`, context);
+  return context.helpers;
 }
 
-function items(containerIndex, quantity) {
-  return Array.from({ length: quantity }, (_, index) => ({ containerIndex, index }));
+function box({ x, y = 0, z = 0, sku = "BX-1001", length = 520, width = 380, height = 310, sequence = 1 }) {
+  return {
+    containerIndex: 0,
+    kind: "cargo",
+    sku,
+    color: "#3478df",
+    orientation: "LWH",
+    originMm: { x, y, z },
+    centerMm: { x: x + length / 2, y: y + width / 2, z: z + height / 2 },
+    dimensionsMm: { length, width, height },
+    loadSequence: sequence,
+  };
 }
 
-test("600-item render cap samples both loaded containers", () => {
-  const selectItems = loadSelector();
-  const selected = selectItems([...items(0, 1100), ...items(1, 656)], 2, 600);
-  assert.equal(selected.length, 600);
-  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 300);
-  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 300);
+test("23 by 6 by 8 grid renders every carton as 48 contiguous row batches", () => {
+  const { compact } = loadRenderingHelpers();
+  const source = [];
+  let sequence = 1;
+  for (let z = 0; z < 8; z += 1) {
+    for (let y = 0; y < 6; y += 1) {
+      for (let x = 0; x < 23; x += 1) {
+        source.push(box({ x: x * 520, y: y * 380, z: z * 310, sequence: sequence++ }));
+      }
+    }
+  }
+  const batches = compact(source);
+  assert.equal(source.length, 1104);
+  assert.equal(batches.length, 48);
+  assert.equal(batches.reduce((sum, batch) => sum + batch.batchCount, 0), 1104);
+  assert.ok(batches.every((batch) => batch.batchCount === 23));
+  assert.ok(batches.every((batch) => batch.dimensionsMm.length === 11960));
+  assert.equal(Math.max(...batches.map((batch) => batch.originMm.x + batch.dimensionsMm.length)), 11960);
+  assert.equal(Math.max(...batches.map((batch) => batch.originMm.y + batch.dimensionsMm.width)), 2280);
+  assert.equal(Math.max(...batches.map((batch) => batch.originMm.z + batch.dimensionsMm.height)), 2480);
 });
 
-test("unused quota from a small container is reassigned", () => {
-  const selectItems = loadSelector();
-  const selected = selectItems([...items(0, 10), ...items(1, 1000)], 2, 600);
-  assert.equal(selected.length, 600);
-  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 10);
-  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 590);
+test("a physical gap prevents cartons from merging", () => {
+  const { compact } = loadRenderingHelpers();
+  const batches = compact([box({ x: 0, sequence: 1 }), box({ x: 570, sequence: 2 })]);
+  assert.equal(batches.length, 2);
+  assert.ok(batches.every((batch) => batch.batchCount === 1));
 });
 
-test("empty configured containers do not consume render quota", () => {
-  const selectItems = loadSelector();
-  const selected = selectItems([...items(0, 400), ...items(2, 400)], 3, 600);
-  assert.equal(selected.length, 600);
-  assert.equal(selected.filter((item) => item.containerIndex === 0).length, 300);
-  assert.equal(selected.filter((item) => item.containerIndex === 1).length, 0);
-  assert.equal(selected.filter((item) => item.containerIndex === 2).length, 300);
+test("different SKUs and dimensions remain separate", () => {
+  const { compact } = loadRenderingHelpers();
+  const batches = compact([
+    box({ x: 0, sequence: 1 }),
+    box({ x: 520, sku: "OTHER", sequence: 2 }),
+    box({ x: 1040, length: 680, sequence: 3 }),
+  ]);
+  assert.equal(batches.length, 3);
 });
 
-test("plans below the cap keep their original order", () => {
-  const selectItems = loadSelector();
-  const source = [...items(0, 2), ...items(1, 2)];
-  const selected = selectItems(source, 2, 600);
-  assert.equal(selected.length, source.length);
-  selected.forEach((item, index) => assert.equal(item, source[index]));
+test("batch metadata retains unit dimensions and sequence range", () => {
+  const { compact } = loadRenderingHelpers();
+  const [batch] = compact([
+    box({ x: 0, sequence: 41 }),
+    box({ x: 520, sequence: 42 }),
+    box({ x: 1040, sequence: 43 }),
+  ]);
+  assert.equal(batch.batchCount, 3);
+  assert.equal(batch.loadSequenceStart, 41);
+  assert.equal(batch.loadSequenceEnd, 43);
+  assert.equal(batch.unitDimensionsMm.length, 520);
+  assert.equal(batch.dimensionsMm.length, 1560);
+  assert.equal(batch.centerMm.x, 780);
+});
+
+test("one line-segment geometry contains every internal carton divider", () => {
+  const { compact, dividers } = loadRenderingHelpers();
+  const [batch] = compact(Array.from({ length: 23 }, (_, x) => box({ x: x * 520, sequence: x + 1 })));
+  const positions = dividers(batch);
+  assert.equal(positions.length, 22 * 8 * 3);
+  assert.equal(Math.min(...positions.filter((_, index) => index % 3 === 0)), -5460);
+  assert.equal(Math.max(...positions.filter((_, index) => index % 3 === 0)), 5460);
 });
