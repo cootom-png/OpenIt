@@ -17148,11 +17148,11 @@ function compactSceneItemsForRendering(i) {
 function buildBatchDividerPositions(i) {
     if (!i.unitDimensionsMm || i.batchCount <= 1) return [];
     const t = [],
-        e = i.dimensionsMm.length / 2,
-        n = i.dimensionsMm.height / 2,
-        s = i.dimensionsMm.width / 2;
+        e = i.dimensionsMm.length * Ee / 2,
+        n = i.dimensionsMm.height * Ee / 2,
+        s = i.dimensionsMm.width * Ee / 2;
     for (let r = 1; r < i.batchCount; r += 1) {
-        const a = -e + r * i.unitDimensionsMm.length;
+        const a = -e + r * i.unitDimensionsMm.length * Ee;
         t.push(a, -n, -s, a, n, -s, a, n, -s, a, n, s, a, n, s, a, -n, s, a, -n, s, a, -n, -s)
     }
     return t
