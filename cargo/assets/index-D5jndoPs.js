@@ -236,8 +236,9 @@ class yl {
                                 const N = O.heightMm,
                                     q = Math.floor(b.height / N + Vt);
                                 if (q < 1) continue;
-                                // Place one carton at a time so lower, deeper positions are
-                                // exhausted before the solver builds an outer vertical column.
+                                // Place one carton at a time. Fill the deepest longitudinal
+                                // section from bottom to top before advancing toward the door,
+                                // leaving one continuous empty area for later products.
                                 let V = 1;
                                 if (this.options.enforceSupport) {
                                     const tt = Nn(b.x, b.y, b.z, O.lengthMm, O.widthMm, O.heightMm);
@@ -254,10 +255,10 @@ class yl {
                                 if (z.x2 > b.x2 + Vt || z.y2 > b.y2 + Vt || z.z2 > b.z2 + Vt) continue;
                                 const st = z.length * z.width * z.height,
                                     isEarlierLoadPosition = E === null ||
-                                    z.z < E.box.z - Vt ||
-                                    Math.abs(z.z - E.box.z) <= Vt && z.x < E.box.x - Vt ||
-                                    Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.x - E.box.x) <= Vt && z.y < E.box.y - Vt ||
-                                    Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.y - E.box.y) <= Vt && st > P;
+                                    z.x < E.box.x - Vt ||
+                                    Math.abs(z.x - E.box.x) <= Vt && z.z < E.box.z - Vt ||
+                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && z.y < E.box.y - Vt ||
+                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && st > P;
                                 isEarlierLoadPosition && (P = st, E = {
                                     box: z,
                                     orientation: O,
@@ -324,7 +325,7 @@ class yl {
                 containersUsed: m.size
             },
             warnings: x,
-            solverVersion: "inside-out-layer-first/0.2.0"
+            solverVersion: "inside-section-compact/0.3.0"
         }
     }
 }
