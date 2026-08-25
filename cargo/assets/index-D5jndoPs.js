@@ -195,6 +195,7 @@ class yl {
             l = e.map(_ => ({
                 ..._
             }));
+        const looseCargoMaxGapMm = Math.max(0, t.looseCargoMaxGapMm ?? 50);
         for (const {
                 containerIndex: _,
                 type: u
@@ -254,17 +255,23 @@ class yl {
                                     z = Nn(b.x, b.y, b.z, O.lengthMm, O.widthMm, K);
                                 if (z.x2 > b.x2 + Vt || z.y2 > b.y2 + Vt || z.z2 > b.z2 + Vt) continue;
                                 const st = z.length * z.width * z.height,
+                                    isBoundedSectionSpace = b.length < u.innerLengthMm - b.x - Vt,
+                                    longitudinalRemainder = Math.max(0, b.length - O.lengthMm),
+                                    fragmentsCurrentSection = isBoundedSectionSpace && longitudinalRemainder > looseCargoMaxGapMm + Vt,
                                     isEarlierLoadPosition = E === null ||
+                                    E.fragmentsCurrentSection && !fragmentsCurrentSection ||
+                                    E.fragmentsCurrentSection === fragmentsCurrentSection && (
                                     z.x < E.box.x - Vt ||
                                     Math.abs(z.x - E.box.x) <= Vt && z.z < E.box.z - Vt ||
                                     Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && z.y < E.box.y - Vt ||
-                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && st > P;
+                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && st > P);
                                 isEarlierLoadPosition && (P = st, E = {
                                     box: z,
                                     orientation: O,
                                     height: N,
                                     count: V,
-                                    productIndex: S.productIndex
+                                    productIndex: S.productIndex,
+                                    fragmentsCurrentSection
                                 })
                             }
                         }
@@ -311,8 +318,11 @@ class yl {
             f = c.reduce((_, u) => _ + u.orientation.lengthMm * u.orientation.widthMm * u.orientation.heightMm, 0),
             p = c.reduce((_, u) => _ + (t.products[u.productIndex]?.weightG ?? 0), 0),
             m = new Set(c.map(_ => _.containerIndex)),
+            gapStats = computeLooseGapStats(c, looseCargoMaxGapMm),
             x = [];
-        return d.length > 0 && x.push("存在未能装入的货物，请增加容器数量或放宽约束。"), {
+        d.length > 0 && x.push("存在未能装入的货物，请增加容器数量或放宽约束。");
+        gapStats.oversizedGapCount > 0 && x.push(`检测到 ${gapStats.oversizedGapCount} 处纵向内部空隙超过 ${looseCargoMaxGapMm} mm（最大 ${Math.round(gapStats.maxInternalGapMm)} mm），请调整箱型组合或使用衬垫、充气袋、挡木固定。`);
+        return {
             placements: c,
             unloaded: d,
             metrics: {
@@ -322,12 +332,45 @@ class yl {
                 loadedWeightG: p,
                 containerPayloadG: o,
                 weightRatio: o > 0 ? p / o : 0,
-                containersUsed: m.size
+                containersUsed: m.size,
+                maxInternalGapMm: gapStats.maxInternalGapMm,
+                oversizedGapCount: gapStats.oversizedGapCount,
+                looseCargoMaxGapMm
             },
             warnings: x,
-            solverVersion: "inside-section-compact/0.3.0"
+            solverVersion: "cross-section-compact/0.4.0"
         }
     }
+}
+
+function computeLooseGapStats(i, t) {
+    let e = 0;
+    const n = new Set,
+        s = new Map;
+    for (const r of i) {
+        const a = s.get(r.containerIndex) ?? [];
+        a.push(r);
+        s.set(r.containerIndex, a)
+    }
+    for (const r of s.values()) r.sort((a, o) => a.x - o.x);
+    for (const r of i) {
+        const a = r.x + r.orientation.lengthMm,
+            o = s.get(r.containerIndex) ?? [];
+        let c = Number.POSITIVE_INFINITY;
+        for (const d of o) {
+            if (d === r || d.x < a - Vt) continue;
+            if (Number.isFinite(c) && d.x - a > c + Vt) break;
+            const l = Math.min(r.y + r.orientation.widthMm, d.y + d.orientation.widthMm) - Math.max(r.y, d.y),
+                h = Math.min(r.z + r.orientation.heightMm, d.z + d.orientation.heightMm) - Math.max(r.z, d.z);
+            if (l <= Vt || h <= Vt) continue;
+            c = Math.min(c, d.x - a)
+        }
+        if (Number.isFinite(c) && c > t + Vt) {
+            n.add(`${r.containerIndex}:${Math.round(a)}:${Math.round(a+c)}`);
+            e = Math.max(e, c)
+        }
+    }
+    return { maxInternalGapMm: e, oversizedGapCount: n.size }
 }
 
 function Tl(i, t, e) {
@@ -1036,7 +1079,8 @@ function Gl(i) {
         products: zl(i),
         palletTypes: i.pallet ? [kl(i.pallet)] : [],
         containerTypes: [Hl(i.container)],
-        minimumSupportRatio: 1
+        minimumSupportRatio: 1,
+        looseCargoMaxGapMm: Math.max(0, i.looseCargoMaxGapMm ?? 50)
     }
 }
 
@@ -1058,7 +1102,10 @@ function va(i, t, e, n) {
         metrics: {
             volumeRatio: i.metrics.volumeRatio,
             weightRatio: i.metrics.weightRatio,
-            containersUsed: i.metrics.containersUsed
+            containersUsed: i.metrics.containersUsed,
+            maxInternalGapMm: i.metrics.maxInternalGapMm ?? 0,
+            oversizedGapCount: i.metrics.oversizedGapCount ?? 0,
+            looseCargoMaxGapMm: i.metrics.looseCargoMaxGapMm ?? 50
         },
         solverVersion: i.solverVersion,
         palletsUsed: e

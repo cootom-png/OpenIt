@@ -62,5 +62,34 @@ document.getElementById('solve').onclick=solve;
 function renderResult(rows,loaded,all,vRate,wRate,cq,type,plan,solverResult){let cap=capacities[type],usedContainers=Math.max(1,solverResult.metrics.containersUsed);document.getElementById('loadedMetric').textContent=`${loaded} / ${all}`;document.getElementById('volumeMetric').innerHTML=`${vRate.toFixed(1)}% <em>正式求解</em>`;document.getElementById('weightMetric').textContent=`${wRate.toFixed(1)}%`;document.getElementById('containerMetric').textContent=`${usedContainers} / ${cq} × ${type}`;document.getElementById('resultSub').textContent=mode==='pallet'?`正式求解器 · ${solverResult.palletsUsed} 托 · ${solverResult.solverVersion}`:`正式求解器 · ${solverResult.solverVersion}`;document.getElementById('empty').classList.add('hidden');document.getElementById('scene').classList.remove('hidden');let renderInfo=window.cargoViewer.render({container:cap,containerCount:usedContainers,plan,products:rows,sceneItems:solverResult.sceneItems});let status=document.getElementById('renderStatus');status.classList.remove('hidden');status.textContent=renderInfo.limited?`已渲染 ${renderInfo.rendered} / 已装 ${renderInfo.total}（为保证流畅，三维渲染上限 600 箱）`:`已渲染 ${renderInfo.rendered} / 已装 ${renderInfo.total}`;let occupiedLength=Math.max(0,...plan.placements.map(p=>p.x+p.l)),doorFree=Math.max(0,cap.l-occupiedLength),note=document.getElementById('dimensionNote');note.classList.remove('hidden');note.textContent=`已占用长 ${Math.round(occupiedLength)} mm · 门口连续空余 ${Math.round(doorFree)} mm`;document.getElementById('legend').innerHTML=rows.map(p=>`<span><i class="dot" style="background:${p.color}"></i>${p.sku} · ${p.loaded} 箱</span>`).join('')+`<span class="count-note">左键旋转 · 滚轮缩放 · 右键平移 · 点击固定信息</span>`;document.getElementById('resultList').innerHTML='<div class="resultrow head"><span>产品</span><span>已装</span><span>剩余</span><span>状态</span></div>'+rows.map(p=>`<div class="resultrow"><span><b>${p.name}</b><small style="display:block;color:var(--muted)">${p.sku}</small></span><span>${p.loaded}</span><span>${p.left}</span><span><i class="badge">${p.left?'部分装载':'已装完'}</i></span></div>`).join('');let left=all-loaded,w=document.getElementById('warning');w.classList.toggle('hidden',left===0);w.textContent=left?`有 ${left} 箱未装入。请增加柜数或调整尺寸、朝向和装载条件。`:''}
 document.getElementById('exportBtn').onclick=()=>alert('原型提示：正式版本将在这里导出 Excel / PDF 装柜清单。');
 </script>
+<script>
+// Turn the displayed loose-cargo gap into a real solver input.
+const looseGapField=document.querySelector('input[aria-label^="散箱允许最大空隙"]');
+if(looseGapField){
+  looseGapField.readOnly=false;
+  looseGapField.type='number';
+  looseGapField.id='looseCargoMaxGap';
+  looseGapField.value='50';
+  looseGapField.min='0';
+  looseGapField.step='10';
+  looseGapField.closest('.field').querySelector('label').textContent='散箱允许最大空隙（mm）';
+}
+const baseCargoSolve=window.cargoSolver.solve;
+window.cargoSolver.solve=input=>{
+  const configuredGap=Number(document.getElementById('looseCargoMaxGap')?.value);
+  if(!Number.isInteger(configuredGap)||configuredGap<0)throw new Error('散箱允许最大空隙必须是大于等于 0 的整数。');
+  const result=baseCargoSolve({...input,looseCargoMaxGapMm:configuredGap});
+  window.latestCargoGapWarnings=result.warnings||[];
+  return result;
+};
+const warningNode=document.getElementById('warning');
+new MutationObserver(()=>{
+  const gapWarnings=(window.latestCargoGapWarnings||[]).filter(message=>message.includes('内部空隙'));
+  if(gapWarnings.length){
+    warningNode.classList.remove('hidden');
+    warningNode.textContent=gapWarnings.join(' ');
+  }
+}).observe(document.getElementById('loadedMetric'),{childList:true,subtree:true});
+</script>
 </body>
 </html>
