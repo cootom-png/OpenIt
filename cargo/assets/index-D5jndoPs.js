@@ -17112,6 +17112,29 @@ function Co(i) {
         e = i.originMm;
     return `<strong>${i.sku}</strong><br>${i.loadSequence?`装载顺序：第 ${i.loadSequence} 箱<br>`:""}实际尺寸：${t.length} × ${t.width} × ${t.height} mm<br>坐标：(${e.x}, ${e.y}, ${e.z}) mm<br>朝向：${i.orientation}`
 }
+
+function selectSceneItemsForRendering(i, t, e) {
+    if (i.length <= e) return [...i];
+    const n = Array.from({
+            length: Math.max(1, t)
+        }, () => []),
+        s = [];
+    for (const a of i) {
+        const o = Number.isInteger(a.containerIndex) && a.containerIndex >= 0 && a.containerIndex < n.length ? a.containerIndex : 0;
+        n[o].push(a)
+    }
+    let r = 0,
+        a = !0;
+    for (; s.length < e && a;) {
+        a = !1;
+        for (const o of n) {
+            if (r >= o.length || s.length >= e) continue;
+            s.push(o[r]), a = !0
+        }
+        r += 1
+    }
+    return s
+}
 class Mm {
     constructor(t) {
         this.host = t, this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)), this.renderer.outputColorSpace = Ie, this.renderer.shadowMap.enabled = !0, this.renderer.shadowMap.type = Lo, this.renderer.domElement.className = "cargo-canvas", this.host.append(this.renderer.domElement), this.tooltip = document.createElement("div"), this.tooltip.className = "cargo-tooltip hidden", this.selection = document.createElement("div"), this.selection.className = "cargo-selection hidden", this.host.append(this.tooltip, this.selection), this.scene.background = new Ht(16054266), this.scene.add(this.content), this.scene.add(new ph(16777215, 7042432, 2.2));
@@ -17153,14 +17176,15 @@ class Mm {
                 color: "#8794a1"
             }, o)),
             n = t.sceneItems ? [] : t.plan.pallets.map(Bl),
-            s = e.slice(0, vm),
+            s = selectSceneItemsForRendering(e, this.containerCount, vm),
             r = [...n, ...s];
         for (let a = 0; a < this.containerCount; a += 1) this.addContainer(a);
         for (const a of r) this.addItem(a);
         return this.addGround(), this.setView("3d"), {
             rendered: s.length,
             total: e.length,
-            limited: s.length < e.length
+            limited: s.length < e.length,
+            renderedByContainer: Array.from({ length: this.containerCount }, (_, a) => s.filter(o => o.containerIndex === a).length)
         }
     }
     setView(t) {
