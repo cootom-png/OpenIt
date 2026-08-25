@@ -17144,6 +17144,19 @@ function compactSceneItemsForRendering(i) {
     }
     return e.sort((n, s) => n.containerIndex - s.containerIndex || (n.loadSequenceStart ?? 0) - (s.loadSequenceStart ?? 0))
 }
+
+function buildBatchDividerPositions(i) {
+    if (!i.unitDimensionsMm || i.batchCount <= 1) return [];
+    const t = [],
+        e = i.dimensionsMm.length / 2,
+        n = i.dimensionsMm.height / 2,
+        s = i.dimensionsMm.width / 2;
+    for (let r = 1; r < i.batchCount; r += 1) {
+        const a = -e + r * i.unitDimensionsMm.length;
+        t.push(a, -n, -s, a, n, -s, a, n, -s, a, n, s, a, n, s, a, -n, s, a, -n, s, a, -n, -s)
+    }
+    return t
+}
 class Mm {
     constructor(t) {
         this.host = t, this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)), this.renderer.outputColorSpace = Ie, this.renderer.shadowMap.enabled = !0, this.renderer.shadowMap.type = Lo, this.renderer.domElement.className = "cargo-canvas", this.host.append(this.renderer.domElement), this.tooltip = document.createElement("div"), this.tooltip.className = "cargo-tooltip hidden", this.selection = document.createElement("div"), this.selection.className = "cargo-selection hidden", this.host.append(this.tooltip, this.selection), this.scene.background = new Ht(16054266), this.scene.add(this.content), this.scene.add(new ph(16777215, 7042432, 2.2));
@@ -17240,7 +17253,16 @@ class Mm {
             transparent: !0,
             opacity: .72
         }));
-        a.position.copy(r.position), this.content.add(a)
+        if (a.position.copy(r.position), this.content.add(a), t.batchCount > 1) {
+            const o = new un;
+            o.setAttribute("position", new Ze(buildBatchDividerPositions(t), 3));
+            const c = new Ka(o, new Kr({
+                color: 2504776,
+                transparent: !0,
+                opacity: .72
+            }));
+            c.position.copy(r.position), this.content.add(c)
+        }
     }
     addGround() {
         const t = this.container.l * Ee,
