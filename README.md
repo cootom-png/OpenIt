@@ -7,6 +7,7 @@ Try it at [openit.cc](https://openit.cc), or self-host it on your own server if 
 ## Features
 
 - CAD and 3D preview for STP, STEP, STL, OBJ, 3MF, IGS, IGES, DXF, and DWG files.
+- STEP/IGES WASM and DWG font data are served from same-origin, versioned build assets. CAD text uses OFL-1.1 Noto fonts rather than redistributed system fonts.
 - Document and media preview for images, video, PDF, Word, Excel, CSV, Markdown, text, and code files.
 - Archive inspection and extraction for ZIP, RAR, and 7z files.
 - Email file preview for EML and MSG files.

@@ -1,4 +1,14 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
+import {
+  CAD_DATA_BASE_URL,
+  CAD_OPEN_SOURCE_FONT_MAPPING,
+} from "@/lib/cadFontConfig";
 
 export interface DwgViewerHandle {
   captureScreenshot: () => Promise<string | null>;
@@ -97,7 +107,10 @@ function patchGetContextForPreserveBuffer(): () => void {
 }
 
 const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
-  function DwgViewerComponent({ fileBuffer, fileName, className, onParsed }, ref) {
+  function DwgViewerComponent(
+    { fileBuffer, fileName, className, onParsed },
+    ref
+  ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [progress, setProgress] = useState("");
@@ -114,7 +127,7 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
         const canvases = container.querySelectorAll("canvas");
         let bestCanvas: HTMLCanvasElement | null = null;
         let bestArea = 0;
-        canvases.forEach((c) => {
+        canvases.forEach(c => {
           const area = c.width * c.height;
           if (area > bestArea) {
             bestArea = area;
@@ -223,7 +236,7 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
           setProgress("正在加载 CAD 引擎...");
           const mod = await import("@mlightcad/cad-simple-viewer");
           cachedModule = mod;
-          const { AcApDocManager } = mod;
+          const { AcApDocManager, AcApSettingManager } = mod;
 
           if (cancelled) return;
 
@@ -241,17 +254,19 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
           // Clear any leftover DOM content from a previous instance
           currentContainer
             .querySelectorAll("canvas, .ml-cli-container, .ml-ccl-overlay")
-            .forEach((el) => el.remove());
+            .forEach(el => el.remove());
 
           // Monkey-patch getContext to force preserveDrawingBuffer: true
           // This is needed so we can capture screenshots from the WebGL canvas later
           unpatchGetContext = patchGetContextForPreserveBuffer();
 
+          AcApSettingManager.instance.fontMapping =
+            CAD_OPEN_SOURCE_FONT_MAPPING;
+
           AcApDocManager.createInstance({
             container: currentContainer,
             autoResize: true,
-            baseUrl:
-              "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/cad-data/",
+            baseUrl: CAD_DATA_BASE_URL,
             webworkerFileUrls: {
               dwgParser: "/assets/libredwg-parser-worker.js",
               dxfParser: "/assets/dxf-parser-worker.js",
@@ -299,13 +314,9 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
               if (doc && onParsed) {
                 const db = doc.database as any;
                 const entityCount =
-                  db?.modelSpace?.length ??
-                  db?.getModelSpace?.()?.length ??
-                  0;
+                  db?.modelSpace?.length ?? db?.getModelSpace?.()?.length ?? 0;
                 const layerCount =
-                  db?.layerTable?.length ??
-                  db?.getLayerTable?.()?.length ??
-                  0;
+                  db?.layerTable?.length ?? db?.getLayerTable?.()?.length ?? 0;
                 onParsed({ entityCount, layerCount });
               }
             } catch {
@@ -350,9 +361,7 @@ const DwgViewerComponent = forwardRef<DwgViewerHandle, DwgViewerComponentProps>(
         } catch (err: any) {
           if (!cancelled) {
             console.error("DWG load error:", err);
-            setError(
-              err.message || "解析 DWG 文件失败，请确认文件格式正确"
-            );
+            setError(err.message || "解析 DWG 文件失败，请确认文件格式正确");
             setIsLoading(false);
             setProgress("");
           }
