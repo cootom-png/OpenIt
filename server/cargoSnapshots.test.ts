@@ -207,6 +207,19 @@ describe("CargoSnapshotStore", () => {
     const store = new CargoSnapshotStore(directory);
     expect(await store.get("../../secrets")).toBeNull();
   });
+
+  it("caps new public snapshots before they can grow storage without bound", async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "openit-cargo-snapshot-capacity-")
+    );
+    temporaryDirectories.push(directory);
+    const store = new CargoSnapshotStore(directory, 1);
+
+    await store.save(validSnapshot());
+    await expect(
+      store.save({ ...validSnapshot(), containerQty: 3 })
+    ).rejects.toThrow(/reached capacity/);
+  });
 });
 
 describe("cargo snapshot HTTP API", () => {

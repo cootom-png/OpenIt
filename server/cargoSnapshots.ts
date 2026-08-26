@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import express, {
   Router,
@@ -12,6 +12,7 @@ const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_ID_PATTERN = /^[A-Za-z0-9_-]{12}$/;
 const MAX_SNAPSHOT_BYTES = 32 * 1024;
 const MAX_PRODUCTS = 100;
+const MAX_STORED_SNAPSHOTS = 10_000;
 
 type CargoProduct = {
   name: string;
@@ -421,7 +422,10 @@ export function normalizeCargoSnapshot(value: unknown): CargoSnapshot {
 }
 
 export class CargoSnapshotStore {
-  constructor(private readonly directory: string) {}
+  constructor(
+    private readonly directory: string,
+    private readonly maxSnapshots = MAX_STORED_SNAPSHOTS
+  ) {}
 
   async save(value: unknown): Promise<{ id: string; snapshot: CargoSnapshot }> {
     const snapshot = normalizeCargoSnapshot(value);
@@ -439,6 +443,14 @@ export class CargoSnapshotStore {
       if (existing !== serialized) throw new Error("snapshot id collision");
     } catch (error: any) {
       if (error?.code !== "ENOENT") throw error;
+      const storedSnapshots = (
+        await readdir(this.directory, {
+          withFileTypes: true,
+        })
+      ).filter(entry => entry.isFile() && entry.name.endsWith(".json"));
+      if (storedSnapshots.length >= this.maxSnapshots) {
+        throw new Error("cargo snapshot storage has reached capacity");
+      }
       const temporary = path.join(
         this.directory,
         `.${id}-${process.pid}-${Date.now()}.tmp`
