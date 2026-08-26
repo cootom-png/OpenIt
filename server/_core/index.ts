@@ -13,6 +13,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startCleanupScheduler } from "../cleanup";
 import { ensureDefaultAdminAccount } from "../bootstrapAdmin";
+import { createCargoSnapshotRouter } from "../cargoSnapshots";
 
 // ═══════════════════════════════════════════════════════════════
 // 全局异常处理 — 防止未捕获错误导致进程退出
@@ -144,6 +145,10 @@ async function startServer() {
 
   const app = express();
   const server = createServer(app);
+
+  // Cargo snapshots use their own small JSON limit so this public endpoint
+  // cannot consume the larger file-processing request allowance.
+  app.use(createCargoSnapshotRouter());
 
   // ─── Body parser: 降低 limit 到 10MB ───
   // 大文件已通过分块上传 (chunkedUpload) 处理，不需要超大 JSON body
