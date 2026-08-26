@@ -17266,6 +17266,61 @@ function buildBatchDividerPositions(i) {
     }
     return t
 }
+
+function buildContainerDirectionGuides(i, t) {
+    const e = i.l * Ee,
+        n = i.w * Ee,
+        s = i.h * Ee,
+        r = Math.min(1.05, Math.max(.65, e * .075));
+    return Array.from({ length: Math.max(1, t) }, (_, a) => {
+        const o = a * (n + .8),
+            c = o + n / 2,
+            l = e * .18,
+            h = e * .84,
+            d = Math.min(.42, Math.max(.22, e * .035)),
+            f = Math.min(.3, Math.max(.16, n * .13));
+        return {
+            containerIndex: a,
+            offset: o,
+            head: {
+                x: -.12 - r,
+                y: s * .78,
+                z: c,
+                label: `柜 ${a+1} · 里面 / 柜头 / 先装`
+            },
+            door: {
+                x: e + .18,
+                y: s * .86,
+                z: c,
+                label: `柜 ${a+1} · 外面 / 柜门 / 装卸口`
+            },
+            cab: {
+                x: -.12 - r / 2,
+                y: s * .34,
+                z: c,
+                length: r,
+                height: s * .68,
+                width: n * .76
+            },
+            doorPanels: [{
+                x: e + .018,
+                y: s / 2,
+                z: o + n * .255,
+                length: .035,
+                height: s * .92,
+                width: n * .46
+            }, {
+                x: e + .018,
+                y: s / 2,
+                z: o + n * .745,
+                length: .035,
+                height: s * .92,
+                width: n * .46
+            }],
+            arrowPositions: [h, s + .055, c, l, s + .055, c, l, s + .055, c, l + d, s + .055, c - f, l, s + .055, c, l + d, s + .055, c + f]
+        }
+    })
+}
 class Mm {
     constructor(t) {
         this.host = t, this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)), this.renderer.outputColorSpace = Ie, this.renderer.shadowMap.enabled = !0, this.renderer.shadowMap.type = Lo, this.renderer.domElement.className = "cargo-canvas", this.host.append(this.renderer.domElement), this.tooltip = document.createElement("div"), this.tooltip.className = "cargo-tooltip hidden", this.selection = document.createElement("div"), this.selection.className = "cargo-selection hidden", this.host.append(this.tooltip, this.selection), this.scene.background = new Ht(16054266), this.scene.add(this.content), this.scene.add(new ph(16777215, 7042432, 2.2));
@@ -17291,6 +17346,7 @@ class Mm {
     tooltip;
     selection;
     observer;
+    directionLabels = [];
     selected = null;
     hovered = null;
     container = {
@@ -17309,7 +17365,8 @@ class Mm {
             n = t.sceneItems ? [] : t.plan.pallets.map(Bl),
             s = compactSceneItemsForRendering(e),
             r = [...n, ...s];
-        for (let a = 0; a < this.containerCount; a += 1) this.addContainer(a);
+        const directionGuides = buildContainerDirectionGuides(this.container, this.containerCount);
+        for (let a = 0; a < this.containerCount; a += 1) this.addContainer(a), this.addDirectionGuide(directionGuides[a]);
         for (const a of r) this.addItem(a);
         return this.addGround(), this.setView("3d"), {
             rendered: e.length,
@@ -17324,8 +17381,10 @@ class Mm {
             n = this.container.w * Ee,
             s = this.container.h * Ee,
             r = this.containerCount * n + Math.max(0, this.containerCount - 1) * .8,
-            a = new F(e / 2, s / 2, r / 2 - n / 2);
-        this.controls.target.copy(a), t === "top" ? this.camera.position.set(a.x, Math.max(e, r) * 1.25, a.z + .001) : t === "side" ? this.camera.position.set(a.x, a.y, a.z + Math.max(e, s) * 1.15) : this.camera.position.set(e * .72, Math.max(s * 2.4, 6), r + Math.max(n * 2.3, 5)), this.camera.near = .01, this.camera.far = 200, this.camera.updateProjectionMatrix(), this.controls.update()
+            a = Math.min(1.05, Math.max(.65, e * .075)) + .12,
+            o = e + a,
+            c = new F((e - a) / 2, s / 2, r / 2 - n / 2);
+        this.controls.target.copy(c), t === "top" ? this.camera.position.set(c.x, Math.max(o, r) * 1.25, c.z + .001) : t === "side" ? this.camera.position.set(c.x, c.y, c.z + Math.max(o, s) * 1.15) : this.camera.position.set(c.x + o * .22, Math.max(s * 2.8, 7), r + Math.max(o * .8, n * 3.2, 8)), this.camera.near = .01, this.camera.far = 200, this.camera.updateProjectionMatrix(), this.controls.update()
     }
     addContainer(t) {
         const e = this.container.l * Ee,
@@ -17346,6 +17405,97 @@ class Mm {
             color: 4285565
         }));
         c.position.copy(o.position), this.content.add(c)
+    }
+    addDirectionGuide(t) {
+        const e = t.cab,
+            n = new kn(e.length, e.height, e.width),
+            s = new ze(n, new uh({
+                color: 6323595,
+                transparent: !0,
+                opacity: .1,
+                roughness: .8,
+                side: Ye,
+                depthWrite: !1
+            }));
+        s.position.set(e.x, e.y, e.z), this.content.add(s);
+        const r = new Ka(new $a(n), new Kr({
+            color: 6323595,
+            transparent: !0,
+            opacity: .72
+        }));
+        r.position.copy(s.position), this.content.add(r);
+        const windshieldGeometry = new kn(.026, e.height * .34, e.width * .68),
+            windshield = new ze(windshieldGeometry, new uh({
+                color: 4369066,
+                transparent: !0,
+                opacity: .3,
+                roughness: .35,
+                depthWrite: !1
+            }));
+        windshield.position.set(e.x - e.length / 2 - .014, e.y + e.height * .1, e.z), this.content.add(windshield);
+        for (const wheelX of [e.x - e.length * .26, e.x + e.length * .26]) {
+            const wheelGeometry = new kn(Math.min(.2, e.length * .22), .22, e.width * .92),
+                wheel = new ze(wheelGeometry, new ms({
+                    color: 2960685,
+                    roughness: .95
+                }));
+            wheel.position.set(wheelX, .11, e.z), this.content.add(wheel)
+        }
+        for (const a of t.doorPanels) {
+            const o = new kn(a.length, a.height, a.width),
+                c = new ze(o, new uh({
+                    color: 15964683,
+                    transparent: !0,
+                    opacity: .12,
+                    roughness: .72,
+                    side: Ye,
+                    depthWrite: !1
+                }));
+            c.position.set(a.x, a.y, a.z), this.content.add(c);
+            const l = new Ka(new $a(o), new Kr({
+                color: 13932550,
+                transparent: !0,
+                opacity: .95
+            }));
+            l.position.copy(c.position), this.content.add(l)
+        }
+        const handleGeometry = new kn(.055, this.container.h * Ee * .3, .025);
+        for (const handleZ of [t.offset + this.container.w * Ee * .485, t.offset + this.container.w * Ee * .515]) {
+            const handle = new ze(handleGeometry, new ms({
+                color: 7356194,
+                roughness: .8
+            }));
+            handle.position.set(this.container.l * Ee + .042, this.container.h * Ee * .52, handleZ), this.content.add(handle)
+        }
+        const a = new un;
+        a.setAttribute("position", new Ze(t.arrowPositions, 3));
+        const o = new Ka(a, new Kr({
+            color: 1763557,
+            transparent: !0,
+            opacity: .95
+        }));
+        this.content.add(o), this.addDirectionLabel(t.head, "head"), this.addDirectionLabel(t.door, "door")
+    }
+    addDirectionLabel(t, e) {
+        const n = document.createElement("div");
+        n.className = `cargo-direction-label ${e}`, n.textContent = t.label, this.host.append(n), this.directionLabels.push({
+            element: n,
+            position: new F(t.x, t.y, t.z)
+        })
+    }
+    updateDirectionLabels() {
+        const t = this.host.clientWidth,
+            e = this.host.clientHeight;
+        for (const n of this.directionLabels) {
+            const s = n.position.clone().project(this.camera),
+                r = s.z >= -1 && s.z <= 1;
+            if (n.element.classList.toggle("hidden", !r), !r) continue;
+            const a = n.element.offsetWidth / 2,
+                o = n.element.offsetHeight / 2,
+                c = Math.min(t - a - 6, Math.max(a + 6, (s.x + 1) / 2 * t)),
+                l = Math.min(e - o - 6, Math.max(o + 6, (1 - s.y) / 2 * e));
+            n.element.style.left = `${c}px`, n.element.style.top = `${l}px`
+        }
     }
     addItem(t) {
         const e = t.dimensionsMm,
@@ -17413,7 +17563,7 @@ class Mm {
         n instanceof ms && n.emissive.setHex(e)
     }
     clearContent() {
-        this.selected = null, this.hovered = null, this.selection.classList.add("hidden"), this.tooltip.classList.add("hidden"), this.interactive.length = 0;
+        this.selected = null, this.hovered = null, this.selection.classList.add("hidden"), this.tooltip.classList.add("hidden"), this.interactive.length = 0, this.directionLabels.forEach(t => t.element.remove()), this.directionLabels.length = 0;
         for (const t of [...this.content.children]) {
             this.content.remove(t);
             const e = t;
@@ -17426,7 +17576,7 @@ class Mm {
         this.renderer.setSize(t, e, !1), this.camera.aspect = t / e, this.camera.updateProjectionMatrix()
     }
     animate = () => {
-        this.frameHandle = requestAnimationFrame(this.animate), this.controls.update(), this.renderer.render(this.scene, this.camera)
+        this.frameHandle = requestAnimationFrame(this.animate), this.controls.update(), this.updateDirectionLabels(), this.renderer.render(this.scene, this.camera)
     };
     dispose() {
         cancelAnimationFrame(this.frameHandle), this.observer.disconnect(), this.controls.dispose(), this.clearContent(), this.renderer.dispose()
