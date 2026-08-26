@@ -1,13 +1,22 @@
 ﻿import type { ParsedMeshData } from "@/components/ThreeViewer";
-import { getFileExtension, QUALITY_PRESETS, type MeshQuality } from "@/lib/fileMetadata";
+import {
+  getFileExtension,
+  QUALITY_PRESETS,
+  type MeshQuality,
+} from "@/lib/fileMetadata";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import * as THREE from "three";
 
-export { getFileExtension, QUALITY_PRESETS, type MeshQuality } from "@/lib/fileMetadata";
+export {
+  getFileExtension,
+  QUALITY_PRESETS,
+  type MeshQuality,
+} from "@/lib/fileMetadata";
 
-const WASM_CDN_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663486221484/3j4sFbGUefQfhYED2wtVaa/occt-import-js_dde0c27b.wasm";
+export const OCCT_WASM_URL =
+  "/assets/vendor/v1/occt-import-js/occt-import-js.wasm";
 
 let occtInstance: any = null;
 
@@ -15,8 +24,30 @@ async function getOcctInstance(): Promise<any> {
   if (occtInstance) return occtInstance;
 
   // Pre-fetch WASM as ArrayBuffer to avoid MIME type issues with instantiateStreaming
-  const wasmResponse = await fetch(WASM_CDN_URL);
+  const wasmResponse = await fetch(OCCT_WASM_URL);
+  if (!wasmResponse.ok) {
+    throw new Error(
+      `3D 预览引擎加载失败：${wasmResponse.status} ${wasmResponse.statusText} (${OCCT_WASM_URL})`
+    );
+  }
   const wasmBinary = await wasmResponse.arrayBuffer();
+  const magic = new Uint8Array(
+    wasmBinary,
+    0,
+    Math.min(4, wasmBinary.byteLength)
+  );
+  if (
+    magic.length !== 4 ||
+    magic[0] !== 0x00 ||
+    magic[1] !== 0x61 ||
+    magic[2] !== 0x73 ||
+    magic[3] !== 0x6d
+  ) {
+    const contentType = wasmResponse.headers.get("content-type") || "unknown";
+    throw new Error(
+      `3D 预览引擎响应不是有效的 WebAssembly（Content-Type: ${contentType}）`
+    );
+  }
 
   // Dynamic import of occt-import-js
   const occtimportjs = (await import("occt-import-js")).default;
@@ -26,7 +57,7 @@ async function getOcctInstance(): Promise<any> {
     wasmBinary: wasmBinary,
     locateFile: (filename: string) => {
       if (filename.endsWith(".wasm")) {
-        return WASM_CDN_URL;
+        return OCCT_WASM_URL;
       }
       return filename;
     },
@@ -35,7 +66,10 @@ async function getOcctInstance(): Promise<any> {
   return occtInstance;
 }
 
-export async function parseStepFile(fileBuffer: Uint8Array, quality: MeshQuality = "standard"): Promise<ParsedMeshData> {
+export async function parseStepFile(
+  fileBuffer: Uint8Array,
+  quality: MeshQuality = "standard"
+): Promise<ParsedMeshData> {
   const occt = await getOcctInstance();
   const preset = QUALITY_PRESETS[quality];
   const result = occt.ReadStepFile(fileBuffer, {
@@ -99,7 +133,7 @@ export function parseObjFile(text: string): ParsedMeshData {
   const group = loader.parse(text);
   const meshes: ParsedMeshData["meshes"] = [];
 
-  group.traverse((child) => {
+  group.traverse(child => {
     if (child instanceof THREE.Mesh) {
       const geometry = child.geometry as THREE.BufferGeometry;
       // Ensure geometry has computed normals
@@ -153,7 +187,7 @@ export function parse3mfFile(buffer: ArrayBuffer): ParsedMeshData {
   const group = loader.parse(buffer);
   const meshes: ParsedMeshData["meshes"] = [];
 
-  group.traverse((child) => {
+  group.traverse(child => {
     if (child instanceof THREE.Mesh) {
       const geometry = child.geometry as THREE.BufferGeometry;
       if (!geometry.attributes.normal) {
@@ -201,7 +235,10 @@ export function parse3mfFile(buffer: ArrayBuffer): ParsedMeshData {
   return { meshes };
 }
 
-export async function parseIgesFile(fileBuffer: Uint8Array, quality: MeshQuality = "standard"): Promise<ParsedMeshData> {
+export async function parseIgesFile(
+  fileBuffer: Uint8Array,
+  quality: MeshQuality = "standard"
+): Promise<ParsedMeshData> {
   const occt = await getOcctInstance();
   const preset = QUALITY_PRESETS[quality];
   const result = occt.ReadIgesFile(fileBuffer, {
@@ -258,6 +295,8 @@ export async function parseFile(
     const data = await parseIgesFile(new Uint8Array(buffer), quality);
     return { data, parseTime: performance.now() - startTime };
   } else {
-    throw new Error(`不支持的文件格式: .${ext}。请使用 .stp, .step, .stl, .obj, .3mf, .igs 或 .iges 文件。`);
+    throw new Error(
+      `不支持的文件格式: .${ext}。请使用 .stp, .step, .stl, .obj, .3mf, .igs 或 .iges 文件。`
+    );
   }
 }
