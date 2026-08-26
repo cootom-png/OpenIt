@@ -47,7 +47,7 @@ async function startSnapshotServer(directory: string): Promise<string> {
 
 function validSnapshot() {
   return {
-    version: 1,
+    version: 2,
     mode: "loose",
     products: [
       {
@@ -61,6 +61,10 @@ function validSnapshot() {
         rotate: true,
         side: true,
         color: "#3478d4",
+        group: 1,
+        stackable: true,
+        maxLayers: 8,
+        maxTopKg: 300,
       },
       {
         name: "C款边柜",
@@ -73,11 +77,16 @@ function validSnapshot() {
         rotate: true,
         side: false,
         color: "#e18b32",
+        group: 2,
+        stackable: false,
+        maxLayers: 1,
+        maxTopKg: 0,
       },
     ],
     containerType: "40HQ",
     containerQty: 2,
     looseCargoMaxGapMm: 50,
+    priorityGroupMode: "virtual-wall",
     optimizationGoal: "complete-order",
     simulationTimeLimit: "balanced",
     pallet: {
@@ -89,6 +98,37 @@ function validSnapshot() {
       packingMode: "mixed-max",
       allowLooseCargo: true,
     },
+    result: {
+      solverVersion: "loading-strategy/0.5.0",
+      loadedByProduct: [420, 80],
+      warnings: ["CB-3012 有 16 箱未装入：不可堆叠约束。"],
+      metrics: {
+        volumeRatio: 0.72,
+        weightRatio: 0.31,
+        containersUsed: 2,
+        maxInternalGapMm: 40,
+        minimumSupportRatio: 1,
+        containerDiagnostics: [
+          {
+            containerIndex: 0,
+            loadedWeightG: 4_100_000,
+            longitudinalCenterOffsetMm: -120,
+            lateralCenterOffsetMm: 18,
+            continuousDoorFreeMm: 420,
+            occupiedLengthMm: 11_612,
+          },
+          {
+            containerIndex: 1,
+            loadedWeightG: 1_230_000,
+            longitudinalCenterOffsetMm: -820,
+            lateralCenterOffsetMm: -12,
+            continuousDoorFreeMm: 2_100,
+            occupiedLengthMm: 9_932,
+          },
+        ],
+      },
+    },
+    resultHash: "dsSHcLf6rsqu",
   };
 }
 
@@ -97,6 +137,32 @@ describe("cargo snapshot normalization", () => {
     expect(
       normalizeCargoSnapshot({ ...validSnapshot(), version: 999 })
     ).toEqual(validSnapshot());
+  });
+
+  it("upgrades old condition-only snapshots with safe defaults", () => {
+    const legacy = validSnapshot() as any;
+    legacy.version = 1;
+    delete legacy.priorityGroupMode;
+    delete legacy.result;
+    delete legacy.resultHash;
+    legacy.products.forEach((product: any) => {
+      delete product.group;
+      delete product.stackable;
+      delete product.maxLayers;
+      delete product.maxTopKg;
+    });
+
+    const normalized = normalizeCargoSnapshot(legacy);
+    expect(normalized.version).toBe(2);
+    expect(normalized.priorityGroupMode).toBe("virtual-wall");
+    expect(normalized.products[0]).toMatchObject({
+      group: 1,
+      stackable: true,
+      maxLayers: 99,
+      maxTopKg: 100_000,
+    });
+    expect(normalized.result).toBeNull();
+    expect(normalized.resultHash).toBeNull();
   });
 
   it("rejects unsafe text and out-of-range conditions", () => {
@@ -157,7 +223,11 @@ describe("cargo snapshot HTTP API", () => {
       body: JSON.stringify(validSnapshot()),
     });
     expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as { id: string };
+    const created = (await createResponse.json()) as {
+      id: string;
+      resultHash: string;
+    };
+    expect(created.resultHash).toBe(validSnapshot().resultHash);
 
     const readResponse = await fetch(
       `${baseUrl}/api/cargo-snapshots/${created.id}`

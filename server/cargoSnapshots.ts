@@ -8,7 +8,7 @@ import express, {
   type Response,
 } from "express";
 
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_ID_PATTERN = /^[A-Za-z0-9_-]{12}$/;
 const MAX_SNAPSHOT_BYTES = 32 * 1024;
 const MAX_PRODUCTS = 100;
@@ -24,15 +24,43 @@ type CargoProduct = {
   rotate: boolean;
   side: boolean;
   color: string;
+  group: number;
+  stackable: boolean;
+  maxLayers: number;
+  maxTopKg: number;
+};
+
+type ContainerDiagnostic = {
+  containerIndex: number;
+  loadedWeightG: number;
+  longitudinalCenterOffsetMm: number;
+  lateralCenterOffsetMm: number;
+  continuousDoorFreeMm: number;
+  occupiedLengthMm: number;
+};
+
+type CargoSnapshotResult = {
+  solverVersion: string;
+  loadedByProduct: number[];
+  warnings: string[];
+  metrics: {
+    volumeRatio: number;
+    weightRatio: number;
+    containersUsed: number;
+    maxInternalGapMm: number;
+    minimumSupportRatio: number;
+    containerDiagnostics: ContainerDiagnostic[];
+  };
 };
 
 export type CargoSnapshot = {
-  version: 1;
+  version: 2;
   mode: "loose" | "pallet";
   products: CargoProduct[];
   containerType: "20GP" | "40GP" | "40HQ";
   containerQty: number;
   looseCargoMaxGapMm: number;
+  priorityGroupMode: "virtual-wall" | "no-cross-stacking" | "allow-stacking";
   optimizationGoal: "complete-order" | "volume" | "weight-balance";
   simulationTimeLimit: "fast" | "balanced" | "deep";
   pallet: {
@@ -44,6 +72,8 @@ export type CargoSnapshot = {
     packingMode: "single-sku" | "mixed-max";
     allowLooseCargo: boolean;
   };
+  result: CargoSnapshotResult | null;
+  resultHash: string | null;
 };
 
 function finiteNumber(
@@ -151,8 +181,167 @@ export function normalizeCargoSnapshot(value: unknown): CargoSnapshot {
       rotate: booleanValue(product.rotate, `products[${index}].rotate`),
       side: booleanValue(product.side, `products[${index}].side`),
       color,
+      group:
+        product.group === undefined
+          ? 1
+          : finiteNumber(product.group, `products[${index}].group`, {
+              integer: true,
+              min: 1,
+              max: 99,
+            }),
+      stackable:
+        product.stackable === undefined
+          ? true
+          : booleanValue(product.stackable, `products[${index}].stackable`),
+      maxLayers:
+        product.maxLayers === undefined
+          ? 99
+          : finiteNumber(product.maxLayers, `products[${index}].maxLayers`, {
+              integer: true,
+              min: 1,
+              max: 99,
+            }),
+      maxTopKg:
+        product.maxTopKg === undefined
+          ? 100_000
+          : finiteNumber(product.maxTopKg, `products[${index}].maxTopKg`, {
+              min: 0,
+              max: 100_000,
+            }),
     };
   });
+
+  let result: CargoSnapshotResult | null = null;
+  if (input.result !== undefined && input.result !== null) {
+    if (typeof input.result !== "object" || Array.isArray(input.result))
+      throw new Error("result must be an object");
+    const resultInput = input.result as Record<string, unknown>;
+    if (
+      !Array.isArray(resultInput.loadedByProduct) ||
+      resultInput.loadedByProduct.length !== products.length
+    ) {
+      throw new Error("result.loadedByProduct must match products");
+    }
+    if (
+      !Array.isArray(resultInput.warnings) ||
+      resultInput.warnings.length > 50
+    ) {
+      throw new Error("result.warnings is invalid");
+    }
+    const metricsInput = resultInput.metrics;
+    if (
+      !metricsInput ||
+      typeof metricsInput !== "object" ||
+      Array.isArray(metricsInput)
+    ) {
+      throw new Error("result.metrics must be an object");
+    }
+    const metrics = metricsInput as Record<string, unknown>;
+    if (
+      !Array.isArray(metrics.containerDiagnostics) ||
+      metrics.containerDiagnostics.length > 20
+    ) {
+      throw new Error("result.metrics.containerDiagnostics is invalid");
+    }
+    result = {
+      solverVersion: shortText(
+        resultInput.solverVersion,
+        "result.solverVersion",
+        80
+      ),
+      loadedByProduct: resultInput.loadedByProduct.map((count, index) =>
+        finiteNumber(count, `result.loadedByProduct[${index}]`, {
+          integer: true,
+          min: 0,
+          max: products[index].q,
+        })
+      ),
+      warnings: resultInput.warnings.map((warning, index) =>
+        shortText(warning, `result.warnings[${index}]`, 500)
+      ),
+      metrics: {
+        volumeRatio: finiteNumber(
+          metrics.volumeRatio,
+          "result.metrics.volumeRatio",
+          {
+            min: 0,
+            max: 1,
+          }
+        ),
+        weightRatio: finiteNumber(
+          metrics.weightRatio,
+          "result.metrics.weightRatio",
+          {
+            min: 0,
+            max: 1,
+          }
+        ),
+        containersUsed: finiteNumber(
+          metrics.containersUsed,
+          "result.metrics.containersUsed",
+          { integer: true, min: 0, max: 20 }
+        ),
+        maxInternalGapMm: finiteNumber(
+          metrics.maxInternalGapMm,
+          "result.metrics.maxInternalGapMm",
+          { min: 0, max: 50_000 }
+        ),
+        minimumSupportRatio: finiteNumber(
+          metrics.minimumSupportRatio,
+          "result.metrics.minimumSupportRatio",
+          { min: 0, max: 1 }
+        ),
+        containerDiagnostics: metrics.containerDiagnostics.map(
+          (entry, index) => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry))
+              throw new Error(
+                `result.metrics.containerDiagnostics[${index}] is invalid`
+              );
+            const diagnostic = entry as Record<string, unknown>;
+            const field = `result.metrics.containerDiagnostics[${index}]`;
+            return {
+              containerIndex: finiteNumber(
+                diagnostic.containerIndex,
+                `${field}.containerIndex`,
+                { integer: true, min: 0, max: 19 }
+              ),
+              loadedWeightG: finiteNumber(
+                diagnostic.loadedWeightG,
+                `${field}.loadedWeightG`,
+                { min: 0, max: 100_000_000 }
+              ),
+              longitudinalCenterOffsetMm: finiteNumber(
+                diagnostic.longitudinalCenterOffsetMm,
+                `${field}.longitudinalCenterOffsetMm`,
+                { min: -50_000, max: 50_000 }
+              ),
+              lateralCenterOffsetMm: finiteNumber(
+                diagnostic.lateralCenterOffsetMm,
+                `${field}.lateralCenterOffsetMm`,
+                { min: -50_000, max: 50_000 }
+              ),
+              continuousDoorFreeMm: finiteNumber(
+                diagnostic.continuousDoorFreeMm,
+                `${field}.continuousDoorFreeMm`,
+                { min: 0, max: 50_000 }
+              ),
+              occupiedLengthMm: finiteNumber(
+                diagnostic.occupiedLengthMm,
+                `${field}.occupiedLengthMm`,
+                { min: 0, max: 50_000 }
+              ),
+            };
+          }
+        ),
+      },
+    };
+  }
+  const resultHash = result
+    ? createHash("sha256")
+        .update(JSON.stringify(result))
+        .digest("base64url")
+        .slice(0, 12)
+    : null;
 
   return {
     version: SNAPSHOT_VERSION,
@@ -173,6 +362,14 @@ export function normalizeCargoSnapshot(value: unknown): CargoSnapshot {
       "looseCargoMaxGapMm",
       { integer: true, min: 0, max: 10_000 }
     ),
+    priorityGroupMode:
+      input.priorityGroupMode === undefined
+        ? "virtual-wall"
+        : enumValue(input.priorityGroupMode, "priorityGroupMode", [
+            "virtual-wall",
+            "no-cross-stacking",
+            "allow-stacking",
+          ] as const),
     optimizationGoal: enumValue(input.optimizationGoal, "optimizationGoal", [
       "complete-order",
       "volume",
@@ -218,6 +415,8 @@ export function normalizeCargoSnapshot(value: unknown): CargoSnapshot {
         "pallet.allowLooseCargo"
       ),
     },
+    result,
+    resultHash,
   };
 }
 
@@ -284,8 +483,8 @@ export function createCargoSnapshotRouter(
     express.json({ limit: "40kb", strict: true }),
     async (req, res) => {
       try {
-        const { id } = await store.save(req.body);
-        res.status(201).json({ id });
+        const { id, snapshot } = await store.save(req.body);
+        res.status(201).json({ id, resultHash: snapshot.resultHash });
       } catch (error: any) {
         res
           .status(400)

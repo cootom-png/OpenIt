@@ -181,7 +181,8 @@ class yl {
                 productIndex: u,
                 sku: _.sku,
                 weightG: _.weightG,
-                quantity: _.quantity
+                quantity: _.quantity,
+                priorityGroup: Number.isInteger(_.priorityGroup) ? Math.max(1, _.priorityGroup) : 1
             })),
             n = new Map;
         t.products.forEach((_, u) => n.set(u, Po(_)));
@@ -208,7 +209,8 @@ class yl {
             const h = {
                 spaces: [Nn(0, 0, 0, u.innerLengthMm, u.innerWidthMm, u.innerHeightMm)],
                 placed: [],
-                usedWeightG: 0
+                usedWeightG: 0,
+                activePriorityGroup: 0
             };
             let w = 0,
                 T = !0;
@@ -236,6 +238,8 @@ class yl {
                             const A = t.products[S.productIndex],
                                 G = n.get(S.productIndex) ?? [];
                             for (const O of G) {
+                                const priorityGroup = S.priorityGroup ?? 1;
+                                if (priorityGroup < h.activePriorityGroup) continue;
                                 if (O.lengthMm > b.length + Vt || O.widthMm > b.width + Vt) continue;
                                 const N = O.heightMm,
                                     q = Math.floor(b.height / N + Vt);
@@ -248,6 +252,10 @@ class yl {
                                     const tt = Nn(b.x, b.y, b.z, O.lengthMm, O.widthMm, O.heightMm);
                                     if (!Tl(tt, h.placed, t.minimumSupportRatio)) continue
                                 }
+                                const tt = Nn(b.x, b.y, b.z, O.lengthMm, O.widthMm, O.heightMm),
+                                    groupMode = t.priorityGroupMode ?? "virtual-wall",
+                                    stackSafety = validateStackSafety(tt, A, S.weightG, h.placed, t.products, priorityGroup, groupMode);
+                                if (!stackSafety.ok) continue;
                                 if (h.usedWeightG + S.weightG > u.maxPayloadG) continue;
                                 if (this.options.enforceTopLoad && A.maxTopLoadG !== void 0) {
                                     const tt = A.maxTopLoadG / S.weightG + 1;
@@ -260,20 +268,23 @@ class yl {
                                 const st = z.length * z.width * z.height,
                                     isBoundedSectionSpace = b.length < u.innerLengthMm - b.x - Vt,
                                     longitudinalRemainder = Math.max(0, b.length - O.lengthMm),
-                                    fragmentsCurrentSection = isBoundedSectionSpace && longitudinalRemainder > looseCargoMaxGapMm + Vt,
-                                    isEarlierLoadPosition = E === null ||
+                                    fragmentsCurrentSection = isBoundedSectionSpace && longitudinalRemainder > looseCargoMaxGapMm + Vt;
+                                let isEarlierLoadPosition = E === null || priorityGroup < E.priorityGroup;
+                                priorityGroup === E?.priorityGroup && (isEarlierLoadPosition =
                                     E.fragmentsCurrentSection && !fragmentsCurrentSection ||
                                     E.fragmentsCurrentSection === fragmentsCurrentSection && (
                                     z.x < E.box.x - Vt ||
                                     Math.abs(z.x - E.box.x) <= Vt && z.z < E.box.z - Vt ||
                                     Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && z.y < E.box.y - Vt ||
-                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && (st > P || Math.abs(st - P) <= Vt && orientationCapacityScore(b, O) > orientationCapacityScore(b, E.orientation)));
+                                    Math.abs(z.x - E.box.x) <= Vt && Math.abs(z.z - E.box.z) <= Vt && Math.abs(z.y - E.box.y) <= Vt && (st > P || Math.abs(st - P) <= Vt && orientationCapacityScore(b, O) > orientationCapacityScore(b, E.orientation))));
                                 isEarlierLoadPosition && (P = st, E = {
                                     box: z,
                                     orientation: O,
                                     height: N,
                                     count: V,
                                     productIndex: S.productIndex,
+                                    priorityGroup,
+                                    stackLevel: stackSafety.stackLevel,
                                     fragmentsCurrentSection
                                 })
                             }
@@ -285,6 +296,7 @@ class yl {
                     for (let M = 0; M < b; M += 1) {
                         const S = E.box.z + M * E.height,
                             A = Nn(E.box.x, E.box.y, S, E.orientation.lengthMm, E.orientation.widthMm, E.height);
+                        applyTopLoad(A, R.weightG, h.placed, t.products);
                         c.push({
                             productIndex: R.productIndex,
                             sku: R.sku,
@@ -292,12 +304,16 @@ class yl {
                             x: A.x,
                             y: A.y,
                             z: A.z,
-                            containerIndex: _
+                            containerIndex: _,
+                            priorityGroup: E.priorityGroup
                         }), h.placed.push({
                             box: A,
                             productIndex: R.productIndex,
-                            weightG: R.weightG
-                        }), h.usedWeightG += R.weightG
+                            weightG: R.weightG,
+                            priorityGroup: E.priorityGroup,
+                            stackLevel: E.stackLevel + M,
+                            topLoadG: 0
+                        }), h.usedWeightG += R.weightG, h.activePriorityGroup = Math.max(h.activePriorityGroup, E.priorityGroup)
                     }
                     R.quantity -= b, w += b, T = !0;
                     const I = [];
@@ -313,17 +329,29 @@ class yl {
                 } else T = !1
             }
         }
-        const d = l.filter(_ => _.quantity > 0).map(_ => ({
-                sku: _.sku,
-                productIndex: _.productIndex,
-                remaining: _.quantity
-            })),
+        const d = l.filter(_ => _.quantity > 0).map(_ => {
+                const u = t.products[_.productIndex],
+                    h = n.get(_.productIndex) ?? [],
+                    w = h.some(T => s.some(E => T.lengthMm <= E.type.innerLengthMm + Vt && T.widthMm <= E.type.innerWidthMm + Vt && T.heightMm <= E.type.innerHeightMm + Vt));
+                let T = "CAPACITY_OR_CONSTRAINT_LIMIT",
+                    E = "柜内剩余空间或当前安全约束无法继续放置";
+                return h.length === 0 ? (T = "NO_ALLOWED_ORIENTATION", E = "没有符合旋转、侧装或直立要求的允许朝向") : w ? s.every(P => u.weightG > P.type.maxPayloadG) ? (T = "WEIGHT_LIMIT", E = "单箱重量超过所选柜型载重") : (u.stackable === !1 || Number.isFinite(u.maxStackLayers) || Number.isFinite(u.maxTopLoadG)) && (T = "STACK_OR_SUPPORT_LIMIT", E = "堆叠层数、顶部承重或支撑条件限制") : (T = "DIMENSION_LIMIT", E = "所有允许朝向都超过所选柜型内部尺寸"), {
+                    sku: _.sku,
+                    productIndex: _.productIndex,
+                    remaining: _.quantity,
+                    priorityGroup: _.priorityGroup,
+                    reasonCode: T,
+                    reason: E
+                }
+            }),
             f = c.reduce((_, u) => _ + u.orientation.lengthMm * u.orientation.widthMm * u.orientation.heightMm, 0),
             p = c.reduce((_, u) => _ + (t.products[u.productIndex]?.weightG ?? 0), 0),
             m = new Set(c.map(_ => _.containerIndex)),
             gapStats = computeLooseGapStats(c, looseCargoMaxGapMm),
+            containerDiagnostics = computeContainerDiagnostics(c, t.products, s),
             x = [];
         d.length > 0 && x.push("存在未能装入的货物，请增加容器数量或放宽约束。");
+        d.slice(0, 10).forEach(_ => x.push(`SKU ${_.sku} 未装 ${_.remaining} 箱：${_.reason}。`));
         gapStats.oversizedGapCount > 0 && x.push(`检测到 ${gapStats.oversizedGapCount} 处纵向内部空隙超过 ${looseCargoMaxGapMm} mm（最大 ${Math.round(gapStats.maxInternalGapMm)} mm），请调整箱型组合或使用衬垫、充气袋、挡木固定。`);
         return {
             placements: c,
@@ -338,10 +366,13 @@ class yl {
                 containersUsed: m.size,
                 maxInternalGapMm: gapStats.maxInternalGapMm,
                 oversizedGapCount: gapStats.oversizedGapCount,
-                looseCargoMaxGapMm
+                looseCargoMaxGapMm,
+                targetGapMm: 0,
+                minimumSupportRatio: t.minimumSupportRatio,
+                containerDiagnostics
             },
             warnings: x,
-            solverVersion: "cross-section-compact/0.4.0"
+            solverVersion: "loading-strategy/0.5.0"
         }
     }
 }
@@ -376,6 +407,27 @@ function computeLooseGapStats(i, t) {
     return { maxInternalGapMm: e, oversizedGapCount: n.size }
 }
 
+function computeContainerDiagnostics(i, t, e) {
+    const n = [];
+    for (const s of e) {
+        const r = i.filter(l => l.containerIndex === s.containerIndex);
+        if (r.length === 0) continue;
+        const a = r.reduce((l, h) => l + (t[h.productIndex]?.weightG ?? 0), 0),
+            o = a > 0 ? r.reduce((l, h) => l + (h.x + h.orientation.lengthMm / 2) * (t[h.productIndex]?.weightG ?? 0), 0) / a : 0,
+            c = a > 0 ? r.reduce((l, h) => l + (h.y + h.orientation.widthMm / 2) * (t[h.productIndex]?.weightG ?? 0), 0) / a : 0,
+            d = Math.max(0, ...r.map(l => l.x + l.orientation.lengthMm));
+        n.push({
+            containerIndex: s.containerIndex,
+            loadedWeightG: a,
+            longitudinalCenterOffsetMm: o - s.type.innerLengthMm / 2,
+            lateralCenterOffsetMm: c - s.type.innerWidthMm / 2,
+            continuousDoorFreeMm: Math.max(0, s.type.innerLengthMm - d),
+            occupiedLengthMm: d
+        })
+    }
+    return n
+}
+
 function Tl(i, t, e) {
     if (i.z <= Vt) return !0;
     const n = i.length * i.width;
@@ -386,6 +438,51 @@ function Tl(i, t, e) {
                 o = Math.max(0, Math.min(i.y2, r.box.y2) - Math.max(i.y, r.box.y));
             s += a * o
         } return s / n >= e - Vt
+}
+
+function overlapAreaXY(i, t) {
+    const e = Math.max(0, Math.min(i.x2, t.x2) - Math.max(i.x, t.x)),
+        n = Math.max(0, Math.min(i.y2, t.y2) - Math.max(i.y, t.y));
+    return e * n
+}
+
+function directSupportItems(i, t) {
+    return t.filter(e => Math.abs(e.box.z2 - i.z) <= Vt + 1 && overlapAreaXY(i, e.box) > Vt)
+}
+
+function validateStackSafety(i, t, e, n, s, r, a) {
+    const trackLayers = s.some(u => Number.isFinite(u.maxStackLayers)),
+        o = i.z > Vt && (trackLayers || a === "no-cross-stacking" || s.some(u => u.stackable === !1)) ? directSupportItems(i, n) : [],
+        c = trackLayers && i.z > Vt ? 1 + o.reduce((u, h) => Math.max(u, h.stackLevel ?? 1), 0) : 1,
+        l = Number.isFinite(t.maxStackLayers) ? Math.max(1, t.maxStackLayers) : Number.POSITIVE_INFINITY;
+    if (c > l) return { ok: !1, stackLevel: c };
+    if (i.z > Vt && o.some(u => s[u.productIndex]?.stackable === !1)) return { ok: !1, stackLevel: c };
+    if (a === "no-cross-stacking" && i.z > Vt && o.some(u => (u.priorityGroup ?? 1) !== r)) return { ok: !1, stackLevel: c };
+    if (a === "virtual-wall" && r > 1) {
+        const u = n.filter(h => (h.priorityGroup ?? 1) < r).reduce((h, w) => Math.max(h, w.box.x2), 0);
+        if (i.x < u - Vt) return { ok: !1, stackLevel: c }
+    }
+    if (!s.some(u => Number.isFinite(u.maxTopLoadG))) return { ok: !0, stackLevel: c };
+    const d = i.length * i.width;
+    for (const u of n) {
+        if (u.box.z2 > i.z + Vt + 1) continue;
+        const h = overlapAreaXY(i, u.box);
+        if (h <= Vt) continue;
+        const w = s[u.productIndex],
+            T = w?.maxTopLoadG;
+        if (Number.isFinite(T) && (u.topLoadG ?? 0) + e * h / d > T + Vt) return { ok: !1, stackLevel: c }
+    }
+    return { ok: !0, stackLevel: c }
+}
+
+function applyTopLoad(i, t, e, n) {
+    if (!n.some(s => Number.isFinite(s.maxTopLoadG))) return;
+    const area = i.length * i.width;
+    for (const s of e) {
+        if (s.box.z2 > i.z + Vt + 1) continue;
+        const r = overlapAreaXY(i, s.box);
+        r > Vt && (s.topLoadG = (s.topLoadG ?? 0) + t * r / area)
+    }
 }
 
 function bl(i, t) {
@@ -1000,6 +1097,7 @@ function Ol(i, t, e) {
         productIndex: i.productIndex,
         containerIndex: i.containerIndex,
         loadSequence: e + 1,
+        priorityGroup: i.priorityGroup ?? 1,
         orientation: a,
         color: t
     })
@@ -1035,7 +1133,10 @@ function zl(i) {
         allowSideLoading: t.side,
         allowUpsideDown: !1,
         mustStayUpright: !t.side,
-        stackable: !0,
+        stackable: t.stackable !== !1,
+        maxStackLayers: Number.isFinite(t.maxLayers) ? Math.max(1, Math.floor(t.maxLayers)) : void 0,
+        maxTopLoadG: Number.isFinite(t.maxTopKg) ? Math.max(0, Math.round(t.maxTopKg * 1e3)) : void 0,
+        priorityGroup: Number.isInteger(t.group) ? Math.max(1, t.group) : 1,
         palletPolicy: i.mode === "pallet" ? "required" : "auto",
         priority: e
     }))
@@ -1083,6 +1184,7 @@ function Gl(i) {
         palletTypes: i.pallet ? [kl(i.pallet)] : [],
         containerTypes: [Hl(i.container)],
         minimumSupportRatio: 1,
+        priorityGroupMode: i.priorityGroupMode ?? "virtual-wall",
         looseCargoMaxGapMm: Math.max(0, i.looseCargoMaxGapMm ?? 50)
     }
 }
@@ -1101,6 +1203,7 @@ function va(i, t, e, n) {
     return {
         sceneItems: Vl(i, n),
         loadedByProduct: Wl(t, i),
+        unloaded: i.unloaded ?? [],
         warnings: i.warnings,
         metrics: {
             volumeRatio: i.metrics.volumeRatio,
@@ -1108,7 +1211,10 @@ function va(i, t, e, n) {
             containersUsed: i.metrics.containersUsed,
             maxInternalGapMm: i.metrics.maxInternalGapMm ?? 0,
             oversizedGapCount: i.metrics.oversizedGapCount ?? 0,
-            looseCargoMaxGapMm: i.metrics.looseCargoMaxGapMm ?? 50
+            looseCargoMaxGapMm: i.metrics.looseCargoMaxGapMm ?? 50,
+            targetGapMm: i.metrics.targetGapMm ?? 0,
+            minimumSupportRatio: i.metrics.minimumSupportRatio ?? 1,
+            containerDiagnostics: i.metrics.containerDiagnostics ?? []
         },
         solverVersion: i.solverVersion,
         palletsUsed: e
